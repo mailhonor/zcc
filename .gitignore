@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Mine
+*~
+dd
+dd2
+.svn
