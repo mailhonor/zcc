@@ -16,6 +16,9 @@ namespace zcc
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 
+#pragma pack(push, 1)
+
+#define var_epoll_event_count  4096
 static int var_iopipe_rbuf_size = 4096;
 #define ZIOPIPE_BASE_LOCK(iopb)		if (pthread_mutex_lock(&(iopb->locker))) { zcc_fatal("mutex:%m"); }
 #define ZIOPIPE_BASE_UNLOCK(iopb)	if (pthread_mutex_unlock(&(iopb->locker))) { zcc_fatal("mutex:%m"); }
@@ -47,6 +50,7 @@ struct iopipe_t {
     iopipe_part_t server;
     iopipe_after_close_fn_t after_close;
     void *context;
+    unsigned char err:1;
 };
 
 struct iopipe_linker_t {
@@ -63,8 +67,8 @@ struct iopipe_linker_t {
 struct iopipe_base_t {
     unsigned int break_flag:1;
     int epoll_fd;
-    int epoll_event_count;
-    struct epoll_event *epoll_event_list;
+    struct epoll_event epoll_event_list[var_epoll_event_count];
+    iopipe_t *iopipe_error_vector[var_epoll_event_count];
     pthread_mutex_t locker;
     iopipe_linker_t *set_list_head;
     iopipe_linker_t *set_list_tail;
@@ -164,9 +168,6 @@ iopipe_base_t *iopipe_base_create(void)
 
     iopb->epoll_fd = epoll_create(1024);
     close_on_exec(iopb->epoll_fd);
-
-    iopb->epoll_event_count = 4096;
-    iopb->epoll_event_list = (struct epoll_event *)malloc(sizeof(struct epoll_event) * iopb->epoll_event_count);
 
     efd = eventfd(0, 0);
     nonblocking(efd);
@@ -343,6 +344,7 @@ int iopipe_base_run(iopipe_base_t * iopb)
     iopipe_part_t *part, *part_a, *part_client, *part_server;
     int efd;
     iopipe_linker_t *linker, *h, *t;
+    int iopipe_error_count = 0;
 
 #define  ___no_indent_while_beign   while(1) {
 #define  ___no_indent_while_end     }
@@ -395,14 +397,15 @@ int iopipe_base_run(iopipe_base_t * iopb)
         iopipe_set_event(iopb, &(iop->server), 1);
     }
 
-    nfds = epoll_wait(iopb->epoll_fd, iopb->epoll_event_list, iopb->epoll_event_count, 10 * 1000);
+    nfds = epoll_wait(iopb->epoll_fd, iopb->epoll_event_list, var_epoll_event_count, 10 * 1000);
     if (nfds == -1) {
         if (errno != EINTR) {
             zcc_fatal("iopipe_base_run: epoll_wait: %m");
         }
-        return -1;
+        continue;
     }
 
+    iopipe_error_count = 0;
     for (i = 0; i < nfds; i++) {
         ev = iopb->epoll_event_list + i;
         events = ev->events;
@@ -481,8 +484,11 @@ int iopipe_base_run(iopipe_base_t * iopb)
             write_read_loop(iopb, part, part_a, part_a->rbuf_p2 - part_a->rbuf_p1);
 #endif
         if (e_err) {
-            int len;
-            len = part->rbuf_p2 > part->rbuf_p1;
+            if (iop->err == 0) {
+                iop->err = 1;
+                iopb->iopipe_error_vector[iopipe_error_count++] = iop;
+            }
+            int len = part->rbuf_p2 > part->rbuf_p1;
             if (len > 0) {
                 if (part_a->ssl) {
                     try_ssl_write(part_a, part->rbuf + part->rbuf_p1, len);
@@ -490,28 +496,37 @@ int iopipe_base_run(iopipe_base_t * iopb)
                     if (write(part_a->fd, part->rbuf + part->rbuf_p1, len));
                 }
             }
-            iopipe_set_event(iopb, part_client, 0);
-            iopipe_set_event(iopb, part_server, 0);
-            if (part_client->rbuf) {
-                free(part_client->rbuf);
-            }
-            if (part_server->rbuf) {
-                free(part_server->rbuf);
-            }
-            if (part->ssl) {
-                openssl_SSL_free(part->ssl);
-            }
-            if (part_a->ssl) {
-                openssl_SSL_free(part_a->ssl);
-            }
-            close(part_client->fd);
-            close(part_server->fd);
-            if (iop->after_close) {
-                iop->after_close(iop->context);
-            }
-            free(iop);
-            continue;
         }
+    }
+
+    for (i=0;i<iopipe_error_count;i++) {
+        iop = iopb->iopipe_error_vector[i];
+        part_client = &(iop->client);
+        part_server = &(iop->server);
+        iopipe_set_event(iopb, part_client, 0);
+        iopipe_set_event(iopb, part_server, 0);
+        if (part_client->rbuf) {
+            free(part_client->rbuf);
+            part_client->rbuf = 0;
+        }
+        if (part_server->rbuf) {
+            free(part_server->rbuf);
+            part_server->rbuf = 0;
+        }
+        if (part_client->ssl) {
+            openssl_SSL_free(part_client->ssl);
+            part_client->ssl = 0;
+        }
+        if (part_server->ssl) {
+            openssl_SSL_free(part_server->ssl);
+            part_server->ssl = 0;
+        }
+        close(part_client->fd);
+        close(part_server->fd);
+        if (iop->after_close) {
+            iop->after_close(iop->context);
+        }
+        free(iop);
     }
 
     if (iopb->break_flag) {
@@ -526,7 +541,6 @@ int iopipe_base_run(iopipe_base_t * iopb)
 void iopipe_base_free(iopipe_base_t * iopb)
 {
     close(iopb->epoll_fd);
-    free(iopb->epoll_event_list);
     close(iopb->eventfd_iop.client.fd);
 
     iopipe_linker_t *hn, *h;
@@ -600,5 +614,7 @@ void iopipe::enter(int client_fd, SSL *client_ssl, int server_fd, SSL *server_ss
 {
     iopipe_enter((iopipe_base_t *)___data, client_fd, client_ssl, server_fd, server_ssl, after_close, context);
 }
+
+#pragma pack(pop)
 
 }

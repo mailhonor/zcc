@@ -672,6 +672,10 @@ extern config default_config;
 /* system ########################################################### */
 bool chroot_user(const char *root_dir, const char *user_name);
 
+/* mime types */
+const char *mime_type_from_suffix(const char *suffix, const char *def = blank_buffer);
+const char *mime_type_from_filename(const char *filename, const char *def = blank_buffer);
+
 /* file ############################################################## */
 ssize_t file_get_size(const char *filename);
 bool file_put_contents(const char *filename, const void *data, size_t len);

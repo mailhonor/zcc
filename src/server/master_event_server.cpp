@@ -207,7 +207,7 @@ void master_event_server::alone_register(char *alone_url)
         if (p) {
             *p=0;
             service = service_buf;
-            url = p+1;
+            url = p+3;
         } else {
             service = blank_buffer;
             url = service_buf;

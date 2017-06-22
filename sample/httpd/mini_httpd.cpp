@@ -8,6 +8,8 @@
 
 #include "zcc.h"
 
+#define RFC1123_TIME "%a, %d %b %Y %H:%M:%S GMT"
+
 namespace zcc
 {
 
@@ -36,7 +38,7 @@ public:
     void response_expires(long expires);
 
     void response_body(const char *content, size_t size);
-    void response_file(const char *path, size_t offset = 0, size_t len = 0);
+    void response_file(const char *path, const char *content_type);
 /* private */
     void deal_header_line();
     void deal_first_line();
@@ -233,7 +235,10 @@ void mini_httpd::response_304(const char *etag)
 void mini_httpd::response_done()
 {
     /* FIXME timeout */
-    aio.cache_flush(___after_flush, 10 * 1000);
+    size_t wsize = aio.get_cache_size();
+    long timeout = 0;
+    timeout = 10 * 1000 + (wsize/1024) * 1000;
+    aio.cache_flush(___after_flush, timeout);
 }
 
 void mini_httpd::deal_first_line()
@@ -432,6 +437,87 @@ void mini_httpd::response_expires(long expires)
     ___response_expires = expires;
 }
 
+void mini_httpd::response_body(const char *content, size_t size)
+{
+    std::string hbuf;
+    char timestringbuf[64 + 1];
+    struct tm tmbuf;
+
+    hbuf.append("HTTP/1.1 200 ZCC\r\n");
+
+    if (___keep_alive) {
+        hbuf.append("Connection:keep-alive\r\n");
+    }
+
+    if (___response_gzip) {
+        hbuf.append("Content-Encoding:gzip\r\n");
+    }
+
+    do {
+        hbuf.append("Content-Length: ");
+        hbuf += size;
+        hbuf.append("\r\n");
+    } while(0);
+
+    do {
+        hbuf.append("Content-Type:");
+        if (___response_content_type.empty()) {
+            hbuf.append("text/html");
+        } else {
+            hbuf.append(___response_content_type.c_str());
+        }
+        if (!___response_charset.empty()) {
+            hbuf.append("; charset=");
+            hbuf.append(___response_charset.c_str());
+        }
+        hbuf.append("\r\n");
+    } while(0);
+
+    if (!___response_etag.empty()) {
+        hbuf.append("Etag:" );
+        hbuf.append(___response_etag.c_str());
+        hbuf.append("\r\n");
+    }
+
+    if (___response_last_modified != -1) {
+        gmtime_r((time_t *)(&___response_last_modified), &tmbuf);
+        strftime(timestringbuf, 64, RFC1123_TIME, &tmbuf);
+        hbuf.append("Last-Modified: ");
+        hbuf.append(timestringbuf);
+        hbuf.append("\r\n");
+    }
+    if (___response_date == -1) {
+        ___response_date = time(0);
+    }
+    do {
+        gmtime_r((time_t *)(&___response_date), &tmbuf);
+        strftime(timestringbuf, 64, RFC1123_TIME, &tmbuf);
+        hbuf.append("Date: ");
+        hbuf.append(timestringbuf);
+        hbuf.append("\r\n");
+    } while(0);
+
+    if (___response_expires != -1) {
+        gmtime_r((time_t *)(&___response_expires), &tmbuf);
+        strftime(timestringbuf, 64, RFC1123_TIME, &tmbuf);
+        hbuf.append("Expires: ");
+        hbuf.append(timestringbuf);
+        hbuf.append("\r\n");
+    }
+
+    do {
+        hbuf.append("Server: ZCC/1.0\r\n");
+    } while(0);
+
+    hbuf.append("\r\n");
+    aio.cache_write(hbuf.c_str(), hbuf.size());
+    aio.cache_write(content, size);
+    response_done();
+}
+
+void response_file(const char *path, const char *content_type)
+{
+}
 
 }
 

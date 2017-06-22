@@ -22,7 +22,7 @@ static char *ssl_cert = 0;
 static SSL_CTX * ssl_proxy_ctx = 0;
 static SSL_CTX * ssl_dest_ctx = 0;
 
-static zcc::iopipe *iop;
+static zcc::iopipe *iop = 0;
 static zcc::event_base *eb;
 
 class  fd_to_fd_linker
@@ -49,6 +49,7 @@ static int ___stop = 0;
 void after_close(void *ctx)
 {
     ___times++;
+    fprintf(stderr, "times: %d\n", ___times);
     if (___times == times) {
         iop->stop_notify();
         ___stop = 1;
@@ -156,6 +157,13 @@ static void after_connect(zcc::async_io &aio)
 
     SSL *proxy_SSL = jctx->proxy.detach_SSL();
     SSL *dest_SSL = jctx->dest.detach_SSL();
+
+    if (___stop) {
+        delete jctx;
+        close(proxy_fd);
+        close(dest_fd);
+        return;
+    }
     iop->enter(proxy_fd, proxy_SSL, dest_fd, dest_SSL, after_close, 0);
 
     delete jctx;
@@ -236,7 +244,6 @@ void * iop_run(void *arg)
 {
     iop = new zcc::iopipe();
     iop->run();
-    delete iop;
     return arg;
 }
 
@@ -257,9 +264,13 @@ int main(int argc, char **argv)
     pthread_join(pth, 0);
 #else
     pthread_create(&pth, 0, iop_run, 0);
+    sleep(1);
     accept_incoming(0);
     pthread_join(pth, 0);
 #endif
+
+    pthread_join(pth, 0);
+    delete iop;
 
     ssl_fini();
 
