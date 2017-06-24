@@ -201,10 +201,12 @@ static inline void write_read_loop(iopipe_base_t *iopb, iopipe_part_t *part, iop
             if (wlen > 0) {
                 part_a->rbuf_p1 += wlen;
                 if (len == wlen) {
+                    len = 0;
                     part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
                     have_data = 0;
                     continue;
                 }
+                len -= wlen;
             } else if (part->ssl) {
                 if (errno == EAGAIN) {
                     if (part->write_want_write) {
@@ -224,6 +226,10 @@ static inline void write_read_loop(iopipe_base_t *iopb, iopipe_part_t *part, iop
         } else {
             if (part_a->rbuf==0) {
                 part_a->rbuf = (char *)malloc(var_iopipe_rbuf_size);
+                part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
+            }
+            if (part_a->rbuf_p1 == part_a->rbuf_p2) {
+                part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
             }
             if (part_a->ssl) {
                 rlen = try_ssl_read(part_a, part_a->rbuf, var_iopipe_rbuf_size);
@@ -238,6 +244,7 @@ static inline void write_read_loop(iopipe_base_t *iopb, iopipe_part_t *part, iop
             }
             free(part_a->rbuf);
             part_a->rbuf = 0;
+            part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
             if (part_a->ssl) {
                 if (errno == EAGAIN) {
                     if (part_a->read_want_write) {
@@ -311,6 +318,8 @@ static inline void read_write_loop(iopipe_base_t *iopb, iopipe_part_t *part, iop
                     part->rbuf_p1 = part->rbuf_p2 = 0;
                     have_data = 0;
                     continue;
+                } else {
+                    part->rbuf_p1 += wlen;
                 }
                 have_data = 1;
                 continue;
