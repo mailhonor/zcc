@@ -19,6 +19,8 @@ clean: CLEAN
 
 CLEAN:
 	@rm -f *~; rm -f $(DEST); rm -f tags gmon.out depend;rm -rf $(DELS);
+	@find -type f -name "*.o" -exec rm  {} \;
+	@find -type f -name "*~" -exec rm  {} \;
 
 libzcc:
 	@echo build global lib

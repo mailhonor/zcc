@@ -32,8 +32,6 @@ static bool flag_inner_event_loop = false;
 static bool flag_clear = false;
 static pid_t parent_pid = 0;
 static event_io *ev_status = 0;
-static event_timer *reload_timer = 0;
-static event_timer *stop_file_timer = 0;
 static std::list<event_io *> event_ios;
 
 static void load_global_config_by_dir(const char *config_path)
@@ -69,14 +67,16 @@ static void stop_file_check(event_timer &tm)
 {
     if (file_get_size(stop_file) < 0) {
         var_proc_stop = true;
+        delete &tm;
     } else {
-        stop_file_timer->start(stop_file_check, 1000 * 1);
+        tm.start(stop_file_check, 1000 * 1);
     }
 }
 
 static void reloading_to_stopping(event_timer &tm)
 {
     var_proc_stop = true;
+    delete &tm;
 }
 
 static void on_master_reload(event_io &ev)
@@ -85,7 +85,7 @@ static void on_master_reload(event_io &ev)
     master_event_server::flag_reloading = true;
     if (getppid() == parent_pid) {
         ms->before_reload();
-        reload_timer = new event_timer();
+        event_timer *reload_timer = new event_timer();
         reload_timer->init();
         reload_timer->start(reloading_to_stopping, 10 * 1000);
     } else {
@@ -145,7 +145,6 @@ master_event_server::master_event_server()
         flag_run = false;
         parent_pid = getppid();
         ev_status = 0;
-        reload_timer = 0;
         /* private */
         flag_inner_event_loop = false;
         flag_clear = false;
@@ -168,14 +167,6 @@ void master_event_server::clear()
         ev_status = 0;
         close(var_master_server_status_fd);
         close(var_master_master_status_fd);
-    }
-    if (reload_timer) {
-        delete reload_timer;
-        reload_timer = 0;
-    }
-    if (stop_file_timer) {
-        delete stop_file_timer;
-        stop_file_timer = 0;
     }
     for (std::list<event_io *>::iterator it = event_ios.begin(); it != event_ios.end(); it++) {
         int fd = (*it)->get_fd();
@@ -337,7 +328,7 @@ void master_event_server::run(int argc, char ** argv)
         ev_status->enable_read(on_master_reload);
         ev_status->set_context(this);
         if (stop_file) {
-            stop_file_timer = new event_timer();
+            event_timer *stop_file_timer = new event_timer();
             stop_file_timer->init();
             stop_file_timer->start(stop_file_check, 1000 * 1);
         }

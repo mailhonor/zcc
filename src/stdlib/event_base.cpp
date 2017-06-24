@@ -1440,7 +1440,7 @@ void event_timer::start(event_timer_cb_t callback, long timeout)
     rbtree_t *timer_tree = &(eb->event_timer_tree);
     rbtree_node_t *rn = &(timer->rbnode_time);
 
-    if (!(timer->init)) {
+    if (!___data.init) {
         return;
     }
 
@@ -1468,7 +1468,7 @@ void event_timer::start(event_timer_cb_t callback, long timeout)
 
 void event_timer::stop()
 {
-    if(___data.init) {
+    if(!___data.init) {
         return;
     }
     start(0, 0);
@@ -1533,7 +1533,7 @@ void event_base::notify()
     ___Z_SYS_write(___data.eventfd_event->___data.fd, &u, sizeof(uint64_t));
 }
 
-void event_base::dispatch()
+void event_base::dispatch(long default_delay)
 {
     evbase_t *eb = &___data;
     int i, nfds, events, recv_events;
@@ -1563,10 +1563,14 @@ void event_base::dispatch()
         }
     }
 
-    if (1) {
-        if (delay > 1 * 1000) {
-            delay = 1 * 1000;
-        }
+    if (default_delay < 1) {
+        default_delay = 1000;
+    }
+    if (delay > default_delay) {
+        delay = default_delay;
+    }
+    if (delay < 1) {
+        delay = 1;
     }
     nfds = epoll_wait(eb->epoll_fd, eb->epoll_event_list, epoll_event_count, delay);
     if (nfds == -1) {
@@ -1607,7 +1611,6 @@ void event_base::dispatch()
                 } else {
                     zcc_fatal("ev: not found callback");
                 }
-                return;
             }
 
         } else if (1 || (aio->aio_type == var_event_type_aio)) {

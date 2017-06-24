@@ -31,6 +31,7 @@ public:
     virtual void response_404();
     void response_304(const char *etag);
     void response_gzip(bool tf=true);
+    void response_content_length(long length);
     void response_content_type(const char *content_type, const char *charset = blank_buffer);
     void response_etag(const char *etag);
     void response_last_modified(long last_modified);
@@ -39,11 +40,14 @@ public:
 
     void response_body(const char *content, size_t size);
     void response_file(const char *path, const char *content_type);
+
+    void response_part_body(const char *content, size_t size, void (*after_part_flush)(mini_httpd &httpd));
 /* private */
     void deal_header_line();
     void deal_first_line();
     void after_flush();
  private: 
+    void response_headers(long length); /* length < 0: means no header of Content-Length */
     void response_done();
     void loop_clear();
     void read_post_body();
@@ -69,7 +73,10 @@ public:
     /* flag */
     bool ___cookie_parsed;
     /* */
+    bool ___response_header_output_flag;
+    bool ___response_part_flag_mode;
     bool ___response_gzip;
+    long ___response_content_length;
     std::string ___response_content_type;
     std::string ___response_charset;
     std::string ___response_etag;
@@ -79,6 +86,9 @@ public:
     dict ___response_cookies;
     /* */
     async_io aio;
+    void *context;
+    void *inner_context;
+    void (*___after_part_flush)(mini_httpd &httpd);
 };
 
 static const int ___header_line_max_size = 10240;
@@ -108,27 +118,7 @@ static void ___after_flush(async_io &aio)
 
 mini_httpd::mini_httpd()
 {
-    ___sslctx = 0;
-    ___content_length = -1;
-    /* flag */
-    ___bind = false;
-    ___gzip = false;
-    ___deflate = false;
-    ___100_continue = false;
-    ___keep_alive = false;
-
-    /* */
-    ___cookie_parsed = false;
-    
-    ___response_gzip = false;
-    ___response_content_type.clear();
-    ___response_charset.clear();
-    ___response_etag.clear();
-    ___response_last_modified = -1;
-    ___response_date = -1;
-    ___response_expires = -1;
-    ___response_cookies.clear();
-    /* */
+    loop_clear();
     aio.set_context(this);
 }
 
@@ -165,7 +155,10 @@ void mini_httpd::loop_clear()
 
     /* */
     ___cookie_parsed = false;
+    ___response_header_output_flag = false;
+    ___response_part_flag_mode = false;
     ___response_gzip = false;
+    ___response_content_length = -1;
     ___response_content_type.clear();
     ___response_charset.clear();
     ___response_etag.clear();
@@ -174,6 +167,7 @@ void mini_httpd::loop_clear()
     ___response_expires = -1;
     ___response_cookies.clear();
     /* */
+    ___after_part_flush = 0;
 }
 
 void mini_httpd::run()
@@ -411,6 +405,16 @@ void mini_httpd::read_post_body()
     }
 }
 
+void mini_httpd::response_gzip(bool tf)
+{
+    ___response_gzip = tf;
+}
+
+void mini_httpd::response_content_length(long length)
+{
+    ___response_content_length = length;
+}
+
 void mini_httpd::response_content_type(const char *content_type, const char *charset)
 {
     ___response_content_type = content_type;
@@ -437,7 +441,7 @@ void mini_httpd::response_expires(long expires)
     ___response_expires = expires;
 }
 
-void mini_httpd::response_body(const char *content, size_t size)
+void mini_httpd::response_headers(long length)
 {
     std::string hbuf;
     char timestringbuf[64 + 1];
@@ -453,11 +457,19 @@ void mini_httpd::response_body(const char *content, size_t size)
         hbuf.append("Content-Encoding:gzip\r\n");
     }
 
-    do {
+    if (length == -1) {
+        
+    }
+
+    if (length > -1 ) {
         hbuf.append("Content-Length: ");
         hbuf += size;
         hbuf.append("\r\n");
-    } while(0);
+    } else if (___response_content_length > -1) {
+        hbuf.append("Content-Length: ");
+        hbuf += ___response_content_length;
+        hbuf.append("\r\n");
+    }
 
     do {
         hbuf.append("Content-Type:");
@@ -510,9 +522,17 @@ void mini_httpd::response_body(const char *content, size_t size)
     } while(0);
 
     hbuf.append("\r\n");
+}
+
+void mini_httpd::response_body(const char *content, size_t size)
+{
     aio.cache_write(hbuf.c_str(), hbuf.size());
     aio.cache_write(content, size);
     response_done();
+}
+
+void mini_httpd::response_part_body(const char *content, size_t size, void (*after_part_flush)(mini_httpd &httpd))
+{
 }
 
 void response_file(const char *path, const char *content_type)

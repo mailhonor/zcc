@@ -1111,7 +1111,7 @@ public:
     inline void set_context(const void *ctx) { ___data.context = const_cast <void *> (ctx); }
     void * get_context() { return ___data.context; }
     void notify();
-    void dispatch();
+    void dispatch(long delay = 1000);
     void set_locker(locker *lock, bool auto_release = false);
     locker *get_locker();
     evbase_t ___data;

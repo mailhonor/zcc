@@ -252,6 +252,7 @@ static int ___sane_connect(int sock, struct sockaddr *sa, int len)
         (void)setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char *)&on, sizeof(on));
     }
 
+    nonblocking(sock);
     if ((___zcc_connect(sock, sa, len) < 0) && (errno != EINPROGRESS)) {
         return (-1);
     }

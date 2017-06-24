@@ -10,7 +10,7 @@ INFO=___INFO
 
 subcmd=$1
 work_path="./"
-master_cmd="./libexec/master"
+master_cmd="./master"
 config_dir="./etc/service/"
 pid_file="./master.pid"
 
