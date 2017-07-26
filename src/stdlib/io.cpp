@@ -11,7 +11,10 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 
-static int (*___zcc_flock)(int fd, int operation) = flock;
+static inline int ___zcc_flock(int fd, int operation)
+{
+    return flock(fd, operation);
+}
 
 namespace zcc
 {
@@ -40,12 +43,6 @@ bool is_rwable(int fd, bool *rable, bool *wable)
             return false;
         default:
             revs = pollfd.revents;
-            if (revs & POLLNVAL) {
-                return false;
-            }
-            if (revs & (POLLERR | POLLHUP | POLLRDHUP)) {
-                return false;
-            }
             if (rable) {
                 if (revs & POLLIN) {
                     *rable = true;
@@ -61,6 +58,12 @@ bool is_rwable(int fd, bool *rable, bool *wable)
                 }
             }
             return true;
+            if (revs & POLLNVAL) {
+                return false;
+            }
+            if (revs & (POLLERR | POLLHUP | POLLRDHUP)) {
+                /* return false; */
+            }
         }
     }
 
@@ -148,6 +151,7 @@ int get_readable_count(int fd)
 
 ssize_t writen(int fd, const void *buf, size_t size)
 {
+    bool is_closed = false;
     ssize_t ret;
     size_t left;
     char *ptr;
@@ -157,23 +161,36 @@ ssize_t writen(int fd, const void *buf, size_t size)
 
     while (left > 0) {
         if (!(timed_wait_writeable(fd, 3600 * 365 * 1000))) {
-            return -1;
+            break;
         }
         ret = write(fd, ptr, left);
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            return -1;
+            if (errno == EAGAIN) {
+                continue;
+            }
+            if (errno == EPIPE) {
+                is_closed = true;
+                break;
+            }
+            break;
         } else if (ret == 0) {
-            return -1;
+            continue;
         } else {
             left -= ret;
             ptr += ret;
         }
     }
 
-    return size;
+    if (size > left) {
+        return size - left;
+    }
+    if (is_closed) {
+        return 0;
+    }
+    return -1;
 }
 
 }

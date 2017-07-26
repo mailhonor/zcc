@@ -95,7 +95,7 @@ static int deal_content_type(mail_parser_inner * parser, mail_parser_mime_inner 
     mime_header_line_decode_content_type(buf, len, &val, &v_len, &boundary, &b_len, &charset, &c_len, &name, &n_len);
     if (v_len) {
         cmime->type = parser->gmp->memdupnull(val, v_len);
-        to_lower(cmime->type);
+        tolower(cmime->type);
     }
     if (b_len) {
         cmime->boundary = parser->gmp->memdupnull(boundary, b_len);

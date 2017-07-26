@@ -48,7 +48,7 @@ int main(int argc, char **argv)
     printf("S: %s", str.c_str());
 
     fp.puts("quit\r\n");
-    printf("C: %s", "quit\n");
+    printf("C: %s", "quit\r\n");
 
     fp.gets(str);
     printf("S: %s", str.c_str());

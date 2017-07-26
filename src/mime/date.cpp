@@ -29,7 +29,7 @@ long mime_header_line_decode_date(const char *str)
     memset(&tm, 0, sizeof(struct tm));
     strncpy(str_copy, str, 127);
     str_copy[127] = 0;
-    to_lower(str_copy);
+    tolower(str_copy);
     p = str_copy;
 
     ___FIND_DIGIT(p);

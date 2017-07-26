@@ -26,8 +26,10 @@ static void server_error(zcc::event_io &ev)
     fd = ev.get_fd();
     fp = (zcc::iostream *)ev.get_context();
 
-    if (ev.exception()) {
+    if (ev.get_result() < 0) {
         zcc_info("fd:%d, exception", fd);
+    } else {
+        zcc_info("fd:%d, clsoed", fd);
     }
 
     delete &ev;
@@ -46,7 +48,7 @@ static void server_read(zcc::event_io &ev)
 
     fd = ev.get_fd();
 
-    if (ev.exception()) {
+    if (ev.get_result() < 1) {
         server_error(ev);
         return;
     }
@@ -68,7 +70,7 @@ static void server_read(zcc::event_io &ev)
     }
 
     fp->puts("your input: ");
-    fp->writen(rbuf.c_str(), rbuf.size());
+    fp->write(rbuf.c_str(), rbuf.size());
     if (!fp->flush()) {
         server_error(ev);
         return;
@@ -79,7 +81,7 @@ static void server_read(zcc::event_io &ev)
 
 static void server_welcome(zcc::event_io &ev)
 {
-    if (ev.exception()) {
+    if (ev.get_result() < 1) {
         server_error(ev);
         return;
     }
@@ -90,7 +92,13 @@ static void server_welcome(zcc::event_io &ev)
         server_error(ev);
         return;
     }
-
+#if 0
+    delete fp;
+    int fd = ev.get_fd();
+    delete &ev;
+    close(fd);
+    return;
+#endif
     ev.set_context(fp);
     ev.enable_read(server_read);
 }
@@ -100,7 +108,7 @@ static void before_accept(zcc::event_io & ev)
     int sock = ev.get_fd();
     int fd = zcc::inet_accept(sock);
     zcc::event_io *nev = new zcc::event_io();
-    nev->init(fd);
+    nev->bind(fd);
     nev->enable_write(server_welcome);
 }
 
@@ -124,10 +132,10 @@ int main(int argc, char **argv)
     int sock;
     zcc::event_io *ev;
 
-    sock = zcc::listen(listen_on, 5);
+    sock = zcc::listen(listen_on, 0);
     zcc::nonblocking(sock);
     ev = new zcc::event_io();
-    ev->init(sock);
+    ev->bind(sock);
     ev->enable_read(before_accept);
 
     while (!___EXIT) {

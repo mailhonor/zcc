@@ -30,7 +30,7 @@ gm_pool::gm_pool()
 
 gm_pool::~gm_pool()
 {
-    reset();
+    clear();
 }
 
 void gm_pool::option_buffer_size(size_t single_buffer_size)
@@ -50,7 +50,7 @@ void gm_pool::option_buffer_size(size_t single_buffer_size)
     ___sys_tail = 0;
 }
 
-void gm_pool::reset()
+void gm_pool::clear()
 {
     if (___single_buffer_size == 0) {
         return;

@@ -164,7 +164,7 @@ static int parser_one(char **str, int *len, char **rname, char **raddress, char 
         mail = pstr;
     }
 
-    to_lower(mail);
+    tolower(mail);
     *raddress = mail;
 
     char *name_bak = name;
@@ -274,7 +274,7 @@ bool mime_address_parser::shift(char **name, char **address)
     }
     return false;
 }
-void mime_header_line_get_address(const char *in_str, size_t in_len, std::vector<mime_address *> &rvec)
+void mime_header_line_get_address(const char *in_str, size_t in_len, vector<mime_address *> &rvec)
 {
     mime_address *addr;
     char *n, *a, *str, *cache;
@@ -305,16 +305,14 @@ void mime_header_line_get_address(const char *in_str, size_t in_len, std::vector
 }
 
 void mime_header_line_get_address_utf8(const char *src_charset_def , const char *in_str, size_t in_len
-        , std::vector<mime_address *> &rvec)
+        , vector<mime_address *> &rvec)
 {
     const char *name;
-    mime_address *addr;
     mime_parser_cache_magic mcm(in_str);
     std::string &dest = mcm.require_string();
 
     mime_header_line_get_address((char *)&mcm, in_len, rvec);
-    for (std::vector<mime_address *>::iterator it = rvec.begin(); it != rvec.end(); it++) {
-        addr = *it;
+    zcc_vector_walk_begin(rvec, addr) {
         name = addr->name();
         if (*name) {
             dest.clear();
@@ -326,7 +324,7 @@ void mime_header_line_get_address_utf8(const char *src_charset_def , const char 
                 addr->update_name_utf8(dest.c_str());
             }
         }
-    }
+    } zcc_vector_walk_end;
 }
 
 }

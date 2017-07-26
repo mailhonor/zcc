@@ -39,11 +39,11 @@ static void ___usage(char *arg = 0)
 
     printf("USAGE: %s -proxy host:port -dest host:port\n", zcc::var_progname);
     printf("USAGE: %s -proxy host:port -ssl-dest host:port\n", zcc::var_progname);
-    printf("USAGE: %s -ssl-proxy host:port -dest host:port --ssl-cert filename -ssl-key filename\n", zcc::var_progname);
+    printf("USAGE: %s -ssl-proxy host:port -dest host:port -ssl-cert filename -ssl-key filename\n", zcc::var_progname);
     exit(1);
 }
 
-int times = 3;
+int times = 999999;
 static int ___times = 0;
 static int ___stop = 0;
 void after_close(void *ctx)
@@ -54,6 +54,7 @@ void after_close(void *ctx)
         iop->stop_notify();
         ___stop = 1;
         eb->notify();
+        fprintf(stderr, "... stop\n");
     }
 }
 
@@ -145,7 +146,7 @@ static void ssl_fini()
 
 static void after_connect(zcc::async_io &aio)
 {
-    int ret = aio.get_ret();
+    int ret = aio.get_result();
     fd_to_fd_linker *jctx = (fd_to_fd_linker *)aio.get_context();
     int proxy_fd = jctx->proxy.get_fd(), dest_fd = jctx->dest.get_fd();
     if (ret < 0) {
@@ -172,7 +173,7 @@ static void after_connect(zcc::async_io &aio)
 static void after_accept(zcc::async_io &aio)
 {
     int proxy_fd;
-    int ret = aio.get_ret();
+    int ret = aio.get_result();
     fd_to_fd_linker *jctx = (fd_to_fd_linker *)aio.get_context();
     if (ret < 0) {
         proxy_fd = aio.get_fd();
@@ -187,7 +188,7 @@ static void after_accept(zcc::async_io &aio)
         return;
     }
 
-    jctx->dest.init(dest_fd);
+    jctx->dest.bind(dest_fd);
     jctx->dest.set_context(jctx);
     if (dest_ssl) {
         jctx->dest.tls_connect(ssl_dest_ctx, after_connect, 10 * 1000);
@@ -206,7 +207,7 @@ static void start_one(zcc::event_io &eio)
     zcc::nonblocking(proxy_fd);
     fd_to_fd_linker *jctx = new fd_to_fd_linker();
 
-    jctx->proxy.init(proxy_fd);
+    jctx->proxy.bind(proxy_fd);
     jctx->proxy.set_context(jctx);
     if (proxy_ssl) {
         jctx->proxy.tls_accept(ssl_proxy_ctx, after_accept, 10 * 1000);
@@ -218,14 +219,14 @@ static void start_one(zcc::event_io &eio)
 static void *accept_incoming(void *arg)
 {
 
-    int fd = zcc::listen(proxy_address, 5);
+    int fd = zcc::listen(proxy_address, 0);
     if (fd < 0) {
         printf("ERR can not open %s (%m)\n", proxy_address);
         exit(1);
     }
 
     zcc::event_io eio;
-    eio.init(fd);
+    eio.bind(fd);
     eio.enable_read(start_one);
 
     while(1) {
@@ -234,8 +235,9 @@ static void *accept_incoming(void *arg)
             break;
         }
     }
-    eio.fini();
     delete eb;
+
+    zcc::openssl_phtread_fini();
 
     return arg;
 }
@@ -244,6 +246,7 @@ void * iop_run(void *arg)
 {
     iop = new zcc::iopipe();
     iop->run();
+    zcc::openssl_phtread_fini();
     return arg;
 }
 
@@ -260,16 +263,14 @@ int main(int argc, char **argv)
     pthread_t pth;
 #if 0
     pthread_create(&pth, 0, accept_incoming, 0);
-    iop_run();
+    iop_run(0);
     pthread_join(pth, 0);
 #else
     pthread_create(&pth, 0, iop_run, 0);
-    sleep(1);
     accept_incoming(0);
     pthread_join(pth, 0);
 #endif
 
-    pthread_join(pth, 0);
     delete iop;
 
     ssl_fini();

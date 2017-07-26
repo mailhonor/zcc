@@ -98,7 +98,7 @@ ssize_t base64_encode(const void *src, size_t src_size, std::string &str, bool m
     return str.size();
 }
 
-ssize_t base64_decode(const void *src, size_t src_size, std::string &str)
+ssize_t base64_decode(const void *src, size_t src_size, std::string &str, size_t *dealed_size)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
@@ -106,23 +106,37 @@ ssize_t base64_decode(const void *src, size_t src_size, std::string &str)
     int ret = -1;
     unsigned char c0, c1, c2, c3;
     bool illegal = false;
+    bool missing = false;
+    size_t dealed_size2 = 0;
     str.clear();
 
 #define ___get_next_ch(c0123, br)    while(1){ \
-    if(src_pos >= src_size){ if(br) {c0123='='; break;}  goto over; } \
+    if(src_pos >= src_size){ if(br) {c0123='='; missing = true; break;}  goto over; } \
     c0123 = src_c[src_pos++]; \
     if(c0123==' ' || c0123 =='\r' || c0123 == '\n'){ continue; } \
     break; \
 }
 
+    if (dealed_size) {
+        *dealed_size = 0;
+    }
 retry:
-    while (1) {
+    ret = -1;
+    while (src_pos < src_size) {
         ret = -1;
+        missing = false;
+        if (dealed_size) {
+            *dealed_size = src_pos;
+        }
         ___get_next_ch(c0, 0);
         ___get_next_ch(c1, 0);
         ___get_next_ch(c2, 1);
         ___get_next_ch(c3, 1);
-
+        dealed_size2 = src_pos;
+        if (dealed_size && missing) {
+            break;
+        }
+        *dealed_size = dealed_size2;
         input[0] = b64dec[c0];
         if (input[0] == 0xff) {
             illegal = true;
@@ -165,13 +179,14 @@ retry:
         str.push_back(output[1]);
         str.push_back(output[2]);
     }
+
     if (ret == 1) {
         goto retry;
     }
 
 over:
     if (illegal) {
-        zcc_debug("base64_decode: illegal char at %zd", src_pos);
+        return -1;
     }
     return str.size();
 }
@@ -203,6 +218,53 @@ ssize_t base64_encode_get_min_len(size_t in_len, bool mime_flag)
         ret += ((in_len / (76 * 3 / 4)) + 1) * 2 + 2;
     }
     ret += 1;
+
+    return ret;
+}
+
+/* ###################################################################### */
+base64_decoder::base64_decoder()
+{
+    leftbuf[0] = 0;
+}
+
+base64_decoder::~base64_decoder()
+{
+}
+
+ssize_t base64_decoder::decode(const void *src, size_t src_size, std::string &str)
+{
+    str.clear();
+    tmpstring.clear();
+    tmpstring.append(leftbuf);
+    leftbuf[0] = 0;
+    if ((!empty(src)) && src_size) {
+        tmpstring.append((char *)src, src_size);
+    }
+    if (tmpstring.empty()) {
+        return 0;
+    }
+    ssize_t ret;
+    size_t dealed_size;
+
+    if ((!empty(src)) && src_size) {
+        ret = base64_decode(tmpstring.c_str(), tmpstring.size(), str, &dealed_size);
+    } else {
+        ret = base64_decode(tmpstring.c_str(), tmpstring.size(), str);
+    }
+    if (ret < 0) {
+        return ret;
+    }
+
+    char *p = const_cast<char *>(tmpstring.c_str());
+    p += dealed_size;
+    long left = tmpstring.size() - dealed_size;
+    if (left > 3)  {
+        return -1;
+    }
+    if (left) {
+        strcpy(leftbuf, p + dealed_size);
+    }
 
     return ret;
 }

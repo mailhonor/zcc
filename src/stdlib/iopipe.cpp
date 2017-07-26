@@ -16,32 +16,31 @@ namespace zcc
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 
+ssize_t syscall_read(int fd, void *buf, size_t count);
+ssize_t syscall_write(int fd, const void *buf, size_t count);
+
 #pragma pack(push, 1)
 
+/* {{{ declare, macro */
 #define var_epoll_event_count  4096
-static int var_iopipe_rbuf_size = 4096;
+#define var_iopipe_rbuf_size 4096
+#define var_iopipe_retry_size 10
 #define ZIOPIPE_BASE_LOCK(iopb)		if (pthread_mutex_lock(&(iopb->locker))) { zcc_fatal("mutex:%m"); }
 #define ZIOPIPE_BASE_UNLOCK(iopb)	if (pthread_mutex_unlock(&(iopb->locker))) { zcc_fatal("mutex:%m"); }
 
 typedef struct iopipe_t iopipe_t;
 typedef struct iopipe_part_t iopipe_part_t;
 typedef struct iopipe_linker_t iopipe_linker_t;
+typedef struct iopipe_retry_t iopipe_retry_t;
 
 struct iopipe_part_t {
     unsigned char is_client_or_server:1;
-    unsigned char read_want_read:1;
-    unsigned char read_want_write:1;
-    unsigned char write_want_read:1;
-    unsigned char write_want_write:1;
-    unsigned char ssl_error:1;
+    unsigned char error_or_closed:1;
     unsigned char event_in:1;
-    unsigned char et_read:1;
-    unsigned char et_write:1;
-    unsigned char et_hup:1;
     int rbuf_p1:16;
     int rbuf_p2:16;
     int fd;
-    char *rbuf;
+    char rbuf[var_iopipe_rbuf_size+1];
     SSL *ssl;
 };
 
@@ -50,7 +49,17 @@ struct iopipe_t {
     iopipe_part_t server;
     iopipe_after_close_fn_t after_close;
     void *context;
-    unsigned char err:1;
+    long timeout;
+    iopipe_t *prev;
+    iopipe_t *next;
+    short int retry_idx;
+    unsigned char error_queue_in:1;
+};
+
+struct iopipe_retry_t {
+    iopipe_t *head;
+    iopipe_t *tail;
+    int count;
 };
 
 struct iopipe_linker_t {
@@ -70,94 +79,338 @@ struct iopipe_base_t {
     struct epoll_event epoll_event_list[var_epoll_event_count];
     iopipe_t *iopipe_error_vector[var_epoll_event_count];
     pthread_mutex_t locker;
-    iopipe_linker_t *set_list_head;
-    iopipe_linker_t *set_list_tail;
+    iopipe_linker_t *enter_list_head;
+    iopipe_linker_t *enter_list_tail;
+    iopipe_retry_t retry_vector[var_iopipe_retry_size];
+    long retry_stamp;
+    short int retry_idx;
     iopipe_t eventfd_iop;
+    long after_peer_closed_timeout;
+    int count;
 };
 
-static void iopipe_set_event(iopipe_base_t * iopb, iopipe_part_t * part, int enable)
+/* }}} */
+
+/* {{{ event set/unset */
+static void iopipe_set_event(iopipe_base_t * iopb, iopipe_part_t * part)
 {
-    int fd, event_in, e_events;
-    struct epoll_event evt;
+    if (part->event_in) {
+        return;
+    }
+    struct epoll_event epev;
+    epev.events = EPOLLET | EPOLLIN | EPOLLOUT;
+    epev.data.ptr = part;
+    if (epoll_ctl(iopb->epoll_fd, EPOLL_CTL_ADD, part->fd, &epev) == -1) {
+        zcc_fatal("fd %d: ADD error: %m", part->fd);
+    }
+    part->event_in = 1;
+}
 
-    fd = part->fd;
-    e_events = EPOLLHUP | EPOLLRDHUP | EPOLLERR | EPOLLET | EPOLLIN| EPOLLOUT;
+static void iopipe_unset_event(iopipe_base_t * iopb, iopipe_part_t * part)
+{
+    if (!(part->event_in)) {
+        return;
+    }
+    if (epoll_ctl(iopb->epoll_fd, EPOLL_CTL_DEL, part->fd, NULL) == -1) {
+        zcc_fatal("fd %d: DEL error: %m", part->fd);
+    }
+    part->event_in = 0;
+}
+/* }}} */
 
-    event_in = part->event_in;
-    part->event_in = enable;
-    if (enable == 0) {
-        if (event_in) {
-            if (epoll_ctl(iopb->epoll_fd, EPOLL_CTL_DEL, fd, NULL) == -1) {
-                zcc_fatal("iopipe_set_event: fd %d: DEL  error: %m", fd);
-            }
+/* {{{ iopipe_try_release */
+static inline void iopipe_part_release(iopipe_base_t *iopb, iopipe_part_t *part)
+{
+    if (part->error_or_closed && (part->fd !=-1 )) {
+        iopipe_unset_event(iopb, part);
+        if (part->ssl) {
+            openssl_SSL_free(part->ssl);
+            part->ssl = 0;
         }
-    } else if (event_in != enable) {
-        evt.events = e_events;
-        evt.data.ptr = part;
-        if (epoll_ctl(iopb->epoll_fd, EPOLL_CTL_ADD, fd, &evt) == -1) {
-            zcc_fatal("iopipe_set_event: fd %d: ADD error: %m", fd);
-        }
+        close(part->fd);
+        part->fd = -1;
     }
 }
 
-static inline int try_ssl_write(iopipe_part_t * part, void *buf, int len)
+static void iopipe_try_release(iopipe_base_t *iopb, iopipe_t *iop)
 {
-    int rlen, status, eo;
+    iopipe_part_t *part_client = &(iop->client);
+    iopipe_part_t *part_server = &(iop->server);
+    bool need_free = false;
+    if ((part_client->error_or_closed==1) && (part_server->error_or_closed==1)){
+        need_free = true;
+    }
+    if ((part_client->error_or_closed==1) && (part_client->rbuf_p2 == part_client->rbuf_p1)) {
+        need_free = true;
+    }
+    if ((part_server->error_or_closed==1) && (part_server->rbuf_p2 == part_server->rbuf_p1)) {
+        need_free = true;
+    }
+    if ((!need_free) && iop->timeout && (timeout_set(0) > iop->timeout)) {
+        need_free = true;
+    }
+    if (need_free) {
+        part_client->error_or_closed = 1;
+        part_server->error_or_closed = 1;
+    }
+    iopipe_part_release(iopb, part_client);
+    iopipe_part_release(iopb, part_server);
 
-    rlen = SSL_write(part->ssl, buf, len);
-    if (rlen < 1) {
-        eo = errno;
-        status = SSL_get_error(part->ssl, rlen);
-       if (status == SSL_ERROR_WANT_WRITE) {
-           part->write_want_write = 0;
-           part->write_want_read = 0;
-            part->write_want_write = 1;
-        } else if (status == SSL_ERROR_WANT_READ) {
-           part->write_want_write = 0;
-           part->write_want_read = 0;
-            part->write_want_read = 1;
-        } else if (status == SSL_ERROR_SYSCALL) {
-            if (eo && (eo != EAGAIN)) {
-                part->ssl_error = 1;
-            }
-        } else {
-            part->ssl_error = 1;
-        }
+    if (!need_free) {
+        return;
+    }
+    
+    zcc_mlink_detach(iopb->retry_vector[iop->retry_idx].head,iopb->retry_vector[iop->retry_idx].tail,iop,prev,next);
+    iopb->retry_vector[iop->retry_idx].count --;
+    iopb->count --;
+    if (iop->after_close) {
+        iop->after_close(iop->context);
+    }
+    free(iop);
+}
+/* }}} */
+
+/* {{{ read/write loop */
+static inline int iopipe_ssl_write(iopipe_part_t * part, void *buf, int len)
+{
+    int wlen = -1, status;
+    if (part->error_or_closed) {
         return -1;
     }
-
-    return rlen;
+    while(1) {
+        wlen = SSL_write(part->ssl, buf, len);
+        if (wlen > 0) {
+            break;
+        }
+        status = SSL_get_error(part->ssl, wlen);
+        if (status == SSL_ERROR_WANT_WRITE) {
+            wlen = -1;
+        } else if (status == SSL_ERROR_WANT_READ) {
+            wlen = -1;
+        } else {
+            part->error_or_closed = 1;
+        }
+        break;
+    }
+    return wlen;
 }
 
-static inline int try_ssl_read(iopipe_part_t * part, void *buf, int len)
+static inline int iopipe_ssl_read(iopipe_part_t * part, void *buf, int len)
 {
-    int rlen, status, eo;
-
-    rlen = SSL_read(part->ssl, buf, len);
-    if (rlen < 1) {
-        eo = errno;
+    int rlen = -1, status;
+    if (part->error_or_closed) {
+        return -1;
+    }
+    while(1) {
+        rlen = SSL_read(part->ssl, buf, len);
+        if (rlen > 0) {
+            break;
+        }
         status = SSL_get_error(part->ssl, rlen);
         if (status == SSL_ERROR_WANT_WRITE) {
-            part->read_want_write = 0;
-            part->read_want_read = 0;
-            part->read_want_write = 1;
+            rlen = -1;
         } else if (status == SSL_ERROR_WANT_READ) {
-            part->read_want_write = 0;
-            part->read_want_read = 0;
-            part->read_want_read = 1;
-        } else if (status == SSL_ERROR_SYSCALL) {
-            if (eo && (eo != EAGAIN)) {
-                part->ssl_error = 1;
-            }
+            rlen = -1;
         } else {
-            part->ssl_error = 1;
+            part->error_or_closed = 1;
+            break;
         }
-        return -1;
+        break;
     }
     return rlen;
 }
 
-iopipe_base_t *iopipe_base_create(void)
+static inline ssize_t iopipe_sys_write(iopipe_part_t * part, const void *buf, size_t count)
+{
+    int wlen = -1, eo;
+    if (part->error_or_closed) {
+        return -1;
+    }
+    while(1) {
+        errno = 0;
+        wlen = syscall_write(part->fd, buf, count);
+        if (wlen > 0) {
+            break;
+        }
+        if (wlen == 0) {
+            wlen = -1;
+            break;
+        }
+        eo = errno;
+        if (eo == EINTR) {
+            continue;
+        }
+        if (eo == EAGAIN) {
+            break;
+        }
+        part->error_or_closed = 1;
+        break;
+    }
+
+    return wlen;
+}
+
+static inline ssize_t iopipe_sys_read(iopipe_part_t * part, void *buf, size_t count)
+{
+    int rlen = -1, eo;
+    if (part->error_or_closed) {
+        return -1;
+    }
+    while(1) {
+        errno = 0;
+        rlen = syscall_read(part->fd, buf, count);
+        if (rlen == 0) {
+            part->error_or_closed = 1;
+        }
+        if (rlen >= 0) {
+            break;
+        }
+        eo = errno;
+        if (eo == EINTR) {
+            continue;
+        }
+        if (eo == EAGAIN) {
+            break;
+        }
+        part->error_or_closed = 1;
+        break;
+    }
+    return rlen;
+}
+
+static void iopipe_read_write_loop(iopipe_base_t *iopb, iopipe_part_t *part, iopipe_part_t *part_a)
+{
+    int rbuf_len, wrote_len;
+    while(1) {
+        rbuf_len = part->rbuf_p2 - part->rbuf_p1;
+        if (rbuf_len == 0) {
+            part->rbuf_p1 = part->rbuf_p2 = 0;
+            if (part->ssl) {
+                rbuf_len = iopipe_ssl_read(part, part->rbuf, var_iopipe_rbuf_size);
+            } else {
+                rbuf_len = (int)iopipe_sys_read(part, part->rbuf, var_iopipe_rbuf_size);
+            }
+
+            if (rbuf_len > 0) {
+                part->rbuf_p2 = rbuf_len;
+                continue;
+            } else {
+                break;
+            }
+        } else {
+            if (part_a->ssl) {
+                wrote_len = iopipe_ssl_write(part_a, part->rbuf + part->rbuf_p1, rbuf_len);
+            } else {
+                wrote_len = (int)iopipe_sys_write(part_a, part->rbuf + part->rbuf_p1, (size_t)rbuf_len);
+            }
+            if (wrote_len > 0) {
+                if (rbuf_len == wrote_len) {
+                    part->rbuf_p1 += wrote_len;
+                }
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
+}
+/* }}} */
+
+/* {{{ iopipe_enter_list_checker */
+static inline void iopipe_enter_list_checker(iopipe_base_t *iopb)
+{
+    while (iopb->enter_list_head) {
+        ZIOPIPE_BASE_LOCK(iopb);
+        iopipe_linker_t *linker = iopb->enter_list_head;
+        if (!linker) {
+            ZIOPIPE_BASE_UNLOCK(iopb);
+            break;
+        }
+        zcc_mlink_detach(iopb->enter_list_head, iopb->enter_list_tail, linker, prev, next);
+        ZIOPIPE_BASE_UNLOCK(iopb);
+
+        int cfd, sfd;
+        SSL *cssl, *sssl;
+        iopipe_after_close_fn_t after_close;
+        void *context;
+        cfd = linker->cfd;
+        sfd = linker->sfd;
+        cssl = linker->cssl;
+        sssl = linker->sssl;
+        after_close = linker->after_close;
+        context = linker->context;
+        iopipe_t *iop = (iopipe_t *) linker;
+        memset(iop, 0, sizeof(iopipe_t));
+
+        iop->client.fd = cfd;
+        iop->client.ssl = cssl;
+        iop->client.is_client_or_server = 0;
+
+        iop->server.fd = sfd;
+        iop->server.ssl = sssl;
+        iop->server.is_client_or_server = 1;
+
+        iop->after_close = after_close;
+        iop->context = context;
+
+        iopipe_set_event(iopb, &(iop->client));
+        iopipe_set_event(iopb, &(iop->server));
+
+        do {
+            int min_count = 1024 * 1024 * 100;
+            int idx = 0;
+            iopipe_retry_t *rt = iopb->retry_vector + 0;
+            for (int i = 0; i < var_iopipe_retry_size; i++) {
+                if (iopb->retry_vector[i].count < min_count) {
+                    rt = iopb->retry_vector + i;
+                    min_count = rt->count;
+                    idx = i;
+                }
+            }
+            iop->retry_idx = idx;
+            zcc_mlink_append(rt->head, rt->tail, iop, prev, next);
+            rt->count ++;
+            iopb->count ++;
+        } while(0);
+    }
+}
+/* }}} */
+
+/* {{{ retry and timeout */
+static inline void iopipe_retry_vector(iopipe_base_t *iopb)
+{
+    if (timeout_set(0) - iopb->retry_stamp < 100) {
+        return;
+    }
+    int idx = iopb->retry_idx;
+    iopb->retry_idx++;
+    if (iopb->retry_idx == var_iopipe_retry_size) {
+        iopb->retry_idx = 0;
+    }
+    iopipe_t *iop, *iop_next;
+    for (iop = iopb->retry_vector[idx].head; iop; iop = iop_next) {
+        iop_next = iop->next;
+        iopipe_part_t *part_client = &(iop->client);
+        iopipe_part_t *part_server = &(iop->server);
+        if (part_server->error_or_closed==0) {
+            iopipe_read_write_loop(iopb, part_client, part_server);
+        }
+        if (part_client->error_or_closed==0) {
+            iopipe_read_write_loop(iopb, part_server, part_client);
+        }
+        if ((part_client->error_or_closed) || (part_server->error_or_closed)) {
+            if (iop->timeout == 0) {
+                iop->timeout = timeout_set(0) + iopb->after_peer_closed_timeout;
+            }
+        }
+        iopipe_try_release(iopb, iop);
+    }
+    iopb->retry_stamp = timeout_set(0);
+}
+/* }}} */
+
+/* {{{ iopipe_base_create */
+static iopipe_base_t *iopipe_base_create(void)
 {
     iopipe_base_t *iopb;
     int efd;
@@ -175,238 +428,57 @@ iopipe_base_t *iopipe_base_create(void)
 
     iopb->eventfd_iop.client.fd = efd;
     iopb->eventfd_iop.client.is_client_or_server = 0;
-    iopipe_set_event(iopb, &(iopb->eventfd_iop.client), 1);
+    iopipe_set_event(iopb, &(iopb->eventfd_iop.client));
+
+    iopb->after_peer_closed_timeout = 10 * 1000;
 
     return iopb;
 }
 
-void iopipe_base_notify_stop(iopipe_base_t * iopb)
+static void iopipe_base_free(iopipe_base_t * iopb)
 {
-    iopb->break_flag = 1;
-}
+    close(iopb->epoll_fd);
+    close(iopb->eventfd_iop.client.fd);
 
-static inline void write_read_loop(iopipe_base_t *iopb, iopipe_part_t *part, iopipe_part_t *part_a, int len)
-{
-    int have_data = 1, wlen, rlen;
-    if (len < 1) {
-        have_data = 0;
+    iopipe_linker_t *hn, *h;
+    for (h = iopb->enter_list_head;h;h=hn) {
+        hn = h->next;
+        openssl_SSL_free(h->cssl);
+        close(h->cfd);
+        openssl_SSL_free(h->sssl);
+        close(h->sfd);
     }
-    while(1) {
-        if (have_data == 1) {
-            if (part->ssl) {
-                wlen = try_ssl_write(part, part_a->rbuf + part_a->rbuf_p1, len);
-            } else {
-                wlen = (int)write(part->fd, part_a->rbuf + part_a->rbuf_p1, (size_t) len);
-            }
-            if (wlen > 0) {
-                part_a->rbuf_p1 += wlen;
-                if (len == wlen) {
-                    len = 0;
-                    part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
-                    have_data = 0;
-                    continue;
-                }
-                len -= wlen;
-            } else if (part->ssl) {
-                if (errno == EAGAIN) {
-                    if (part->write_want_write) {
-                        part->et_write = 0;
-                    }
-                    if (part->write_want_read) {
-                        part->et_read = 0;
-                    }
-                }
-                return;
-            } else {
-                if (errno == EAGAIN) {
-                    part->et_write = 0;
-                }
-                return;
-            }
-        } else {
-            if (part_a->rbuf==0) {
-                part_a->rbuf = (char *)malloc(var_iopipe_rbuf_size);
-                part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
-            }
-            if (part_a->rbuf_p1 == part_a->rbuf_p2) {
-                part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
-            }
-            if (part_a->ssl) {
-                rlen = try_ssl_read(part_a, part_a->rbuf, var_iopipe_rbuf_size);
-            } else {
-                rlen = read(part_a->fd, part_a->rbuf, var_iopipe_rbuf_size);
-            }
-            if (rlen > 0) {
-                part_a->rbuf_p2 = rlen;
-                len = rlen;
-                have_data = 1;
-                continue;
-            }
-            free(part_a->rbuf);
-            part_a->rbuf = 0;
-            part_a->rbuf_p1 = part_a->rbuf_p2 = 0;
-            if (part_a->ssl) {
-                if (errno == EAGAIN) {
-                    if (part_a->read_want_write) {
-                        part_a->et_write = 0;
-                    }
-                    if (part_a->read_want_read) {
-                        part_a->et_read = 0;
-                    }
-                }
-                return;
-            } else {
-                if (errno == EAGAIN) {
-                    part_a->et_read = 0;
-                }
-                return;
-            }
+
+    for (int idx = 0; idx < var_iopipe_retry_size; idx ++) {
+        iopipe_t *iop, *iop_next;
+        for (iop = iopb->retry_vector[idx].head; iop; iop = iop_next) {
+            iop_next = iop->next;
+            iop->client.error_or_closed = 0;
+            iop->server.error_or_closed = 0;
+            iopipe_try_release(iopb, iop);
         }
     }
+
+    pthread_mutex_destroy(&(iopb->locker));
+    free(iopb);
 }
+/* }}} */
 
-static inline void read_write_loop(iopipe_base_t *iopb, iopipe_part_t *part, iopipe_part_t *part_a, int len)
+/* {{{ iopipe_base_run */
+static int iopipe_base_run(iopipe_base_t * iopb)
 {
-    int have_data = 1, rlen, wlen;
-
-    if (len == 0) {
-        part->rbuf_p1 = part->rbuf_p2 = 0;
-        have_data = 0;
-    }
-    if (!(part->rbuf)) {
-        part->rbuf = (char *)malloc(var_iopipe_rbuf_size);
-    }
-
-    while(1) {
-        if (have_data == 0) {
-            part->rbuf_p1 = 0;
-            if (part->ssl) {
-                rlen = try_ssl_read(part, part->rbuf, var_iopipe_rbuf_size);
-            } else {
-                rlen = read(part->fd, part->rbuf, var_iopipe_rbuf_size);
-            }
-
-            if (rlen > 0) {
-                part->rbuf_p2 = rlen;
-                have_data = 1;
-                continue;
-            } else if (part->ssl) {
-                if (errno == EAGAIN) {
-                    if (part->read_want_write) {
-                        part->et_write = 0;
-                    }
-                    if (part->read_want_read) {
-                        part->et_read = 0;
-                    }
-                }
-                return;
-            } else {
-                if (errno == EAGAIN) {
-                    part->et_read = 0;
-                }
-                return;
-            }
-        } else {
-            rlen =  part->rbuf_p2 - part->rbuf_p1;
-            if (part_a->ssl) {
-                wlen = try_ssl_write(part_a, part->rbuf + part->rbuf_p1, rlen);
-            } else {
-                wlen = (int)write(part_a->fd, part->rbuf + part->rbuf_p1, (size_t) rlen);
-            }
-            if (wlen > 0) {
-                if (rlen == wlen) {
-                    part->rbuf_p1 = part->rbuf_p2 = 0;
-                    have_data = 0;
-                    continue;
-                } else {
-                    part->rbuf_p1 += wlen;
-                }
-                have_data = 1;
-                continue;
-            }
-            if (part_a->ssl) {
-                if (errno == EAGAIN) {
-                    if (part_a->read_want_write) {
-                        part_a->et_write = 0;
-                    }
-                    if (part_a->read_want_read) {
-                        part_a->et_read = 0;
-                    }
-                }
-                return;
-            } else {
-                if (errno == EAGAIN) {
-                    part_a->et_write = 0;
-                }
-                return;
-            }
-            return;
-        }
-    }
-}
-
-int iopipe_base_run(iopipe_base_t * iopb)
-{
-    int i, nfds, events, is_client_or_server, e_err;
-    struct epoll_event *ev;
-    iopipe_t *iop;
-    iopipe_part_t *part, *part_a, *part_client, *part_server;
-    int efd;
-    iopipe_linker_t *linker, *h, *t;
-    int iopipe_error_count = 0;
-
 #define  ___no_indent_while_beign   while(1) {
 #define  ___no_indent_while_end     }
 
-    efd = iopb->eventfd_iop.client.fd;
+    int efd = iopb->eventfd_iop.client.fd;
 
     ___no_indent_while_beign;
 
-    while (iopb->set_list_head) {
-        ZIOPIPE_BASE_LOCK(iopb);
-        linker = iopb->set_list_head;
-        if (!linker) {
-            ZIOPIPE_BASE_UNLOCK(iopb);
-            break;
-        }
-        h = (iopipe_linker_t *) (iopb->set_list_head);
-        t = (iopipe_linker_t *) (iopb->set_list_tail);
-        zcc_mlink_detach(h, t, linker, prev, next);
-        iopb->set_list_head = h;
-        iopb->set_list_tail = t;
-        ZIOPIPE_BASE_UNLOCK(iopb);
+    iopipe_enter_list_checker(iopb);
 
-        int cfd, sfd;
-        SSL *cssl, *sssl;
-        iopipe_after_close_fn_t after_close;
-        void *context;
-        cfd = linker->cfd;
-        sfd = linker->sfd;
-        cssl = linker->cssl;
-        sssl = linker->sssl;
-        after_close = linker->after_close;
-        context = linker->context;
-        iop = (iopipe_t *) linker;
-        memset(iop, 0, sizeof(iopipe_t));
-        iop->client.fd = cfd;
-        iop->client.ssl = cssl;
-        iop->client.is_client_or_server = 0;
-        iop->server.fd = sfd;
-        iop->server.ssl = sssl;
-        iop->server.is_client_or_server = 1;
-        if (cssl) {
-            iop->client.read_want_read = 1;
-        }
-        if (sssl) {
-            iop->server.read_want_read = 1;
-        }
-        iop->after_close = after_close;
-        iop->context = context;
-        iopipe_set_event(iopb, &(iop->client), 1);
-        iopipe_set_event(iopb, &(iop->server), 1);
-    }
+    iopipe_retry_vector(iopb);
 
-    nfds = epoll_wait(iopb->epoll_fd, iopb->epoll_event_list, var_epoll_event_count, 10 * 1000);
+    int nfds = epoll_wait(iopb->epoll_fd, iopb->epoll_event_list, var_epoll_event_count, 100);
     if (nfds == -1) {
         if (errno != EINTR) {
             zcc_fatal("iopipe_base_run: epoll_wait: %m");
@@ -414,12 +486,14 @@ int iopipe_base_run(iopipe_base_t * iopb)
         continue;
     }
 
-    iopipe_error_count = 0;
-    for (i = 0; i < nfds; i++) {
-        ev = iopb->epoll_event_list + i;
-        events = ev->events;
-        part = (iopipe_part_t *) (ev->data.ptr);
-        is_client_or_server = part->is_client_or_server;
+    int iopipe_error_count = 0;
+    for (int i = 0; i < nfds; i++) {
+        iopipe_t *iop;
+        iopipe_part_t *part_client, *part_server;
+        struct epoll_event *epev = iopb->epoll_event_list + i;
+        unsigned int events = epev->events;
+        iopipe_part_t *part = (iopipe_part_t *) (epev->data.ptr);
+        int is_client_or_server = part->is_client_or_server;
         if (!is_client_or_server) {
             iop = zcc_container_of(part, iopipe_t, client);
         } else {
@@ -428,114 +502,37 @@ int iopipe_base_run(iopipe_base_t * iopb)
 
         part_client = &(iop->client);
         part_server = &(iop->server);
-        part = part_server;
-        part_a = part_client;
-        if (!is_client_or_server) {
-            part = part_client;
-            part_a = part_server;
-        }
 
         if (part_client->fd == efd) {
             if (!(events & EPOLLOUT)) {
                 uint64_t u;
-                if (read(efd, &u, sizeof(uint64_t))) ;
+                if (syscall_read(efd, &u, sizeof(uint64_t))) ;
             }
             continue;
         }
 
-        e_err = 0;
-        if (events & EPOLLHUP) {
-            e_err = 1;
+        if (part_server->error_or_closed==0) {
+            iopipe_read_write_loop(iopb, part_client, part_server);
         }
-        if (events & EPOLLRDHUP) {
-            e_err = 1;
+        if (part_client->error_or_closed==0) {
+            iopipe_read_write_loop(iopb, part_server, part_client);
         }
-        if (events & EPOLLERR) {
-            e_err = 1;
-        }
-        if (part->ssl && part->ssl_error) {
-            e_err = 1;
-        }
-        if (events & EPOLLOUT) {
-            part->et_write = 1;
-        }
-        if (events & EPOLLIN) {
-            part->et_read = 1;
-        }
-#define _debug_part(p)	printf("client_or_server: %ld, %d, %d, %d, %d\n", p->is_client_or_server, p->read_want_read, p->read_want_write, p->write_want_read, p->write_want_write)
 
-#define _ssl_w(p) (((p->write_want_write) &&(p->et_write))||((p->write_want_read) &&(p->et_read)))
-#define _ssl_r(p) (((p->read_want_write) &&(p->et_write))||((p->read_want_read) &&(p->et_read)))
-#define _www(p) ((p->ssl) && (_ssl_w(p))) || ((!(p->ssl)) && (p->et_write))
-#define _rrr(p) ((p->ssl) && (_ssl_r(p))) || ((!(p->ssl)) && (p->et_read))
-#if 0
-        int _rp = _rrr(part), _rpa=_rrr(part_a);
-        int _wp = _www(part), _wpa=_www(part_a);
-        if (_rp || (part->rbuf_p2 - part->rbuf_p1 > 0) ) {
-            printf("BBB\n");
-            int len = part->rbuf_p2 - part->rbuf_p1;
-            if (_wpa) {
-                read_write_loop(iopb, part, part_a, len);
-            }
-            printf("BBB over\n");
-        }
-        if (_wp) {
-            printf("AAA\n");
-            int len = part_a->rbuf_p2 - part_a->rbuf_p1;
-            if ((len > 0) || _rpa) {
-                write_read_loop(iopb, part, part_a, len);
-            }
-            printf("AAA over\n");
-        }
-#else
-            read_write_loop(iopb, part, part_a, part->rbuf_p2 - part->rbuf_p1);
-
-            write_read_loop(iopb, part, part_a, part_a->rbuf_p2 - part_a->rbuf_p1);
-#endif
-        if (e_err) {
-            if (iop->err == 0) {
-                iop->err = 1;
+        if (part_client->error_or_closed || part_server->error_or_closed) {
+            if (iop->error_queue_in == 0) {
+                iop->error_queue_in = 1;
                 iopb->iopipe_error_vector[iopipe_error_count++] = iop;
-            }
-            int len = part->rbuf_p2 > part->rbuf_p1;
-            if (len > 0) {
-                if (part_a->ssl) {
-                    try_ssl_write(part_a, part->rbuf + part->rbuf_p1, len);
-                } else {
-                    if (write(part_a->fd, part->rbuf + part->rbuf_p1, len));
-                }
             }
         }
     }
 
-    for (i=0;i<iopipe_error_count;i++) {
-        iop = iopb->iopipe_error_vector[i];
-        part_client = &(iop->client);
-        part_server = &(iop->server);
-        iopipe_set_event(iopb, part_client, 0);
-        iopipe_set_event(iopb, part_server, 0);
-        if (part_client->rbuf) {
-            free(part_client->rbuf);
-            part_client->rbuf = 0;
+    for (int i=0;i<iopipe_error_count;i++) {
+        iopipe_t *iop = iopb->iopipe_error_vector[i];
+        if (iop->timeout == 0) {
+            iop->timeout = timeout_set(0) + iopb->after_peer_closed_timeout;
         }
-        if (part_server->rbuf) {
-            free(part_server->rbuf);
-            part_server->rbuf = 0;
-        }
-        if (part_client->ssl) {
-            openssl_SSL_free(part_client->ssl);
-            part_client->ssl = 0;
-        }
-        if (part_server->ssl) {
-            openssl_SSL_free(part_server->ssl);
-            part_server->ssl = 0;
-        }
-        close(part_client->fd);
-        close(part_server->fd);
-        if (iop->after_close) {
-            iop->after_close(iop->context);
-        }
-        free(iop);
+        iop->error_queue_in = 0;
+        iopipe_try_release(iopb, iop);
     }
 
     if (iopb->break_flag) {
@@ -546,27 +543,11 @@ int iopipe_base_run(iopipe_base_t * iopb)
 
     return 0;
 }
+/* }}} */
 
-void iopipe_base_free(iopipe_base_t * iopb)
+/* {{{ enter */
+static void iopipe_enter(iopipe_base_t * iopb, int client_fd, SSL *client_ssl, int server_fd, SSL *server_ssl, iopipe_after_close_fn_t after_close, const void *context)
 {
-    close(iopb->epoll_fd);
-    close(iopb->eventfd_iop.client.fd);
-
-    iopipe_linker_t *hn, *h;
-    for (h = iopb->set_list_head;h;h=hn) {
-        hn = h->next;
-        openssl_SSL_free(h->cssl);
-        close(h->cfd);
-        openssl_SSL_free(h->sssl);
-        close(h->sfd);
-    }
-    pthread_mutex_destroy(&(iopb->locker));
-    free(iopb);
-}
-
-void iopipe_enter(iopipe_base_t * iopb, int client_fd, SSL *client_ssl, int server_fd, SSL *server_ssl, iopipe_after_close_fn_t after_close, const void *context)
-{
-    uint64_t u;
     iopipe_linker_t *linker, *h, *t;
 
     nonblocking(client_fd);
@@ -583,17 +564,20 @@ void iopipe_enter(iopipe_base_t * iopb, int client_fd, SSL *client_ssl, int serv
     linker->context = (void *)context;
 
     ZIOPIPE_BASE_LOCK(iopb);
-    h = (iopipe_linker_t *) (iopb->set_list_head);
-    t = (iopipe_linker_t *) (iopb->set_list_tail);
+    h = (iopipe_linker_t *) (iopb->enter_list_head);
+    t = (iopipe_linker_t *) (iopb->enter_list_tail);
     zcc_mlink_append(h, t, linker, prev, next);
-    iopb->set_list_head = h;
-    iopb->set_list_tail = t;
+    iopb->enter_list_head = h;
+    iopb->enter_list_tail = t;
     ZIOPIPE_BASE_UNLOCK(iopb);
 
-    if (write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) ;
+    uint64_t u = 1;
+    if (syscall_write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) ;
 }
 
-/* ############################################################## */
+/* }}} */
+
+/* {{{ class method */
 iopipe::iopipe()
 {
     ___data = iopipe_base_create();
@@ -602,6 +586,13 @@ iopipe::iopipe()
 iopipe::~iopipe()
 {
     iopipe_base_free((iopipe_base_t *)___data);
+}
+
+void iopipe::option_after_peer_closed_timeout(long timeout)
+{
+    if (timeout > 0){
+        ((iopipe_base_t *)___data)->after_peer_closed_timeout = timeout;
+    }
 }
 
 void iopipe::run()
@@ -614,6 +605,11 @@ void iopipe::stop_notify()
     ((iopipe_base_t *)___data)->break_flag = 1;
 }
 
+size_t iopipe::get_count()
+{
+    return ((iopipe_base_t *)___data)->count;
+}
+
 void iopipe::enter(int client_fd, SSL *client_ssl, int server_fd, SSL *server_ssl)
 {
     iopipe_enter((iopipe_base_t *)___data, client_fd, client_ssl, server_fd, server_ssl, 0, 0);
@@ -623,7 +619,12 @@ void iopipe::enter(int client_fd, SSL *client_ssl, int server_fd, SSL *server_ss
 {
     iopipe_enter((iopipe_base_t *)___data, client_fd, client_ssl, server_fd, server_ssl, after_close, context);
 }
+/* }}} */
 
 #pragma pack(pop)
-
 }
+
+/* Local variables:
+* End:
+* vim600: fdm=marker
+*/

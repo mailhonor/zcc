@@ -16,30 +16,32 @@ stream::stream()
     read_buf_p1 = 0;
     read_buf_p2 = 0;
     write_buf_len = 0;
-    ___stream_error = false;
-    ___stream_eof = false;
+    ___error = false;
+    ___eof = false;
+    ___flushed = false;
     set_timeout(1000L * 3600 * 24 * 365 * 10);
 }
 
 stream::~stream()
 {
-#if 0
     /* flush must be do in parent-class */
-    if (!_flushed) {
-        zfatal("Derived classe of the zcc::stream should do flush when unconstruct.");
+    if (!___flushed) {
+        zcc_fatal("Derived classe of the zcc::stream should do flush when unconstruct.");
     }
-#endif
 }
 
 stream &stream::set_timeout(long timeout)
 {
-    _timeout = timeout_set(timeout);
+    if (timeout == -1) {
+        timeout = 1000L * 3600 * 24 * 365 * 10;
+    }
+    ___timeout = timeout_set(timeout);
     return *this;
 }
 
 long stream::get_timeout()
 {
-    return _timeout;
+    return ___timeout;
 }
 
 /* read */
@@ -52,30 +54,32 @@ int stream::get_char_do()
         return read_buf[read_buf_p1++];
     }
 
-    if (error() || eof()) {
+    if (___error || ___eof) {
         return -1;
     }
 
-    flush();
+    if (write_buf_len > 0) {
+        flush();
+    }
 
-    if (error() || eof()) {
+    if (___error || ___eof) {
         return -1;
     }
 
-    time_left = timeout_left(_timeout);
+    time_left = timeout_left(___timeout);
     if (time_left < 1) {
-        ___stream_error = true;
+        ___error = true;
         return -1;
     }
 
     read_buf_p1 = read_buf_p2 = 0;
     ret = read_fn(read_buf, stream_read_buf_size, time_left);
     if (ret == 0) {
-        ___stream_eof = true;
+        ___eof = true;
         return -1;
     }
     if (ret < 0) {
-        ___stream_error = true;
+        ___error = true;
         return -1;
     }
     read_buf_p2 = ret;
@@ -94,14 +98,17 @@ ssize_t stream::readn(void *buf, size_t size)
     }
     while (left_size) {
         ch = get();
-        if (___stream_error || ___stream_eof) {
+        if (ch == -1) {
             break;
         }
         *ptr++ = ch;
         left_size-- ;
     }
 
-    return size - left_size;
+    if (size > left_size) {
+        return size - left_size;
+    }
+    return -1;
 }
 
 ssize_t stream::readn(std::string &str, size_t size)
@@ -116,14 +123,17 @@ ssize_t stream::readn(std::string &str, size_t size)
     }
     while (left_size) {
         ch = get();
-        if (___stream_error || ___stream_eof) {
+        if (ch == -1) {
             break;
         }
         str.push_back(ch);
         left_size--;
     }
 
-    return size - left_size;
+    if (size > left_size) {
+        return size - left_size;
+    }
+    return -1;
 }
 
 ssize_t stream::gets(void *buf, size_t size, int delimiter)
@@ -138,7 +148,7 @@ ssize_t stream::gets(void *buf, size_t size, int delimiter)
 
     while(left_size) {
         ch = get();
-        if (___stream_error || ___stream_eof) {
+        if (ch == -1) {
             break;
         }
         *ptr++ = ch;
@@ -148,7 +158,10 @@ ssize_t stream::gets(void *buf, size_t size, int delimiter)
         }
     }
 
-    return size - left_size;
+    if (size > left_size) {
+        return size - left_size;
+    }
+    return -1;
 }
 
 ssize_t stream::gets(std::string &str, int delimiter)
@@ -160,10 +173,7 @@ ssize_t stream::gets(std::string &str, int delimiter)
 
     while(1) {
         ch = get();
-        if (___stream_error || ___stream_eof) {
-            if (!rlen) {
-                return -1;
-            }
+        if (ch == -1) {
             break;
         }
         str.push_back(ch);
@@ -172,8 +182,10 @@ ssize_t stream::gets(std::string &str, int delimiter)
             break;
         }
     }
-
-    return rlen;
+    if (rlen) {
+        return rlen;
+    }
+    return -1;
 }
 
 ssize_t stream::size_data_get_size()
@@ -201,7 +213,9 @@ bool stream::flush()
     size_t data_len =write_buf_len;
     size_t wlen = 0;
 
-    if (___stream_error) {
+    ___flushed = true;
+
+    if (___error) {
         return false;
     }
     if (write_buf_len < 1) {
@@ -209,19 +223,18 @@ bool stream::flush()
     }
 
     while (wlen < data_len) {
-        time_left = timeout_left(_timeout);
+        time_left = timeout_left(___timeout);
         if (time_left < 1) {
-            ___stream_error = true;
+            ___error = true;
             return false;
         }
         ret = write_fn(data + wlen, data_len - wlen, time_left);
         if (ret < 0) {
-            ___stream_error = true;
+            ___error = true;
             return false;
         }
         if (ret == 0) {
-            ___stream_eof = true;
-            ___stream_error = true;
+            ___error = true;
             return false;
         }
         wlen += ret;
@@ -238,7 +251,7 @@ stream &stream::puts(const char *str)
     }
     while (*str) {
         put(*str);
-        if (___stream_error || ___stream_eof) {
+        if (___error || ___eof) {
             break;
         }
         str++;
@@ -246,7 +259,7 @@ stream &stream::puts(const char *str)
     return *this;
 }
 
-stream &stream::writen(const void *_data, size_t size)
+stream &stream::write(const void *_data, size_t size)
 {
     const char *str = (const char *)_data;
     if (size < 1) {
@@ -257,7 +270,7 @@ stream &stream::writen(const void *_data, size_t size)
     }
     while (size--) {
         put(*str);
-        if (___stream_error || ___stream_eof) {
+        if (___error || ___eof) {
             break;
         }
         str++;
@@ -278,7 +291,7 @@ stream &stream::printf_1024(const char *format, ...)
     len = zcc::vsnprintf(buf, 1024, format, ap);
     va_end(ap);
 
-    return writen(buf, len);
+    return write(buf, len);
 }
 
 /* io ################################################################# */
@@ -306,5 +319,92 @@ int iostream::get_fd()
 {
     return _fd;
 }
+
+
+/* ssl ################################################################ */
+sslstream::sslstream(SSL *ssl)
+{
+    _ssl = ssl;
+}
+
+sslstream::~sslstream()
+{
+    flush();
+}
+
+SSL *sslstream::get_SSL()
+{
+    return _ssl;
+}
+
+ssize_t sslstream::read_fn(void *buf, size_t size, long timeout)
+{
+    return openssl_timed_read(_ssl, buf, size, timeout);
+};
+ssize_t sslstream::write_fn(const void *buf, size_t size, long timeout)
+{
+    return openssl_timed_write(_ssl, buf, size, timeout);
+};
+
+/* tls ################################################################ */
+tlsstream::tlsstream(int fd)
+{
+    _fd = fd;
+    _ssl = 0;
+}
+
+tlsstream::~tlsstream()
+{
+    flush();
+}
+
+int tlsstream::get_fd()
+{
+    return _fd;
+}
+
+SSL *tlsstream::get_SSL()
+{
+    return _ssl;
+}
+
+bool tlsstream::tls_connect(SSL_CTX *ctx)
+{
+    long time_left = timeout_left(get_timeout());
+    _ssl = openssl_create_SSL(ctx, _fd);
+    if (!_ssl) {
+        return false;
+    }
+    if (!openssl_timed_connect(_ssl, time_left)) {
+        openssl_SSL_free(_ssl);
+        _ssl = 0;
+        return false;
+    }
+    return true;
+}
+
+bool tlsstream::tls_accept(SSL_CTX *ctx)
+{
+    long time_left = timeout_left(get_timeout());
+    _ssl = openssl_create_SSL(ctx, _fd);
+    if (!_ssl) {
+        return false;
+    }
+    if (!openssl_timed_accept(_ssl, time_left)) {
+        openssl_SSL_free(_ssl);
+        _ssl = 0;
+        return false;
+    }
+    return true;
+}
+
+ssize_t tlsstream::read_fn(void *buf, size_t size, long timeout)
+{
+    return ((_ssl)?(openssl_timed_read(_ssl, buf, size, timeout)):(timed_read(_fd, buf, size, timeout)));
+};
+ssize_t tlsstream::write_fn(const void *buf, size_t size, long timeout)
+{
+    return ((_ssl)?(openssl_timed_write(_ssl, buf, size, timeout)):(timed_write(_fd, buf, size, timeout)));
+};
 
 }

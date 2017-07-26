@@ -1009,7 +1009,7 @@ cdb_walker::~cdb_walker()
 {
 }
 
-void cdb_walker::reset()
+void cdb_walker::clear()
 {
     ___pos = 2048;
 }

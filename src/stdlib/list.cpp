@@ -59,6 +59,9 @@ bool basic_list::pop_void(char ** v)
 {
     node *n;
     n = ___tail;
+    if (!n) {
+        return false;
+    }
     zcc_mlink_detach(___head, ___tail, n, ___prev, ___next);
     if (v) {
         *v = (char *)(n->___data);
@@ -84,6 +87,9 @@ bool basic_list::shift_void(char ** v)
 {
     node *n;
     n = ___head;
+    if (!n) {
+        return false;
+    }
     zcc_mlink_detach(___head, ___tail, n, ___prev, ___next);
     if (v) {
         *v = (char *)(n->___data);
@@ -94,6 +100,19 @@ bool basic_list::shift_void(char ** v)
     }
     ___size --;
     return true;
+}
+
+void basic_list::erase_void(node *n)
+{
+    if (!n) {
+        return;
+    }
+    zcc_mlink_detach(___head, ___tail, n, ___prev, ___next);
+    n->~node();
+    if (!___gmp) {
+        zcc::free(n);
+    }
+    ___size --;
 }
 
 }

@@ -174,7 +174,7 @@ size_t mime_header_line_get_elements(const char *in_src, size_t in_len, mime_hea
             mt++;
             mt_count++;
             {
-                char c = to_upper(*pen);
+                char c = toupper(*pen);
                 if (c == 'B') {
                     mt->encode = var_encode_base64;
                 } else if ( c == 'Q') {

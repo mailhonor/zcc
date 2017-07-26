@@ -69,4 +69,29 @@ ssize_t hex_decode(const void *src, size_t src_size, std::string &str)
     return str.size();
 }
 
+ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str)
+{
+    str.clear();
+    int l, r;
+    char *p = (char *)src;
+    for (size_t i = 0; i < src_size; i++) {
+        if (p[i] == '+') {
+            str.push_back('=');
+        } else if (p[i] == '%') {
+            if (i + 3 > src_size) {
+                break;
+            }
+            l = hex_to_dec_table[(int)(p[i+1])];
+            r = hex_to_dec_table[(int)(p[i+2])];
+            if ((l!=-1) && (r!=-1)) {
+                str.push_back((l<<4)+(r));
+            }
+            i += 2;
+        } else {
+            str.push_back(p[i]);
+        }
+    }
+    return str.size();
+}
+
 }

@@ -1,5 +1,5 @@
 
-all: libzcc
+all: libzcc sizeof
 
 .PHONY: test sample
 
@@ -12,6 +12,9 @@ libzcc lib zcc: depend
 
 test sample: libzcc
 	make -f makefiles/sample_list.makefile
+
+sizeof: libzcc
+	make -f makefiles/sizeof.makefile
 
 depend:
 	make -f makefiles/depend.makefile

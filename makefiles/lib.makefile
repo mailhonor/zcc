@@ -4,7 +4,7 @@ include OBJS_DEST/depend
 
 CC=g++
 
-CFLAGS= -Wall -I./ -O3 -g -Wno-invalid-offsetof
+CFLAGS= -Wall -I./ -O3 -g
 
 SRCS=${shell find src -type f -name "*.cpp"}
 

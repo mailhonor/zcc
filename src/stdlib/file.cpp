@@ -12,11 +12,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-static void * (*___zcc_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = mmap;
-static int (*___zcc_munmap)(void *, size_t) = munmap;
+static inline void * ___zcc_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+    return mmap(addr, length, prot, flags, fd, offset);
+}
+
+static inline int ___zcc_munmap(void *data, size_t size)
+{
+    return munmap(data, size);
+}
 
 namespace zcc
 {
+
+ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
+ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
 
 ssize_t file_get_size(const char *filename)
 {
@@ -46,7 +56,7 @@ bool file_put_contents(const char *filename, const void *data, size_t len)
     }
 
     while (len > wlen) {
-        ret = write(fd, (const char *)data + wlen, len - wlen);
+        ret = syscall_write(fd, (const char *)data + wlen, len - wlen);
         if (ret > -1) {
             wlen += ret;
             continue;
@@ -80,8 +90,14 @@ ssize_t file_get_contents(const char *filename, std::string &str)
         return -1;
     }
 
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        return -1;
+    }
+    str.reserve(st.st_size);
+
     while(1) {
-        ret = read(fd, buf, 4096);
+        ret = syscall_read(fd, buf, 4096);
         if (ret < 0) {
             errno2 = errno;
             if (errno == EINTR) {
@@ -121,7 +137,7 @@ ssize_t stdin_get_contents(std::string &str)
     size_t *rlen = 0;
 
     while(1) {
-        ret = read(fd, buf, 4096);
+        ret = syscall_read(fd, buf, 4096);
         if (ret < 0) {
             errno2 = errno;
             if (errno == EINTR) {
@@ -195,7 +211,7 @@ void file_mmap::munmap()
     if (_fd != -1) {
         ___zcc_munmap(_data, _size);
         close(_fd);
-        _fd = 0;
+        _fd = -1;
     }
 }
 

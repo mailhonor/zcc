@@ -8,7 +8,6 @@
 
 #include "zcc.h"
 #include <signal.h>
-#include <list>
 #include <sys/types.h>
 #include <dirent.h>
 
@@ -22,8 +21,6 @@ static void ___usage(const char *arg)
 namespace zcc
 {
 
-bool master_event_server::flag_reloading = false;
-
 static master_event_server *___instance;
 static bool flag_init = false;
 static bool flag_alone_mode = false;
@@ -32,7 +29,7 @@ static bool flag_inner_event_loop = false;
 static bool flag_clear = false;
 static pid_t parent_pid = 0;
 static event_io *ev_status = 0;
-static std::list<event_io *> event_ios;
+static list<event_io *> event_ios;
 
 static void load_global_config_by_dir(const char *config_path)
 {
@@ -67,30 +64,14 @@ static void stop_file_check(event_timer &tm)
 {
     if (file_get_size(stop_file) < 0) {
         var_proc_stop = true;
-        delete &tm;
     } else {
         tm.start(stop_file_check, 1000 * 1);
     }
 }
 
-static void reloading_to_stopping(event_timer &tm)
-{
-    var_proc_stop = true;
-    delete &tm;
-}
-
 static void on_master_reload(event_io &ev)
 {
-    master_event_server *ms = (master_event_server *)ev.get_context();
-    master_event_server::flag_reloading = true;
-    if (getppid() == parent_pid) {
-        ms->before_reload();
-        event_timer *reload_timer = new event_timer();
-        reload_timer->init();
-        reload_timer->start(reloading_to_stopping, 10 * 1000);
-    } else {
-        ms->stop_notify();
-    }
+    var_proc_stop = true;
 }
 
 static void ___inet_server_accept(event_io &ev)
@@ -140,7 +121,6 @@ master_event_server::master_event_server()
     if (!flag_init) {
         signal(SIGPIPE, SIG_IGN);
         flag_init = true;
-        flag_reloading = false;
         flag_alone_mode = false;
         flag_run = false;
         parent_pid = getppid();
@@ -168,11 +148,11 @@ void master_event_server::clear()
         close(var_master_server_status_fd);
         close(var_master_master_status_fd);
     }
-    for (std::list<event_io *>::iterator it = event_ios.begin(); it != event_ios.end(); it++) {
-        int fd = (*it)->get_fd();
-        delete *it;
+    zcc_list_walk_begin(event_ios, eio) {
+        int fd = eio->get_fd();
+        delete eio;
         close(fd);
-    }
+    } zcc_list_walk_end;
     event_ios.clear();
 }
 
@@ -188,7 +168,7 @@ void master_event_server::alone_register(char *alone_url)
     char *service, *url, *p;
     strtok splitor(alone_url);
     
-    while(splitor.tok(" \t,;\\r\n")) {
+    while(splitor.tok(" \t,;\r\n")) {
         if (splitor.size() > 1000) {
             zcc_fatal("alone_register: url too long");
         }
@@ -205,7 +185,7 @@ void master_event_server::alone_register(char *alone_url)
         }
 
         int fd_type;
-        int fd = listen(url, 5,  &fd_type);
+        int fd = listen(url,  &fd_type);
         if (fd < 0) {
             zcc_fatal("alone_register: open %s(%m)", alone_url);
         }
@@ -245,10 +225,6 @@ void master_event_server::event_loop()
     flag_inner_event_loop = true;
 }
 
-void master_event_server::before_reload()
-{
-}
-
 void master_event_server::before_exit()
 {
 }
@@ -262,7 +238,7 @@ event_io *master_event_server::general_service_register(int fd, int fd_type
         , void (*service) (int) , event_base &eb)
 {
     event_io *ev = new event_io();
-    ev->init(fd, eb);
+    ev->bind(fd, eb);
     ev->set_context((void *)service);
     if (fd_type == var_tcp_listen_type_inet) {
         ev->enable_read(___inet_server_accept);
@@ -279,9 +255,8 @@ void master_event_server::service_register(const char *service_name, int fd, int
     general_service_register(fd, fd_type, 0);
 }
 
-void master_event_server::run(int argc, char ** argv)
+void master_event_server::run_begin(int argc, char ** argv)
 {
-    var_proc_stop_handler = true;
     if (flag_run) {
         zcc_fatal("master_event_server:: only run one time");
     }
@@ -309,6 +284,11 @@ void master_event_server::run(int argc, char ** argv)
             opti += 2;
             continue;
         }
+        if (!strcmp(optname, "-log-listen")) {
+            var_masterlog_listen = optval;
+            opti += 2;
+            continue;
+        }
         if (!strcmp(optname, "-stop-file")) {
             stop_file = optval;
             opti += 2;
@@ -324,36 +304,50 @@ void master_event_server::run(int argc, char ** argv)
         ev_status = new event_io();
         close_on_exec(var_master_master_status_fd);
         nonblocking(var_master_master_status_fd);
-        ev_status->init(var_master_master_status_fd);
+        ev_status->bind(var_master_master_status_fd);
         ev_status->enable_read(on_master_reload);
         ev_status->set_context(this);
         if (stop_file) {
             event_timer *stop_file_timer = new event_timer();
-            stop_file_timer->init();
+            stop_file_timer->bind();
             stop_file_timer->start(stop_file_check, 1000 * 1);
         }
     }
 
-    before_service();
+    if (!var_test_mode) {
+        log_use_by_config(argv[0]);
+    }
 
+    before_service();
+}
+
+void master_event_server::run_loop()
+{
     while (1) {
+        if (var_proc_stop) {
+            break;
+        }
         default_evbase.dispatch();
+        if (var_proc_stop) {
+            break;
+        }
         if (!flag_inner_event_loop) {
             event_loop();
         }
-        if (flag_reloading) {
-            clear();
-            if (getppid() != parent_pid) {
-                break;
-            }
-        }
-        if (var_proc_stop) {
-            clear();
-            break;
-        }
     }
     clear();
+}
+
+void master_event_server::run_over()
+{
     before_exit();
+}
+
+void master_event_server::run(int argc, char ** argv)
+{
+    run_begin(argc, argv);
+    run_loop();
+    run_over();
 }
 
 }

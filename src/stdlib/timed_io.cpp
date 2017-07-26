@@ -12,29 +12,66 @@
 namespace zcc
 {
 
+ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
+ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
+
 /* read */
-bool timed_wait_readable(int fd, long timeout)
+/* readable means: 1, have readable data.
+ *                 2, peer closed.
+ * when receive POLLRDHUP, maybe have some readable data.
+ */
+bool timed_wait_readable(int fd, long timeout, bool *error)
 {
     struct pollfd pollfd;
+    long critical_time, left_time;
 
     pollfd.fd = fd;
     pollfd.events = POLLIN;
 
+    if (error) {
+        *error = false;
+    }
+
+    critical_time = timeout_set(timeout);
     for (;;) {
-        switch (poll(&pollfd, 1, timeout)) {
+        if (timeout == -1) {
+            left_time = 1000 * 3600;
+        } else if (timeout == 0) {
+            left_time = 0;
+        } else {
+            left_time = timeout_left(critical_time);
+        }
+        if (left_time < 0) {
+            return false;
+        }
+        switch (poll(&pollfd, 1, left_time)) {
         case -1:
             if (errno != EINTR) {
-                return false;
+                zcc_fatal("poll error (%m)");
             }
             continue;
         case 0:
-            /* errno = ETIMEDOUT; */
             return false;
         default:
-            if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP | POLLRDHUP)) {
+            if (pollfd.revents & POLLIN) {
+                return true;
+            }
+            if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP)) {
+                if (error) {
+                    *error = true;
+                }
                 return false;
             }
-            return true;
+            if (pollfd.revents & POLLRDHUP) {
+                if (error) {
+                    *error = true;
+                }
+                return false;
+            }
+            if (error) {
+                *error = true;
+            }
+            return false;
         }
     }
 
@@ -44,8 +81,7 @@ bool timed_wait_readable(int fd, long timeout)
 ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
 {
     ssize_t ret;
-    long critical_time;
-    long left_time;
+    long critical_time, left_time;
 
     critical_time = timeout_set(timeout);
 
@@ -54,11 +90,15 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
         if (left_time < 1) {
             return -1;
         }
-        if (!(ret = timed_wait_readable(fd, left_time))) {
+        if (!timed_wait_readable(fd, left_time)) {
             return (-1);
         }
-        if ((ret = read(fd, buf, size)) < 0) {
-            if (errno == EINTR) {
+        if ((ret = syscall_read(fd, buf, size)) < 0) {
+            int ec = errno;
+            if (ec == EINTR) {
+                continue;
+            }
+            if (ec == EAGAIN) {
                 continue;
             }
             return -1;
@@ -71,11 +111,11 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
 
 ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
 {
+    bool is_closed = false;
     ssize_t ret;
     size_t left;
     char *ptr;
-    long critical_time;
-    long left_time;
+    long critical_time, left_time;
 
     left = size;
     ptr = (char *)buf;
@@ -85,51 +125,93 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
     while (left > 0) {
         left_time = timeout_left(critical_time);
         if (left_time < 1) {
-            return -1;
+            break;
         }
         if (!(timed_wait_readable(fd, left_time))) {
-            return -1;
+            break;
         }
-        ret = read(fd, ptr, left);
+        ret = syscall_read(fd, ptr, left);
         if (ret < 0) {
-            if (errno == EINTR) {
+            int ec = errno;
+            if (ec == EINTR) {
                 continue;
             }
-            return -1;
+            if (ec == EAGAIN) {
+                continue;
+            }
+            break;
         } else if (ret == 0) {
-            return -1;
+            is_closed = true;
+            break;
         } else {
             left -= ret;
             ptr += ret;
         }
     }
 
-    return size;
+    if (size > left) {
+        return size - left;
+    }
+    if (is_closed) {
+        return 0;
+    }
+    return -1;
 }
 
 /* write */
-bool timed_wait_writeable(int fd, long timeout)
+bool timed_wait_writeable(int fd, long timeout, bool *error)
 {
     struct pollfd pollfd;
+    long critical_time, left_time;
 
     pollfd.fd = fd;
     pollfd.events = POLLOUT;
+    
+    if (error) {
+        *error = false;
+    }
 
+    critical_time = timeout_set(timeout);
     for (;;) {
-        switch (poll(&pollfd, 1, timeout)) {
+        if (timeout == -1) {
+            left_time = 1000 * 3600;
+        } else if (timeout == 0) {
+            left_time = 0;
+        } else {
+            left_time = timeout_left(critical_time);
+        }
+        if (left_time < 0) {
+            return false;
+        }
+        switch (poll(&pollfd, 1, left_time)) {
         case -1:
             if (errno != EINTR) {
-                return false;
+                zcc_fatal("poll error (%m)");
             }
             continue;
         case 0:
-            /* errno = ETIMEDOUT; */
             return false;
         default:
-            if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP | POLLRDHUP)) {
+            if (pollfd.revents & POLLOUT) {
+                return true;
+            }
+            return false;
+            if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP)) {
+                if (error) {
+                    *error = true;
+                }
                 return false;
             }
-            return true;
+            if (pollfd.revents & POLLRDHUP) {
+                if (error) {
+                    *error = true;
+                }
+                return false;
+            }
+            if (error) {
+                *error = true;
+            }
+            return false;
         }
     }
 
@@ -139,8 +221,7 @@ bool timed_wait_writeable(int fd, long timeout)
 ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
 {
     size_t ret;
-    long critical_time;
-    long left_time;
+    long critical_time, left_time;
 
     critical_time = timeout_set(timeout);
 
@@ -152,11 +233,20 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
         if (!(timed_wait_writeable(fd, left_time))) {
             return -1;
         }
-        if ((ret = write(fd, buf, size)) < 0) {
-            if (errno == EINTR) {
+        if ((ret = syscall_write(fd, buf, size)) < 0) {
+            int ec = errno;
+            if (ec == EINTR) {
                 continue;
             }
+            if (ec == EAGAIN) {
+                continue;
+            }
+            if (ec == EPIPE) {
+                return 0;
+            }
             return -1;
+        } else if (ret == 0) {
+            continue;
         }
         return (ret);
     }
@@ -166,6 +256,7 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
 
 ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
 {
+    bool is_closed = false;
     size_t ret;
     size_t left;
     char *ptr;
@@ -180,26 +271,40 @@ ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
     while (left > 0) {
         left_time = timeout_left(critical_time);
         if (left_time < 1) {
-            return -1;
+            break;
         }
         if ((ret = timed_wait_writeable(fd, left_time)) < 0) {
-            return -1;
+            break;
         }
-        ret = write(fd, ptr, left);
+        ret = syscall_write(fd, ptr, left);
         if (ret < 0) {
-            if (errno == EINTR) {
+            int ec = errno;
+            if (ec == EINTR) {
                 continue;
             }
-            return -1;
+            if (ec == EAGAIN) {
+                continue;
+            }
+            if (ec == EPIPE) {
+                is_closed = true;
+                break;
+            }
+            break;
         } else if (ret == 0) {
-            return -1;
+            continue;
         } else {
             left -= ret;
             ptr += ret;
         }
     }
 
-    return size;
+    if (size > left) {
+        return size - left;
+    }
+    if (is_closed) {
+        return 0;
+    }
+    return -1;
 }
 
 }

@@ -59,7 +59,7 @@ bool memcache_finder::open(const char *url)
     sdup.push_back(dt.get_str("suffix", ""));
 
     ___url = sdup.dup();
-    std::vector<size_t> &offsets = sdup.offsets();
+    vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];
@@ -91,7 +91,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         ___fp->set_timeout(timeout_left(dtime));
         ___fp->printf_1024("get %s%s%s\r\n", ___prefix, query, ___suffix);
         ___fp->flush();
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : write error((%m)", ___url);
             continue;
@@ -99,7 +99,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
 
         mystr.clear();
         ___fp->gets(mystr);
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error", ___url);
             disconnect();
@@ -132,7 +132,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         }
         mystr.clear();
         ___fp->gets(mystr);
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error", ___url);
             return -1;

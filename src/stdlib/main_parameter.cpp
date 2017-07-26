@@ -38,9 +38,7 @@ static void ___usage__h(void)
 static void ___timeout_do(int pid)
 { 
     zcc::var_proc_stop = true;
-    if (zcc::var_proc_stop_handler == 0) {
-        exit(1);
-    }
+    exit(1);
 }
 
 namespace zcc
@@ -53,7 +51,6 @@ char *var_module_name = 0;
 bool var_test_mode = false;
 long var_proc_timeout = 0;
 bool var_proc_stop = false;
-bool var_proc_stop_handler = false;
 
 static char *___chroot = 0;
 static char *___chuser = 0;

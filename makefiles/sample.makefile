@@ -4,7 +4,7 @@ all: target
 
 CC=g++
 CFLAGS= -ggdb -Wall -I../../ -O3
-GLOBAL_LIBS=
+GLOBAL_LIBS= -pthread
 SRCS=${shell find -type f -name "*.cpp"}
 DEST := $(SRCS:.cpp=)
 

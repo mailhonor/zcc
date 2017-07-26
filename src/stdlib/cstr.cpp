@@ -13,7 +13,7 @@ static int (*___vsnprintf)(char *str, size_t size, const char *fmt, va_list ap) 
 namespace zcc
 {
 /* ################################################################## */
-/* string case convert.
+/* std::string case convert.
  * only support Enlish locale.
  */
 
@@ -87,7 +87,7 @@ unsigned const char uppercase_map[256] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
-char *to_lower(char *str)
+char *tolower(const char *str)
 {
     unsigned char *scan = (unsigned char *)str;
 
@@ -96,10 +96,10 @@ char *to_lower(char *str)
         scan++;
     }
 
-    return (str);
+    return (char *)(void *)(str);
 }
 
-char *to_upper(char *str)
+char *toupper(const char *str)
 {
     unsigned char *scan = (unsigned char *)str;
 
@@ -108,7 +108,7 @@ char *to_upper(char *str)
         scan++;
     }
 
-    return (str);
+    return (char *)(void *)(str);
 }
 
 /* ################################################################## */
@@ -445,24 +445,26 @@ char *multi_strdup(size_t *offsets, size_t count, const char *first, ...)
 
 stringsdup::stringsdup()
 {
+    ___data = new std::string();
 }
 
 stringsdup::~stringsdup()
 {
+    delete ___data;
 }
 
 void stringsdup::push_back(const char *v)
 {
-    ___offsets.push_back(___data.size());
-    ___data.append(v);
-    ___data.append(1, 0);
+    ___offsets.push_back(___data->size());
+    ___data->append(v);
+    ___data->append(1, 0);
 }
 
 void stringsdup::push_back(const char *v, size_t size)
 {
-    ___offsets.push_back(___data.size());
-    ___data.append(v, size);
-    ___data.append(1, 0);
+    ___offsets.push_back(___data->size());
+    ___data->append(v, size);
+    ___data->append(1, 0);
 }
 
 size_t stringsdup::count()
@@ -472,16 +474,16 @@ size_t stringsdup::count()
 
 void stringsdup::clear()
 {
-    ___data.clear();
+    ___data->clear();
     ___offsets.clear();
 }
 
 char *stringsdup::dup()
 {
-    return memdup(___data.c_str(), ___data.size());
+    return memdup(___data->c_str(), ___data->size());
 }
 
-std::vector<size_t> &stringsdup::offsets()
+vector<size_t> &stringsdup::offsets()
 {
     return ___offsets;
 }

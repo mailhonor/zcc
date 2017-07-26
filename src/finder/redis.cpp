@@ -61,7 +61,7 @@ bool redis_finder::open(const char *url)
     sdup.push_back(dt.get_str("key", ""));
 
     ___url = sdup.dup();
-    std::vector<size_t> &offsets = sdup.offsets();
+    vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];
@@ -93,14 +93,14 @@ ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
         ___fp->set_timeout(timeout_left(dtime));
         ___fp->printf_1024("hget %s %s%s%s\r\n", ___key, ___prefix, query, ___suffix);
         ___fp->flush();
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             sprintf_1024(result, "finder: %s : write error((%m)", ___url);
             continue;
         }
 
         mystr.clear();
         ___fp->gets(mystr);
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             sprintf_1024(result, "finder: %s : read error", ___url);
             disconnect();
             return -1;
@@ -130,7 +130,7 @@ ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
         }
         mystr.clear();
         ___fp->gets(mystr);
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error", ___url);
             return -1;

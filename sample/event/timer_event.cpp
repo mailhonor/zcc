@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     zcc::event_base eb;
     zcc::event_timer *tm = new zcc::event_timer();
 
-    tm->init(eb);
+    tm->bind(eb);
     tm->start(timer_cb, 1 * 1000);
 
     while (1) {

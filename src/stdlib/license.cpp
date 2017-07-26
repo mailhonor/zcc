@@ -87,7 +87,7 @@ void license_mac_build(const char *salt, const char *_mac, char *rbuf)
     unsigned long crc;
 
     snprintf(mac, 127, "%s", _mac);
-    to_upper(mac);
+    toupper(mac);
     snprintf(buf, 511, "%s,%s", salt, mac);
     crc = get_crc64_result(buf, strlen(buf), 0);
 

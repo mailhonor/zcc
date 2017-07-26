@@ -11,8 +11,11 @@
 #define _GNU_SOURCE
 #endif
 
+#if defined(__i386__)
+#error only support X64
+#endif
+
 #include <string>
-#include <vector>
 
 #include <errno.h>
 #include <stdarg.h>
@@ -20,6 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
 
 #pragma pack(push, 4)
 
@@ -53,19 +58,15 @@ int iconv_close(iconv_t cd)
 }
 #endif
 
+#define _ZCC_SIZEOF_DEBUG(a,b) { \
+    if((sizeof(a)-zcc_offsetof(a, ___data))!=sizeof(b)) { \
+        printf("\nsizeof(%s)==%zd\n\n",#b,sizeof(b)); \
+        exit(1); \
+    } \
+}
 
 namespace zcc
 {
-
-class std_vector_release_assistant
-{
-public:
-    std_vector_release_assistant(const void *vec, void *handler);
-    ~std_vector_release_assistant();
-private:
-    std::vector<void *> *___vec;
-    void (*___handler)(void *);
-};
 
 /* ################################################################## */
 #define zcc_offsetof(type, member) ((size_t) &((type *)0)->member)
@@ -78,6 +79,7 @@ private:
 
 /* ################################################################## */
 const size_t var_size_max = 18446744073709551615UL;
+const int var_fd_max = 102400;
 static inline bool empty(const void *ptr)
 {
     return ((!ptr)||(!(*(const char *)(ptr))));
@@ -143,19 +145,6 @@ inline void int_pack3(int num, char *buf)
     num >>= 8; p[0] = num & 255;
 }
 
-/* ################################################################## */
-/* log, 通用 */
-extern bool var_log_fatal_catch;
-extern bool var_log_debug_enable;
-extern void (*log_vprintf) (const char *source_fn, size_t line_number, const char *fmt, va_list ap);
-void log_fatal(const char *source_fn, size_t line_number, const char *fmt, ...);
-void log_info(const char *source_fn, size_t line_number, const char *fmt, ...);
-#define zcc_fatal(fmt, args...) { zcc::log_fatal(__FILE__, __LINE__, fmt, ##args); }
-#define zcc_info(fmt, args...) { zcc::log_info(__FILE__, __LINE__, fmt, ##args); }
-
-extern bool var_log_debug_enable;
-#define zcc_debug(fmt,args...) { if(zcc::var_log_debug_enable){zcc_info(fmt, ##args);} }
-
 /* mlink  ############################################################ */
 #define zcc_mlink_append(head, tail, node, prev, next) {\
     typeof(head) _head_1106=head, _tail_1106=tail, _node_1106 = node;\
@@ -215,10 +204,12 @@ rbtree_node_t *rbtree_near_prev(rbtree_t * tree, rbtree_node_t * vnode);
 rbtree_node_t *rbtree_near_next(rbtree_t * tree, rbtree_node_t * vnode);
 
 #define zcc_rbtree_walk_begin(root, var_your_node)     {                    \
+    zcc::rbtree_node_t * var_your_node; \
     for (var_your_node = rbtree_first(root); var_your_node; var_your_node = rbtree_next(var_your_node)) {
 #define zcc_rbtree_walk_end                }}
 
 #define zcc_rbtree_walk_back_begin(root, var_your_node)        {                    \
+    zcc::rbtree_node_t * var_your_node; \
     for (var_your_node = rbtree_last(root); var_your_node; var_your_node = rbtree_prev(var_your_node)) {
 #define zcc_rbtree_walk_back_end                   }}
 
@@ -233,6 +224,36 @@ char *strndup(const char *ptr, size_t n);
 char *memdup(const void *ptr, size_t n);
 char *memdupnull(const void *ptr, size_t n);
 
+/* autobuffer ############################################# */
+class autobuffer
+{
+public:
+    inline autobuffer() { data = 0; }
+    inline ~autobuffer() { free(data); }
+    char *data;
+};
+
+/* ################################################################## */
+/* log, 通用 */
+extern std::string var_masterlog_listen;
+extern bool var_log_fatal_catch;
+extern bool var_log_debug_enable;
+extern void (*log_vprintf) (const char *source_fn, size_t line_number, const char *fmt, va_list ap);
+void log_fatal(const char *source_fn, size_t line_number, const char *fmt, ...);
+void log_info(const char *source_fn, size_t line_number, const char *fmt, ...);
+#define zcc_fatal(fmt, args...) { zcc::log_fatal(__FILE__, __LINE__, fmt, ##args); }
+#define zcc_info(fmt, args...) { zcc::log_info(__FILE__, __LINE__, fmt, ##args); }
+
+extern bool var_log_debug_enable;
+#define zcc_debug(fmt,args...) { if(zcc::var_log_debug_enable){zcc_info(fmt, ##args);} }
+
+void log_use_syslog(int facility, const char *identity);
+void log_use_syslog(const char *facility, const char *identity);
+
+void log_use_masterlog(const char *dest, const char *facility, const char *identity);
+
+bool log_use_by_config(char *progname);
+
 /* greedy_mem_pool ############################################## */
 class gm_pool
 {
@@ -246,7 +267,7 @@ public:
     char *strndup(const char *ptr, size_t n);
     char *memdup(const void *ptr, size_t n);
     char *memdupnull(const void *ptr, size_t n);
-    void reset();
+    void clear();
 private:
     unsigned int ___single_buffer_size;
     unsigned int ___single_buffer_size_10percent;
@@ -256,6 +277,35 @@ private:
     char *___sys_tail;
 };
 
+/* piece_mem_pool ############################################## */
+typedef struct ___piece_group_t ___piece_group_t;
+class pm_pool
+{
+public:
+    pm_pool();
+    ~pm_pool();
+    void option_piece_size(size_t piece_size, size_t element_count_of_group = 0);
+    void *require();
+    void release(const void *);
+private:
+    unsigned short int ___element_size;
+    unsigned short int ___element_count_of_group;
+    unsigned int ___element_used_count;
+    unsigned int ___group_count;
+    ___piece_group_t *___unused_piece_group;
+    ___piece_group_t *___space_piece_group_head;
+    ___piece_group_t *___space_piece_group_tail;
+    rbtree_t ___piece_group_tree;
+};
+
+/* std::string ########################################################## */
+std::string &sprintf_1024(std::string &str, const char *fmt, ...);
+std::string &tolower(std::string &str);
+std::string &toupper(std::string &str);
+std::string &size_data_escape(std::string &str, const void *data, size_t n);
+std::string &size_data_escape(std::string &str, int i);
+std::string &size_data_escape(std::string &str, long i);
+
 /* vector ########################################################## */
 class basic_vector
 {
@@ -264,6 +314,7 @@ public:
     ~basic_vector();
     void push_back_void(const void * v);
     void reserve_void(size_t size);
+    void resize_void(size_t size);
     void option_gm_pool_void(gm_pool &gmp);
     size_t ___capacity;
     size_t ___size;
@@ -272,8 +323,19 @@ public:
 };
 
 template <typename T>
-class vector
+class vector: private basic_vector
 {
+public:
+    inline vector() {}
+    inline ~vector() {}
+    inline T operator[](size_t n) const { return (T)((long)___data[n]); }
+    inline void clear() { ___size = 0; }
+    inline size_t size() const { return ___size; }
+    inline void push_back(T v) { push_back_void((const void *)(long)v); }
+    inline void truncate(size_t n) {if (n < ___size) { ___size = n; }}
+    inline void reserve(size_t size) { reserve_void(size); }
+    inline void resize(size_t size) { resize_void(size); }
+    inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
 };
 
 template <typename T>
@@ -287,15 +349,18 @@ public:
     inline size_t size() const { return ___size; }
     inline void push_back(T *v) { push_back_void((const void *)v); }
     inline void truncate(size_t n) {if (n < ___size) { ___size = n; }}
-    inline void reserve_void(size_t size) { reserve_void(size); }
+    inline void reserve(size_t size) { reserve_void(size); }
+    inline void resize(size_t size) { resize_void(size); }
     inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
+    inline T* template_type() const { return 0; };
 };
 
-#define zcc_vector_walk_begin(var_your_vec, var_your_node) { \
+#define zcc_vector_walk_begin(var_your_vec, var_your_ptr) { \
     typeof(var_your_vec) &___V_VEC = (var_your_vec); \
-     size_t ___I_VEC = 0, ___C_VEC=(___V_VEC).size(); \
-    for (; ___I_VEC < ___C_VEC; ___I_VEC ++) { \
-        var_your_node = (typeof(var_your_node)) (___V_VEC)[___I_VEC]; {
+    typeof(___V_VEC.template_type()) var_your_ptr; \
+     size_t var_zcc_vector_opti = 0, ___C_VEC=(___V_VEC).size(); \
+    for (; var_zcc_vector_opti < ___C_VEC; var_zcc_vector_opti ++) { \
+        var_your_ptr = (___V_VEC)[var_zcc_vector_opti]; {
 #define zcc_vector_walk_end }}}
 
 /* list ############################################################ */
@@ -322,18 +387,20 @@ public:
     bool pop_void(char **v);
     void unshift_void(const void * v);
     bool shift_void(char **v);
+    void erase_void(node *n);
     node *___head;
     node *___tail;
     unsigned int ___size;
     gm_pool *___gmp;
 };
+typedef basic_list::node list_node;
 template <typename T>
 class list
 {
 };
 
 template <typename T>
-class list<T *>: private basic_list
+class list<T *>: public basic_list
 {
 public:
     inline list() {}
@@ -344,17 +411,22 @@ public:
     inline void push_back(T * v) { push_void((const void *)v); }
     inline bool pop(T **v) { return pop_void((char **)v); }
     inline void unshift(T * v) { push_void((const void *)v); }
-    inline bool shift(T **v) { return pop_void((char **)v); }
+    inline bool shift(T **v) { return shift_void((char **)v); }
+    inline void erase(node *n) { return erase_void(n); }
     inline node *first_node() { return ___head; }
     inline node *last_node() { return ___tail; }
     inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
+    inline T* template_type() const { return 0; }
 };
 
-#define zcc_list_walk_begin(var_your_list, var_your_node) { \
+#define zcc_list_walk_begin(var_your_list, var_your_ptr) { \
     typeof(var_your_list) &___V_LIST = (var_your_list); \
-    typeof(___V_LIST.first_node()) ___V_NODE = ___V_LIST.first_node(); \
-    for (; ___V_NODE; ___V_NODE = ___V_NODE->next()) { \
-        var_your_node = (typeof(var_your_node)) (___V_NODE->data()); {
+    typeof(___V_LIST.template_type()) var_your_ptr; \
+    typeof(___V_LIST.first_node()) var_zcc_list_node = ___V_LIST.first_node(); \
+    typeof(___V_LIST.first_node()) var_zcc_list_node_next; \
+    for (; var_zcc_list_node; var_zcc_list_node = var_zcc_list_node_next) { \
+        var_zcc_list_node_next = var_zcc_list_node->next(); \
+        var_your_ptr = (typeof(___V_LIST.template_type())) (var_zcc_list_node->data()); {
 #define zcc_list_walk_end }}}
 
 /* cstr ######################################################*/
@@ -363,10 +435,10 @@ extern unsigned const char uppercase_map[];
 
 #define zcc_char_tolower(c)    ((int)zcc::lowercase_map[(unsigned char )(c)])
 #define zcc_char_toupper(c)    ((int)zcc::uppercase_map[(unsigned char )(c)])
-static inline int to_lower(int c) { return zcc_char_tolower(c); }
-static inline int to_upper(int c) { return zcc_char_toupper(c); }
-char *to_lower(char *str);
-char *to_upper(char *str);
+static inline int tolower(int c) { return zcc_char_tolower(c); }
+static inline int toupper(int c) { return zcc_char_toupper(c); }
+char *tolower(const char *str);
+char *toupper(const char *str);
 char *trim_left(char *str);
 char *trim_right(char *str);
 char *trim(char *str);
@@ -407,10 +479,10 @@ public:
     void clear();
     size_t count();
     char *dup();
-    std::vector<size_t> &offsets();
+    vector<size_t> &offsets();
 private:
-    std::string ___data;
-    std::vector<size_t> ___offsets;
+    std::string *___data;
+    vector<size_t> ___offsets;
 };
 
 /* argv ############################################################ */
@@ -419,7 +491,6 @@ class argv
 public:
     argv();
     ~argv();
-    inline void reset() { clear(); }
     inline size_t size() const { return ___size; }
     inline char ** data() const { return ___data; }
     inline char * operator[](size_t n) const { return (char *)(___data[n]); }
@@ -436,6 +507,12 @@ private:
     unsigned int ___size;
     char **___data;
 };
+#define zcc_argv_walk_begin(var_your_argv, var_your_value) { \
+    char * var_your_value; \
+    typeof(var_your_argv) &___V_ARGV = (var_your_argv); \
+    for (size_t var_zcc_argv_opti = 0; var_zcc_argv_opti < ___V_ARGV.size(); var_zcc_argv_opti++) { \
+        var_your_value = (char *)(___V_ARGV[var_zcc_argv_opti]); {
+#define zcc_argv_walk_end }}}
 
 /* dict ############################################################ */
 class dict
@@ -464,7 +541,6 @@ public:
     inline size_t size() { return ___size; }
     inline size_t length() { return ___size; }
     void clear();
-    void reset();
     node *update(const char *key, const char *value, size_t len = var_size_max);
     void update(node *n, const char *value, size_t len = var_size_max);
     bool exists(const char *key) { return find(key)?true:false; }
@@ -476,62 +552,271 @@ public:
     node *first_node();
     node *last_node();
     void debug_show();
+    void option_gm_pool(gm_pool &gmp);
+    /* extend */
     char *get_str(const char *key, const char *def = "");
     bool get_bool(const char *key, bool def);
     int get_int(const char *key, int def, int min, int max);
     long get_long(const char *key, long def, long min, long max);
     long get_second(const char *key, long def, long min, long max);
     long get_size(const char *key, long def, long min, long max);
-    void option_gm_pool(gm_pool &gmp);
+    void parse_url_query(const char *query);
+    char *build_url_query(std::string &query, bool strict = true);
 private:
     rbtree_t ___rbtree;
     unsigned int ___size;
     gm_pool *___gmp;
 };
 
+#define zcc_dict_walk_begin(var_your_dict, var_your_key_ptr, var_your_value_ptr) { \
+    typeof(var_your_dict) &___V_DICT = (var_your_dict); \
+    char * var_your_key_ptr, * var_your_value_ptr; \
+    typeof(___V_DICT.first_node()) var_zcc_dict_node = ___V_DICT.first_node(); \
+    typeof(___V_DICT.first_node()) var_zcc_dict_node_next; \
+    for (; var_zcc_dict_node; var_zcc_dict_node = var_zcc_dict_node_next) { \
+        var_zcc_dict_node_next = var_zcc_dict_node->next(); \
+        var_your_key_ptr = var_zcc_dict_node->key(); (void)var_your_key_ptr; \
+        var_your_value_ptr = var_zcc_dict_node->value(); (void)var_your_value_ptr; {
+#define zcc_dict_walk_end }}}
+
 /* grid INNER USE ################################################## */
-class grid
+struct basic_grid_node_t {
+    char *key;
+    void *value;
+    rbtree_node_t rbnode;
+};
+typedef struct basic_grid_node_t basic_grid_node_t;
+class basic_grid_node {
+public:
+    inline basic_grid_node() {}
+    inline ~basic_grid_node() {}
+    inline char *key_void() { return ___data.key; }
+    inline void *value_void() { return ___data.value; }
+    basic_grid_node *prev_void();
+    basic_grid_node *next_void();
+private:
+    basic_grid_node_t ___data;
+};
+class basic_grid
 {
 public:
-    struct node_t {
-        char *key;
-        void *value;
-        rbtree_node_t rbnode;
-    };
-    typedef struct node_t node_t;
-    class node {
+    basic_grid();
+    ~basic_grid();
+    void clear_void();
+    basic_grid_node *update_void(const char *key, const void *value, void **old_value = 0);
+    void update_void(basic_grid_node *n, const void *value, void **old_value = 0);
+    bool exists_void(const char *key) { return find_void(key)?true:false; }
+    void erase_void(const char *key, void **old_value = 0);
+    void erase_void(basic_grid_node *n, void **old_value);
+    basic_grid_node *find_void(const char *key, void **value=0);
+    basic_grid_node *find_near_prev_void(const char *key, void **value=0);
+    basic_grid_node *find_near_next_void(const char *key, void **value=0);
+    basic_grid_node *first_node_void();
+    basic_grid_node *last_node_void();
+    void option_gm_pool_void(gm_pool &gmp);
+    void option_long();
+private:
+    unsigned char ___long_flag:1;
+    unsigned int ___size:31;
+    rbtree_t ___rbtree;
+    gm_pool *___gmp;
+};
+
+template <typename T>
+class grid
+{
+};
+
+template <typename T>
+class grid<T *>: private basic_grid
+{
+public:
+    class node: public basic_grid_node
+    {
     public:
         inline node() {}
         inline ~node() {}
-        inline char *key() { return ___data.key; }
-        inline void *value() { return ___data.value; }
-        inline void set_value(const void *value) { ___data.value = const_cast<void *>(value); }
-        node *prev();
-        node *next();
-    private:
-        node_t ___data;
+        inline char * key() { return key_void(); }
+        inline T * value() { return (T *)(value_void()); }
+        inline node *prev() { return (node *)(prev_void()); }
+        inline node *next() { return (node *)(next_void()); }
     };
 public:
-    grid();
-    ~grid();
+    inline grid() {}
+    inline ~grid() {}
     inline size_t size() { return ___size; }
     inline size_t length() { return ___size; }
-    node *update(const char *key, const void *value, void **old_value = 0);
-    void update(node *n, const void *value, void **old_value = 0);
-    bool exists(const char *key) { return find(key)?true:false; }
-    void erase(const char *key, void **old_value = 0);
-    void erase(node *n, void **old_value);
-    node *find(const char *key, void **value=0);
-    node *find_near_prev(const char *key, void **value=0);
-    node *find_near_next(const char *key, void **value=0);
-    node *first_node();
-    node *last_node();
-    void option_gm_pool(gm_pool &gmp);
-private:
-    rbtree_t ___rbtree;
-    unsigned int ___size;
-    gm_pool *___gmp;
+    inline bool exists(const char *key)
+    {
+        return find_void(key)?true:false;
+    }
+
+    inline void clear()
+    {
+        clear_void();
+    }
+
+    inline node *update(const char *key, const void *value, T **old_value = 0)
+    {
+        return (node *)update_void(key, value, (void **)old_value);
+    }
+
+    inline void update(node *n, const void *value, T **old_value = 0)
+    {
+        update_void((basic_grid_node *)n, value, (void **)old_value);
+    }
+
+    inline void erase(const char *key, T **old_value = 0)
+    {
+        erase_void(key, (void **)old_value);
+    }
+
+    inline void erase(node *n, T **old_value)
+    {
+        erase_void((basic_grid_node *)n, (void **)old_value);
+    }
+
+    inline node *find(const char *key, T **value=0)
+    {
+        return (node *)find_void(key, (void **)value);
+    }
+
+    inline node *find_near_prev(const char *key, T **value=0)
+    {
+        return (node *)find_near_prev_void(key, (void **)value);
+    }
+
+    inline node *find_near_next(const char *key, T **value=0)
+    {
+        return (node *)find_near_next_void(key, (void **)value);
+    }
+
+    inline node *first_node()
+    {
+        return (node *)first_node_void();
+    }
+
+    inline node *last_node()
+    {
+        return (node *)last_node_void();
+    }
+
+    inline void option_gm_pool(gm_pool &gmp)
+    {
+        option_gm_pool_void(gmp);
+    }
+    inline T * template_type() const  { return 0; }
 };
+
+#define zcc_grid_walk_begin(var_your_grid, var_your_key_ptr, var_your_value_ptr) { \
+    typeof(var_your_grid) &___V_GRID = (var_your_grid); \
+    typeof(___V_GRID.template_type()) var_your_value_ptr; \
+    typeof(___V_GRID.first_node()) var_zcc_grid_node = ___V_GRID.first_node(); \
+    typeof(___V_GRID.first_node()) var_zcc_grid_node_next; \
+    for (; var_zcc_grid_node; var_zcc_grid_node = var_zcc_grid_node_next) { \
+        var_zcc_grid_node_next = var_zcc_grid_node->next(); \
+        char * var_your_key_ptr = var_zcc_grid_node->key(); (void)var_your_key_ptr; \
+        var_your_value_ptr = (typeof(___V_GRID.template_type()))var_zcc_grid_node->value(); \
+        (void) var_your_value_ptr; {
+#define zcc_grid_walk_end }}}
+
+template <typename T>
+class lgrid
+{
+};
+
+template <typename T>
+class lgrid<T *>: private basic_grid
+{
+public:
+    class node: public basic_grid_node
+    {
+    public:
+        inline node() {}
+        inline ~node() {}
+        inline long key() { return (long)(key_void()); }
+        inline T * value() { return (T *)(value_void()); }
+        inline node *prev() { return (node *)(prev_void()); }
+        inline node *next() { return (node *)(next_void()); }
+    };
+public:
+    inline lgrid() {option_long();}
+    inline ~lgrid() {}
+    inline size_t size() { return ___size; }
+    inline size_t length() { return ___size; }
+    inline bool exists(long key)
+    {
+        return find_void(key)?true:false;
+    }
+
+    inline void clear()
+    {
+        clear_void();
+    }
+
+    inline node *update(long key, const void *value, T **old_value = 0)
+    {
+        return (node *)update_void((char *)key, value, (void **)old_value);
+    }
+
+    inline void update(node *n, const void *value, T **old_value = 0)
+    {
+        update_void((basic_grid_node *)n, value, (void **)old_value);
+    }
+
+    inline void erase(long key, T **old_value = 0)
+    {
+        erase_void((char *)key, (void **)old_value);
+    }
+
+    inline void erase(node *n, T **old_value)
+    {
+        erase_void((basic_grid_node *)n, (void **)old_value);
+    }
+
+    inline node *find(long key, T **value=0)
+    {
+        return (node *)find_void((char *)key, (void **)value);
+    }
+
+    inline node *find_near_prev(long key, T **value=0)
+    {
+        return (node *)find_near_prev_void((char *)key, (void **)value);
+    }
+
+    inline node *find_near_next(long key, T **value=0)
+    {
+        return (node *)find_near_next_void((char *)key, (void **)value);
+    }
+
+    inline node *first_node()
+    {
+        return (node *)first_node_void();
+    }
+
+    inline node *last_node()
+    {
+        return (node *)last_node_void();
+    }
+
+    inline void option_gm_pool(gm_pool &gmp)
+    {
+        option_gm_pool_void(gmp);
+    }
+    inline T * template_type() const  { return 0; }
+};
+
+#define zcc_lgrid_walk_begin(var_your_lgrid, var_your_key_ptr, var_your_value_ptr) { \
+    typeof(var_your_lgrid) &___V_GRID = (var_your_lgrid); \
+    typeof(___V_GRID.template_type()) var_your_value_ptr; \
+    typeof(___V_GRID.first_node()) var_zcc_lgrid_node = ___V_GRID.first_node(); \
+    typeof(___V_GRID.first_node()) var_zcc_lgrid_node_next; \
+    for (; var_zcc_lgrid_node; var_zcc_lgrid_node = var_zcc_lgrid_node_next) { \
+        var_zcc_lgrid_node_next = var_zcc_lgrid_node->next(); \
+        long var_your_key_ptr = var_zcc_lgrid_node->key(); (void)var_your_key_ptr; \
+        var_your_value_ptr = (typeof(___V_GRID.template_type()))var_zcc_lgrid_node->value(); \
+        (void) var_your_value_ptr; {
+#define zcc_lgrid_walk_end }}}
 
 /* set INNER USE ################################################### */
 class set
@@ -573,13 +858,15 @@ private:
     gm_pool *___gmp;
 };
 
-/* string ###################################################### */
-std::string &to_lower(std::string &str);
-std::string &to_upper(std::string &str);
-std::string &sprintf_1024(std::string &str, const char *fmt, ...);
-std::string &size_data_escape(std::string &str, const void *data, size_t n = 0);
-std::string &size_data_escape(std::string &str, int i);
-std::string &size_data_escape(std::string &str, long i);
+#define zcc_set_walk_begin(var_your_set, var_your_key_ptr) {\
+    typeof(var_your_set) &___V_SET = (var_your_set); \
+    char * var_your_key_ptr; \
+    typeof(___V_SET.first_node()) var_zcc_set_node = ___V_SET.first_node(); \
+    typeof(___V_SET.first_node()) var_zcc_set_node_next; \
+    for (; var_zcc_set_node; var_zcc_set_node = var_zcc_set_node_next) { \
+        var_zcc_set_node_next = var_zcc_set_node->next(); \
+        var_your_key_ptr = var_zcc_set_node->key(); {
+#define zcc_set_walk_end }}}
 
 /* size_data ######################################################## */
 ssize_t size_data_unescape(const void *src_data, size_t src_size, char **result_data, size_t *result_size);
@@ -596,9 +883,19 @@ const encode_type var_encode_qp = 3;
 const encode_type var_encode_unknown = 126;
 
 ssize_t base64_encode(const void *src, size_t src_size, std::string &dest, bool mime_flag = false);
-ssize_t base64_decode(const void *src, size_t src_size, std::string &dest);
+ssize_t base64_decode(const void *src, size_t src_size, std::string &dest, size_t *dealed_size = 0);
 ssize_t base64_encode_get_min_len(size_t in_len, bool mime_flag = false);
 ssize_t base64_decode_get_valid_len(const void *src, size_t src_size);
+class base64_decoder
+{
+public:
+    base64_decoder();
+    ~base64_decoder();
+    ssize_t decode(const void *src, size_t src_size, std::string &str);
+private:
+    std::string tmpstring;
+    char leftbuf[9];
+};
 
 ssize_t qp_decode_2045(const void *src, size_t src_size, std::string &dest);
 ssize_t qp_decode_2047(const void *src, size_t src_size, std::string &dest);
@@ -607,6 +904,7 @@ ssize_t qp_decode_get_valid_len(const void *src, size_t src_size);
 extern char hex_to_dec_table[];
 ssize_t hex_encode(const void *src, size_t src_size, std::string &dest);
 ssize_t hex_decode(const void *src, size_t src_size, std::string &dest);
+ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str);
 
 size_t ncr_decode(size_t ins, char *wchar);
 
@@ -620,10 +918,14 @@ long timeout_left(long timeout);
 void msleep(long delay);
 void sleep(long delay);
 
+/* date ############################################################ */
+char *build_rfc1123_date_string(long t, char *buf);
+
 /* dns ############################################################ */
 ssize_t get_localaddr(char * addr_list, size_t max_count);
 ssize_t get_hostaddr(const char *host, char * addr_list, size_t max_count);
 bool get_peername(int sockfd, int *host, int *port);
+bool get_ipstring(int ip, char *str);
 
 /* 配置文件 ######################################################### */
 typedef struct {
@@ -673,6 +975,7 @@ extern config default_config;
 bool chroot_user(const char *root_dir, const char *user_name);
 
 /* mime types */
+extern const char *var_mime_type_application_cotec_stream;
 const char *mime_type_from_suffix(const char *suffix, const char *def = blank_buffer);
 const char *mime_type_from_filename(const char *filename, const char *def = blank_buffer);
 
@@ -710,7 +1013,6 @@ extern char *var_module_name;
 extern bool var_test_mode;
 extern long var_proc_timeout;
 extern bool var_proc_stop;
-extern bool var_proc_stop_handler;
 
 extern void (*show_usage) (const char *ctx);
 int main_parameter_run(int argc, char **argv);
@@ -745,10 +1047,10 @@ int get_readable_count(int fd);
 ssize_t writen(int fd, const void *buf, size_t size);
 
 /* timed_io ######################################################## */
-bool timed_wait_readable(int fd, long timeout);
+bool timed_wait_readable(int fd, long timeout, bool *error = 0);
 ssize_t timed_read(int fd, void *buf, size_t size, long timeout);
 ssize_t timed_readn(int fd, void *buf, size_t size, long timeout);
-bool timed_wait_writeable(int fd, long timeout);
+bool timed_wait_writeable(int fd, long timeout, bool *error = 0);
 ssize_t timed_write(int fd, const void *buf, size_t size, long timeout);
 ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout);
 
@@ -758,9 +1060,10 @@ const int var_tcp_listen_type_unix = 'u';
 const int var_tcp_listen_type_fifo = 'f';
 int unix_accept(int fd);
 int inet_accept(int fd);
-int unix_listen(char *addr, int backlog);
-int inet_listen(const char *sip, int port, int backlog);
-int listen(const char *netpath, int backlog, int *type = 0);
+int accept(int sock, int type = var_tcp_listen_type_inet);
+int unix_listen(char *addr, int backlog = 5);
+int inet_listen(const char *sip, int port, int backlog = 5);
+int listen(const char *netpath, int *type = 0, int backlog = 5);
 int fifo_listen(const char *path);
 int unix_connect(const char *addr);
 int inet_connect(const char *dip, int port);
@@ -771,6 +1074,7 @@ int connect(const char *netpath);
 extern bool var_openssl_debug;
 void openssl_init(void);
 void openssl_fini(void);
+void openssl_phtread_fini(void);
 SSL_CTX *openssl_create_SSL_CTX_server(void);
 SSL_CTX *openssl_create_SSL_CTX_client(void);
 bool openssl_SSL_CTX_set_cert(SSL_CTX *ctx, const char *cert_file, const char *key_file);
@@ -797,40 +1101,39 @@ public:
     virtual ssize_t write_fn(const void *buf, size_t size, long timeout) = 0;
     stream &set_timeout(long timeout);
     long get_timeout();
-    inline bool error() { return ___stream_error; }
-    inline bool eof() { return ___stream_eof; }
-    inline bool exception() { return ___stream_error || ___stream_eof; }
+    inline bool is_error() { return ___error; }
+    inline bool is_eof() { return ___eof; }
+    inline bool is_exception() { return ___error || ___eof; }
     /* read */
-    inline int get()
-    {
+    inline int get() {
         return ((read_buf_p1<read_buf_p2)?(read_buf[read_buf_p1++]):(get_char_do()));
-    };
+    }
     ssize_t readn(void *buf, size_t size);
     ssize_t readn(std::string &str, size_t size);
     ssize_t gets(void *buf, size_t size, int delimiter='\n');
     ssize_t gets(std::string &str, int delimiter = '\n');
     ssize_t size_data_get_size();
     /* write */
-    inline stream &put(int ch)
-    {
-        write_buf[write_buf_len++]=ch;
+    inline stream &put(int ch) {
+        write_buf[write_buf_len++]=ch; ___flushed = false;
         (write_buf_len<stream_write_buf_size)?(1):(flush());
         return *this;
     };
     bool flush();
-    stream &writen(const void *buf, size_t size);
+    stream &write(const void *buf, size_t size);
     stream &puts(const char *str);
     stream &printf_1024(const char *format, ...);
 private:
     int get_char_do();
-    int read_buf_p1:20;
-    int read_buf_p2:20;
-    size_t write_buf_len:20;
-    long _timeout;
+    int read_buf_p1:16;
+    int read_buf_p2:16;
+    unsigned short int write_buf_len;
+    long ___timeout;
     char read_buf[stream_read_buf_size + 1];
     char write_buf[stream_write_buf_size + 1];
-    bool ___stream_error;
-    bool ___stream_eof;
+    bool ___error;
+    bool ___eof;
+    bool ___flushed;
 };
 
 
@@ -893,121 +1196,28 @@ locker *pthread_locker_create();
 void pthread_locker_free(locker *lock);
 
 /* event ####################################################### */
-const unsigned char var_event_none         =    0x00;
-const unsigned char var_event_read         =    0x01;
-const unsigned char var_event_write        =    0x02;
-const unsigned char var_event_rdwr         =    0x03;
-const unsigned char var_event_persist      =    0x04;
-const unsigned char var_event_rdhup        =    0x10;
-const unsigned char var_event_hup          =    0x20;
-const unsigned char var_event_error        =    0x40;
-const unsigned char var_event_errors       =    0x70;
-const unsigned char var_event_timeout      =    0x80;
-const unsigned char var_event_exception    =    0xF0;
-const unsigned char var_event_type_event   =    0x01;
-const unsigned char var_event_type_aio     =    0x02;
-
-typedef struct ev_t ev_t;
-typedef struct aio_t aio_t;
-typedef struct evtimer_t evtimer_t;
-typedef struct evbase_t evbase_t;
 class event_io;
 class async_io;
 class event_timer;
 class event_base;
-
 extern event_base default_evbase;
-
-typedef void (*event_io_cb_t) (event_io &ev);
-struct ev_t {
-    unsigned char aio_type:3;
-    unsigned char is_local:1;
-    unsigned char _init:1;
-    unsigned char events;
-    unsigned char recv_events;
-    int fd;
-    event_io_cb_t callback;
-    void *context;
-    evbase_t *evbase;
-};
 
 class event_io
 {
 public:
     event_io();
     ~event_io();
-    void init(int fd, event_base &eb = default_evbase);
-    void fini();
-    inline bool error() { return ___data.recv_events & var_event_exception; }
-    inline bool timeout() { return ___data.recv_events & var_event_timeout; }
-    inline bool exception() { return ___data.recv_events & var_event_exception; }
-    inline bool is_local() { return ___data.is_local; }
-    inline void set_local() { ___data.is_local = 1; }
-    inline int get_fd() { return ___data.fd; }
-    void enable_event(int events, event_io_cb_t callback);
-    inline void enable_read(event_io_cb_t callback) { enable_event(var_event_read, callback); }
-    inline void enable_write(event_io_cb_t callback) { enable_event(var_event_write, callback); }
-    inline void disable() { enable_event(0, 0); }
-    inline void set_context(const void *ctx) { ___data.context = const_cast <void *> (ctx); }
-    void * get_context() { return ___data.context; }
-    event_base *get_event_base();
-    ev_t ___data;
-};
-
-typedef struct aio_rwbuf_t aio_rwbuf_t;
-typedef struct aio_rwbuf_list_t aio_rwbuf_list_t;
-const int aio_rwbuf_size  = 4096;
-struct aio_rwbuf_t {
-    aio_rwbuf_t *next;
-    unsigned int long_flag:1;
-    unsigned int p1:15;
-    unsigned int p2:15;
-    char data[aio_rwbuf_size];
-};
-
-typedef struct aio_rwbuf_longbuf_t aio_rwbuf_longbuf_t;
-struct aio_rwbuf_longbuf_t {
-    size_t p1;
-    size_t p2;
-    char *data;
-};
-struct aio_rwbuf_list_t {
-    int len;
-    aio_rwbuf_t *head;
-    aio_rwbuf_t *tail;
-};
-typedef void (*async_io_cb_t) (async_io &as);
-struct aio_t {
-    unsigned char aio_type:3;
-    unsigned char is_local:1;
-    unsigned char in_time:1;
-    unsigned char enable_time:1;
-    unsigned char want_read:1;
-    unsigned char is_size_data:1;
-    unsigned char events;
-    unsigned char recv_events;
-    unsigned char rw_type;
-    char delimiter;
-    int fd;
-    int read_magic_len;
-    int ret;
-    async_io_cb_t callback;
-    void *context;
-    aio_rwbuf_list_t read_cache;
-    aio_rwbuf_list_t write_cache;
-    long timeout;
-    rbtree_node_t rbnode_time;
-    evbase_t *evbase;
-    aio_t *queue_prev;
-    aio_t *queue_next;
-    unsigned char ssl_server_or_client:1;
-    unsigned char ssl_session_init:1;
-    unsigned char ssl_read_want_read:1;
-    unsigned char ssl_read_want_write:1;
-    unsigned char ssl_write_want_read:1;
-    unsigned char ssl_write_want_write:1;
-    unsigned char ssl_error:1;
-    SSL *ssl;
+    void bind(int fd, event_base &evbase = default_evbase);
+    void option_local();
+    ssize_t get_result();
+    int get_fd();
+    void enable_read(void (*callback)(event_io &));
+    void enable_write(void (*callback)(event_io &));
+    void disable();
+    void set_context(const void *ctx);
+    void * get_context();
+    event_base &get_event_base();
+    char ___data[31];
 };
 
 class async_io
@@ -1015,56 +1225,32 @@ class async_io
 public:
     async_io();
     ~async_io();
-    inline int get_ret() { return ___data.ret; }
-    inline bool is_local() { return ___data.is_local; }
-    inline void set_local() { ___data.is_local = 1; }
-    inline int get_fd() { return ___data.fd; }
-    inline void set_context(const void *ctx) { ___data.context = const_cast <void *> (ctx); }
-    void * get_context() { return ___data.context; }
-    void init(int fd, event_base &eb = default_evbase);
-    void fini();
-    void ssl_init(SSL_CTX * ctx, async_io_cb_t callback, long timeout, bool server_or_client);
-    inline void tls_connect(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
-    { return ssl_init(ctx, callback, timeout, false); }
-    inline void tls_accept(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
-    { return ssl_init(ctx, callback, timeout, true); }
+    void option_local();
+    int get_result();
+    int get_fd();
+    void set_context(const void *ctx);
+    void * get_context();
+    void bind(int fd, event_base &eb = default_evbase);
+    void tls_connect(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
+    void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
     SSL *detach_SSL();
     void fetch_rbuf(char *buf, int len);
     void fetch_rbuf(std::string &dest, int len);
-    void read(int max_len, async_io_cb_t callback, long timeout);
-    void readn(int strict_len, async_io_cb_t callback, long timeout);
-    void read_size_data(async_io_cb_t callback, long timeout);
-    void read_delimiter(int delimiter, int max_len, async_io_cb_t callback, long timeout);
-    inline void read_line(int max_len, async_io_cb_t callback, long timeout)
-    { read_delimiter('\n', max_len, callback, timeout); }
+    void read(size_t max_len, void (*callback)(async_io &), long timeout);
+    void readn(size_t strict_len, void (*callback)(async_io &), long timeout);
+    void read_size_data(void (*callback)(async_io &), long timeout);
+    void read_delimiter(int delimiter, size_t max_len, void (*callback)(async_io &), long timeout);
+    void read_line(size_t max_len, void (*callback)(async_io &), long timeout);
     void cache_printf_1024(const char *fmt, ...);
     void cache_puts(const char *s);
     void cache_write(const void *buf, size_t len);
     void cache_write_size_data(const void *buf, size_t len);
     void cache_write_direct(const void *buf, size_t len);
-    void cache_flush(async_io_cb_t callback, long timeout);
-    inline size_t get_cache_size() { return ___data.write_cache.len; }
-    void sleep(async_io_cb_t callback, long timeout);
-    event_base *get_event_base();
-
-    aio_t ___data;
-};
-#if 1
-/* inner used */
-void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *aio);
-void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *aio);
-#endif
-
-typedef void (*event_timer_cb_t) (event_timer &);
-struct evtimer_t {
-    long timeout;
-    event_timer_cb_t callback;
-    void *context;
-    rbtree_node_t rbnode_time;
-    unsigned char init:1;
-    unsigned char in_time:1;
-    unsigned char is_local:1;
-    evbase_t *evbase;
+    void cache_flush(void (*callback)(async_io &), long timeout);
+    size_t get_cache_size();
+    void sleep(void (*callback)(async_io &), long timeout);
+    event_base &get_event_base();
+    char ___data[122];
 };
 
 class event_timer
@@ -1072,35 +1258,14 @@ class event_timer
 public:
     event_timer();
     ~event_timer();
-    void init(event_base &eb = default_evbase);
-    void fini();
-    void start(event_timer_cb_t callback, long timeout);
+    void bind(event_base &eb = default_evbase);
+    void start(void (*callback)(event_timer &), long timeout);
     void stop();
-    inline bool is_local() { return ___data.is_local; }
-    inline void set_local() { ___data.is_local = 1; }
-    inline void set_context(const void *ctx) { ___data.context = const_cast <void *> (ctx); }
-    void * get_context() { return ___data.context; }
-    event_base *get_event_base();
-/* private */
-    evtimer_t ___data;
-};
-
-struct evbase_t {
-    int epoll_fd;
-    struct epoll_event *epoll_event_list;
-    rbtree_t event_timer_tree;
-    rbtree_t aio_timer_tree;
-    event_io *eventfd_event;
-    void *context;
-
-    aio_t *queue_head;
-    aio_t *queue_tail;
-
-    aio_t *extern_queue_head;
-    aio_t *extern_queue_tail;
-
-    locker *lock;
-    bool lock_auto_release;
+    void option_local();
+    void set_context(const void *ctx);
+    void * get_context();
+    event_base &get_event_base();
+    char ___data[57];
 };
 
 class event_base
@@ -1108,13 +1273,12 @@ class event_base
 public:
     event_base();
     ~event_base();
-    inline void set_context(const void *ctx) { ___data.context = const_cast <void *> (ctx); }
-    void * get_context() { return ___data.context; }
+    void set_context(const void *ctx);
+    void * get_context();
     void notify();
+    void option_local();
     void dispatch(long delay = 1000);
-    void set_locker(locker *lock, bool auto_release = false);
-    locker *get_locker();
-    evbase_t ___data;
+    char ___data[117];
 };
 
 /* iopipe ########################################################### */
@@ -1124,6 +1288,8 @@ class iopipe
 public:
     iopipe();
     ~iopipe();
+    void option_after_peer_closed_timeout(long timeout);
+    size_t get_count();
     void run();
     void stop_notify();
     void enter(int client_fd, SSL *client_ssl, int server_fd, SSL *server_ssl);
@@ -1131,6 +1297,33 @@ public:
 private:
     void *___data;
 };
+
+
+/* coroutine ########################################################## */
+class coroutine;
+typedef struct coroutine_mutex_t coroutine_mutex_t;
+typedef struct coroutine_cond_t coroutine_cond_t;
+void coroutine_base_init();
+void coroutine_base_loop();
+void coroutine_base_stop_notify();
+void coroutine_base_fini();
+void coroutine_go(void *(*start_job)(void *ctx), void *ctx);
+void coroutine_yield(coroutine *co = 0);
+void coroutine_exit(coroutine *co = 0);
+void coroutine_sleep(long s);
+void coroutine_msleep(long ms);
+void *coroutine_get_context(coroutine *co = 0);
+void coroutine_set_context(coroutine *co, const void *ctx);
+void coroutine_set_context(const void *ctx);
+coroutine_mutex_t * coroutine_mutex_create();
+void coroutine_mutex_free(coroutine_mutex_t *);
+void coroutine_mutex_lock(coroutine_mutex_t *);
+void coroutine_mutex_unlock(coroutine_mutex_t *);
+coroutine_cond_t * coroutine_cond_create();
+void coroutine_cond_free(coroutine_cond_t *);
+void coroutine_cond_wait(coroutine_cond_t *, coroutine_mutex_t *);
+void coroutine_cond_signal(coroutine_cond_t *);
+void coroutine_cond_broadcast(coroutine_cond_t *);
 
 /* master ############################################################# */
 const int var_master_server_status_fd = 3;
@@ -1143,14 +1336,14 @@ public:
     master();
     ~master();
     void run(int argc, char **argv);
-    void load_server_config_from_dir(const char *config_path, std::vector<config *> &cfs);
-    virtual void load_server_config(std::vector<config *> &cfs);
+    void load_server_config_from_dir(const char *config_path, vector<config *> &cfs);
+    virtual void load_server_config(vector<config *> &cfs);
     virtual void before_service();
     virtual void event_loop();
     void set_reload_signal(int sig);
 };
 
-/* server */
+/* master_event_server */
 class master_event_server
 {
 public:
@@ -1158,7 +1351,6 @@ public:
     ~master_event_server();
     virtual void before_service();
     virtual void event_loop();
-    virtual void before_reload();
     virtual void before_exit();
     virtual void simple_service(int fd);
     virtual void service_register(const char *service_name, int fd, int fd_type);
@@ -1166,11 +1358,31 @@ public:
             , event_base &eb = default_evbase);
     void run(int argc, char **argv);
     static void stop_notify();
-    static bool flag_reloading;
 private:
     void clear();
     void alone_register(char *urls);
     void inner_service_register(char *s, char *optval);
+    void run_begin(int argc, char **argv);
+    void run_loop();
+    void run_over();
+};
+
+/* master_coroutine_server */
+class master_coroutine_server
+{
+public:
+    master_coroutine_server();
+    ~master_coroutine_server();
+    virtual void before_service();
+    virtual void before_exit();
+    virtual void service_register(const char *service_name, int fd, int fd_type) = 0;
+    void run(int argc, char **argv);
+    static void stop_notify();
+private:
+    void alone_register(char *urls);
+    void run_begin(int argc, char **argv);
+    void run_loop();
+    void run_over();
 };
 
 /* charset ############################################################ */
@@ -1229,6 +1441,12 @@ int finder_main(int argc, char **argv);
 extern basic_finder *(*finder_create_extend_fn)(const char *method, const char *url);
 
 /* cdb ############################################################## */
+void debug_kv_show(const char *k, const char *v);
+void debug_kv_show(const char *k, long v);
+
+char *build_unique_id(char *buf);
+
+/* cdb ############################################################## */
 class cdb
 {
 public:
@@ -1255,7 +1473,7 @@ public:
     ~cdb_walker();
     bool get_data(char **key, size_t *klen, char **val, size_t *vlen);
     bool get_data(std::string &key, std::string &val);
-    void reset();
+    void clear();
 private:
     unsigned char *___data;
     unsigned ___pos;
@@ -1352,9 +1570,9 @@ private:
     int ___len;
     bool ___over;
 };
-void mime_header_line_get_address(const char *in_str, size_t in_len, std::vector<mime_address *> &rvec);
+void mime_header_line_get_address(const char *in_str, size_t in_len, vector<mime_address *> &rvec);
 void mime_header_line_get_address_utf8(const char *src_charset_def , const char *in_str, size_t in_len
-        , std::vector<mime_address *> &rvec);
+        , vector<mime_address *> &rvec);
 
 
 /* mime parser ##################################################### */
@@ -1388,11 +1606,11 @@ public:
     mail_parser_mime * next();
     mail_parser_mime * child();
     mail_parser_mime * parent();
-    const std::vector<size_data_t *> &header_line();
+    const vector<size_data_t *> &header_line();
     /* sn == 0: first, sn == -1: last */
     size_t header_line(const char *header_name, char **data, int n = 0);
     bool header_line(const char *header_name, std::string &result, int n = 0);
-    bool header_line(const char *header_name, std::vector<const size_data_t *> &vec);
+    bool header_line(const char *header_name, vector<const size_data_t *> &vec);
     void decoded_content(std::string &dest);
     void decoded_content_utf8(std::string &dest);
 /* private: */
@@ -1428,23 +1646,23 @@ public:
     const mime_address &reply_to();
     const mime_address &receipt();
     const char *in_reply_to();
-    const std::vector<mime_address *> &to();
-    const std::vector<mime_address *> &to_utf8();
-    const std::vector<mime_address *> &cc();
-    const std::vector<mime_address *> &cc_utf8();
-    const std::vector<mime_address *> &bcc();
-    const std::vector<mime_address *> &bcc_utf8();
-    const std::vector<char *> &references();
+    const vector<mime_address *> &to();
+    const vector<mime_address *> &to_utf8();
+    const vector<mime_address *> &cc();
+    const vector<mime_address *> &cc_utf8();
+    const vector<mime_address *> &bcc();
+    const vector<mime_address *> &bcc_utf8();
+    const vector<char *> &references();
     const mail_parser_mime *top_mime();
-    const std::vector<mail_parser_mime *> &all_mimes();
-    const std::vector<mail_parser_mime *> &text_mimes();
-    const std::vector<mail_parser_mime *> &show_mimes();
-    const std::vector<mail_parser_mime *> &attachment_mimes();
-    const std::vector<size_data_t *> &header_line();
+    const vector<mail_parser_mime *> &all_mimes();
+    const vector<mail_parser_mime *> &text_mimes();
+    const vector<mail_parser_mime *> &show_mimes();
+    const vector<mail_parser_mime *> &attachment_mimes();
+    const vector<size_data_t *> &header_line();
     /* sn == 0: first, sn == -1: last */;
     size_t header_line(const char *header_name, char **data, int n = 0);
     bool header_line(const char *header_name, std::string &result, int n = 0);
-    bool header_line(const char *header_name, std::vector<const size_data_t *> &vec);
+    bool header_line(const char *header_name, vector<const size_data_t *> &vec);
 /* private: */
     inline mail_parser_inner *get_inner_data() { return ___data; }
 private:
@@ -1482,9 +1700,92 @@ public:
     void parse(const char *mail_data, size_t mail_data_len);
     const char *data();
     size_t size();
-    const std::vector<tnef_parser_mime *> &all_mimes();
+    const vector<tnef_parser_mime *> &all_mimes();
 private:
     tnef_parser_t *___data;
+};
+
+/* http httpd ##################################################### */
+class http_url
+{
+public:
+    http_url();
+    ~http_url();
+    /* parse */
+    http_url(const char *url);
+    void clear();
+    void parse(const char *url);
+    char *get_scheme(const char *def_val = blank_buffer);
+    char *get_destination();
+    char *get_host();
+    int get_port(int def_val = -1);
+    char *get_path();
+    char *get_query();
+    char *get_query_variate(const char *name, const char *def_val = blank_buffer);
+    dict &get_query_variate();
+    char *get_fragment();
+    void debug_show();
+    char ___data[88];
+};
+
+void http_cookie_parse_request(dict &result, const char *raw_cookie);
+void http_cookie_build(std::string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
+
+extern bool var_httpd_debug;
+class httpd
+{
+public:
+    httpd();
+    ~httpd();
+    void bind(int sock);
+    void bind(SSL *ssl);
+    bool run();
+    virtual void handler();
+    virtual void get_post_data_hander();
+    void get_post_data_hander_default();
+    void set_exception();
+    void stop();
+
+    /* option */
+    virtual long keep_alive_timeout();
+    virtual long request_header_timeout();
+    virtual long max_length_for_post();
+    virtual char *tmp_path_for_post();
+
+    /* request */
+    char *request_method();
+    char *request_uri();
+    char *request_version();
+    char *request_header(const char *name, const char *def_val = blank_buffer);
+    dict &request_header();
+    char *request_query_variate(const char *name, const char *def_val = blank_buffer);
+    dict &request_query_variate();
+    char *request_post_variate(const char *name, const char *def_val = blank_buffer);
+    dict &request_post_variate();
+    char *request_cookie(const char *name, const char *def_val = blank_buffer);
+    dict &request_cookie();
+
+    /* response completly*/
+    virtual void response_304(const char *etag);
+    virtual void response_404();
+    virtual void response_500();
+    void response_file_by_absolute_path(const char *filename, const char *content_type = 0);
+
+    /* response header */
+    void response_header_initialization(const char *initialization = 0);
+    void response_header(const char *name, const char *value);
+    void response_header(const char *name, long d);
+    void response_header_content_type(const char *value, const char *charset = 0);
+    void response_header_content_length(long length);
+    void response_header_set_cookie(const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
+    void response_header_unset_cookie(const char *name);
+    void response_header_over();
+
+    /* response */
+    bool response_flush();
+    stream &get_stream();
+    /* */
+    char ___data[192];
 };
 
 }

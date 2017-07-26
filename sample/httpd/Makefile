@@ -1,2 +1,2 @@
-mini_httpd_LIB=-lssl -lcrypto
+async_httpd_LIB= -lssl -lcrypto
 include ../../makefiles/sample.makefile

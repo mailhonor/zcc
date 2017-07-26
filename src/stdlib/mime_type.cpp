@@ -11,6 +11,7 @@
 namespace zcc
 {
 
+const char *var_mime_type_application_cotec_stream = "application/octet-stream";
 const char *mime_type_from_suffix(const char *suffix, const char *def)
 {
     /* {{{ mt_count mt_vector mt_offsets */
@@ -27,7 +28,7 @@ const char *mime_type_from_suffix(const char *suffix, const char *def)
     }
     memcpy(sufbuf, suffix, slen);
     sufbuf[slen] = 0;
-    to_lower((char *)sufbuf);
+    tolower((char *)sufbuf);
 
     int sint = sufbuf[0];
     sint = (sint<<8) + sufbuf[1];

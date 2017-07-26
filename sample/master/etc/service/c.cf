@@ -1,0 +1,4 @@
+zcmd = ./coroutine
+zlisten = 0:8898
+zproc_limit = 1
+zlog = masterlog,simple

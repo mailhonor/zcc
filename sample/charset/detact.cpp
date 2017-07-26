@@ -30,7 +30,7 @@ void dorun(const char *fn)
 
 int main(int argc, char **argv)
 {
-    std::vector<char *> fn_vec;
+    zcc::vector<char *> fn_vec;
     zcc::var_progname = argv[0];
 
     if (argc < 2) {
@@ -54,10 +54,9 @@ int main(int argc, char **argv)
     } zcc_main_parameter_end;
 
 
-    std::vector<char *>::iterator fit;
-    for (fit = fn_vec.begin(); fit != fn_vec.end(); fit++) {
-        dorun(*fit);
-    }
+    zcc_vector_walk_begin(fn_vec, fn) {
+        dorun(fn);
+    } zcc_vector_walk_end;
 
     return 0;
 }

@@ -145,9 +145,9 @@ ssize_t finder::find(const char *query, std::string &result, long timeout)
         memcpy(buf, query, qlen);
         buf[qlen] = 0;
         if (___lowercase) {
-            to_lower(buf);
+            tolower(buf);
         } else if (___uppercase) {
-            to_upper(buf);
+            toupper(buf);
         }
         nq = buf;
     }

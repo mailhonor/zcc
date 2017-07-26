@@ -14,9 +14,20 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-static int (*___zcc_accept)(int sockfd, struct sockaddr *addr, socklen_t *addrlen) = accept;
-static int (*___zcc_listen)(int sockfd, int backlog) = listen;
-static int (*___zcc_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen) = connect;
+static inline int ___zcc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    return accept(sockfd, addr, addrlen);
+}
+
+static inline int ___zcc_listen(int sockfd, int backlog)
+{
+    return listen(sockfd, backlog);
+}
+
+static inline int ___zcc_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return connect(sockfd, addr, addrlen);
+}
 
 namespace zcc
 {
@@ -43,10 +54,12 @@ static int ___sane_accept(int sock, struct sockaddr *sa, socklen_t * len)
     int count;
     int err;
     int fd;
+    int errno2;
 
     if ((fd = ___zcc_accept(sock, sa, len)) < 0) {
+        errno2 = errno;
         for (count = 0; (err = accept_ok_errors[count]) != 0; count++) {
-            if (errno == err) {
+            if (errno2 == err) {
                 errno = EAGAIN;
                 break;
             }
@@ -54,6 +67,10 @@ static int ___sane_accept(int sock, struct sockaddr *sa, socklen_t * len)
     } else if (sa && (sa->sa_family == AF_INET || sa->sa_family == AF_INET6)) {
         int on = 1;
         (void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&on, sizeof(on));
+    }
+
+    if (fd > -1) {
+        nonblocking(fd);
     }
 
     return (fd);
@@ -70,6 +87,36 @@ int inet_accept(int fd)
     socklen_t ss_len = sizeof(ss);
 
     return (___sane_accept(fd, (struct sockaddr *)&ss, &ss_len));
+}
+
+int accept(int sock, int type)
+{
+    int fd = -1;
+    while(1) {
+        bool fderror = false;
+        if ((!timed_wait_readable(sock, 1 * 1000, &fderror)) && (fderror)) {
+            zcc_fatal("accept sock:%d error(%m)", sock);
+        }
+        if (var_proc_stop) {
+            return -1;
+        }
+        if (type == var_tcp_listen_type_inet) {
+            fd = inet_accept(sock);
+        } else if (type == var_tcp_listen_type_unix) {
+            fd = unix_accept(sock);
+        } else  {
+            zcc_fatal("accept only support inet/unix");
+        }
+        if (fd<0) {
+            int eo = errno;
+            if (eo == EAGAIN || eo == EINTR) {
+                continue;
+            }
+            zcc_fatal("accept sock:%d error(%m)", sock);
+        }
+        return fd;
+    }
+    return -1;
 }
 
 /* listen */
@@ -164,7 +211,7 @@ err:
     return -1;
 }
 
-int listen(const char *netpath, int backlog, int *type)
+int listen(const char *netpath, int *type, int backlog)
 {
     char _netpath[1024], *path, *host, *p;
     int fd, port, tp;
@@ -185,7 +232,7 @@ int listen(const char *netpath, int backlog, int *type)
             } else {
                 port = atoi(p+1);
             }
-        } else if (!strcmp(_netpath, "unix")) {
+        } else if (!strcmp(_netpath, "unix") || !(strcmp(_netpath, "local"))) {
             tp = var_tcp_listen_type_unix;
             path  = p;
         } else if (!strcmp(_netpath, "fifo")) {

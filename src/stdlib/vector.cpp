@@ -62,6 +62,16 @@ void basic_vector::reserve_void(size_t size)
     ___capacity += size;
 }
 
+void basic_vector::resize_void(size_t size)
+{
+    if (size > ___capacity) {
+        reserve_void(size - ___capacity);
+    }
+    if (size  <  ___capacity) {
+        ___size = size;
+    }
+}
+
 void basic_vector::option_gm_pool_void(gm_pool &gmp)
 {
     ___gmp = &gmp;

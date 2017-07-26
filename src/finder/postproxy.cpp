@@ -61,7 +61,7 @@ bool postproxy_finder::open(const char *url)
     sdup.push_back(dt.get_str("dictname", ""));
 
     ___url = sdup.dup();
-    std::vector<size_t> &offsets = sdup.offsets();
+    vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];
@@ -114,7 +114,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         ___fp->put('\0');
 
         ___fp->flush();
-        if (___fp->error()) {
+        if (___fp->is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : write error(%m)", ___url);
             continue;

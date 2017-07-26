@@ -73,15 +73,12 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
     if (mime->tnef()) {
         int j = 0;
         zcc::tnef_parser tp;
-        zcc::tnef_parser_mime *m;
         tp.parse(dcon.c_str(), dcon.size());
-        const std::vector<zcc::tnef_parser_mime *> &ams = tp.all_mimes();
-        std::vector<zcc::tnef_parser_mime *>::const_iterator it;
-        for (it = ams.begin(); it != ams.end(); it++) {
-            m = *it;
+        const zcc::vector<zcc::tnef_parser_mime *> &ams = tp.all_mimes();
+        zcc_vector_walk_begin(ams, m) {
             save_att_tnef(&tp, m, j + 1);
             j++;
-        };
+        } zcc_vector_walk_end;
     }
     return 0;
 }
@@ -89,14 +86,11 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
 static int save_all_attachments(zcc::mail_parser &parser)
 {
     int i = 0;
-    const std::vector<zcc::mail_parser_mime *> &allm = parser.attachment_mimes();
-    std::vector<zcc::mail_parser_mime *>::const_iterator it;
-    zcc::mail_parser_mime *m;
-    for (it = allm.begin(); it != allm.end(); it++) {
+    const zcc::vector<zcc::mail_parser_mime *> &allm = parser.attachment_mimes();
+    zcc_vector_walk_begin(allm, m) {
         i++;
-        m = *it;
         save_att(&parser, m, i);
-    }
+    } zcc_vector_walk_end;
 
     return 0;
 }
@@ -120,7 +114,7 @@ static void do_parse(char *eml_fn)
 
 int main(int argc, char **argv)
 {
-    std::vector<char *> fn_vec;
+    zcc::vector<char *> fn_vec;
     zcc_main_parameter_begin() {
         if (!strcmp(optname, "-att")) {
             enable_att = 1;
@@ -147,9 +141,9 @@ int main(int argc, char **argv)
         ___usage(0);
     }
 
-    for (std::vector<char *>::iterator it = fn_vec.begin(); it != fn_vec.end(); it++) {
-        do_parse(*it);
-    }
+    zcc_vector_walk_begin(fn_vec, fn) {
+        do_parse(fn);
+    } zcc_vector_walk_end;
 
     return 0;
 }

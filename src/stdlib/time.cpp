@@ -9,6 +9,7 @@
 #include "zcc.h"
 #include <sys/time.h>
 #include <time.h>
+#include <poll.h>
 
 namespace zcc
 {
@@ -41,6 +42,7 @@ long timeout_left(long timeout)
 
 void msleep(long delay)
 {
+#if 0
     struct timespec req, rem;
 
     rem.tv_sec = delay / 1000;
@@ -55,6 +57,14 @@ void msleep(long delay)
             zcc_fatal("msleep: nanosleep: %m");
         }
     }
+#else
+    long timeout = timeout_set(delay);
+    int left = (int)delay;
+    while (left > 0) {
+        poll(0, 0, left);
+        left = (int)timeout_left(timeout);
+    }
+#endif
 }
 
 void sleep(long delay)

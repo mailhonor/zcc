@@ -1,3 +1,4 @@
 zcmd = ./simple_server
 zlisten = 0:8899
-zproc_limit = 3
+zproc_limit = 1
+zlog = masterlog,simple

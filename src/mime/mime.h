@@ -65,7 +65,7 @@ public:
     bool filename2231_with_charset;
 
     /* mime original header-logic-line */
-    std::vector<size_data_t *> header_lines;
+    vector<size_data_t *> header_lines;
 
     /* relationship */
     mail_parser_mime *wrap;
@@ -98,29 +98,29 @@ public:
     mime_address from;
     mime_address sender;
     mime_address reply_to;
-    std::vector<mime_address *> to;
-    std::vector<mime_address *> cc;
-    std::vector<mime_address *> bcc;
+    vector<mime_address *> to;
+    vector<mime_address *> cc;
+    vector<mime_address *> bcc;
     mime_address receipt;
     char *in_reply_to;
     char *message_id;
-    std::vector<char *> references;
+    vector<char *> references;
 
     /* mime-tree */
     mail_parser_mime *top_mime;
 
-    /* all-mime-std::vector */
-    std::vector<mail_parser_mime *> all_mimes;
+    /* all-mime-vector */
+    vector<mail_parser_mime *> all_mimes;
 
     /* text(plain,html) type mime-list except for attachment */
-    std::vector<mail_parser_mime *> text_mimes;
+    vector<mail_parser_mime *> text_mimes;
 
     /* similar to the above, 
      * in addition to the case of alternative, html is preferred */
-    std::vector<mail_parser_mime *> show_mimes;
+    vector<mail_parser_mime *> show_mimes;
 
     /* attachment(and background-image) type mime-list */
-    std::vector<mail_parser_mime *> attachment_mimes;
+    vector<mail_parser_mime *> attachment_mimes;
 
     /* option */
     short int mime_max_depth;

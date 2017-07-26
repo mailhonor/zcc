@@ -59,7 +59,7 @@ bool cdb_finder::open(const char *url)
     sdup.push_back(dt.get_str("suffix", ""));
 
     ___url = sdup.dup();
-    std::vector<size_t> &offsets = sdup.offsets();
+    vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];

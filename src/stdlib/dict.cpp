@@ -7,6 +7,7 @@
  */
 
 #include "zcc.h"
+#include <ctype.h>
 
 namespace zcc
 {
@@ -55,11 +56,6 @@ dict::~dict()
 void dict::option_gm_pool(gm_pool &gmp)
 {
     ___gmp = &gmp;
-}
-
-void dict::reset()
-{
-    clear();
 }
 
 void dict::clear()
@@ -217,7 +213,7 @@ dict::node *dict::last_node()
 void dict::debug_show()
 {
     for (dict::node *n = first_node();n;n=n->next()) {
-        printf("%s = %s\n", n->key(), n->value());
+        debug_kv_show(n->key(), n->value());
     }
 }
 
@@ -271,6 +267,86 @@ long dict::get_size(const char *key, long def, long min, long max)
         return def;
     }
     return r;
+}
+
+void dict::parse_url_query(const char *query)
+{
+    char *q, *p, *ps = const_cast<char *>(query);
+    std::string name(32, 0), value(128, 0);
+    while(1) {
+        p = ps;
+        while((*p != '\0') && (*p != '&')) {
+            p++;
+        }
+        do {
+            q = ps;
+            while(q < p) {
+                if (*q  == '=') {
+                    break;
+                }
+                q ++ ;
+            }
+            if (q == p) {
+                break;
+            }
+            name.clear();
+            name.append(ps, q - ps);
+            tolower(name);
+            value.clear();
+            q ++;
+            url_hex_decode(q, p - q, value);
+        } while(0);
+        update(name.c_str(), value.c_str(), value.size());
+        if (*p == '\0') {
+            break;
+        }
+        ps = p + 1;
+    }
+}
+
+char *dict::build_url_query(std::string &query, bool strict)
+{
+    bool first = true;
+    for (dict::node *n = first_node();n;n=n->next()) {
+        if (first) {
+            first = false;
+        } else {
+            query.push_back('&');
+        }
+        query.append(n->key());
+        query.push_back('&');
+        char *v = n->value();
+        size_t i, len = strlen(v);
+        for (i = 0; i < len; i++) {
+            unsigned char ch = v[i];
+            if (ch == ' ') {
+                query.push_back('+');
+                continue;
+            }
+            if (isalnum(ch)) {
+                query.push_back(ch);
+                continue;
+            }
+            if (strict) {
+                query.push_back('%');
+                query.push_back(ch>>4);
+                query.push_back(ch&0X0F);
+                continue;
+            } 
+            if (ch > 127) {
+                query.push_back(ch);
+                continue;
+            }
+            if (strchr("._-", ch)) {
+                query.push_back(ch);
+                continue;
+            }
+            query.push_back('%');
+            query.push_back(ch>>4);
+            query.push_back(ch&0X0F);
+        }
+    }
+    return (char *)(void *)query.c_str();
 }
 
 }

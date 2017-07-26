@@ -22,6 +22,7 @@ argv::argv()
 argv::~argv()
 {
     clear();
+    free(___data);
 }
 
 void argv::push_back(const std::string &v)

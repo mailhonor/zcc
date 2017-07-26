@@ -7,26 +7,124 @@
  */
 
 #include "zcc.h"
+#include <pthread.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+/* {{{ pthread safe */
+static pthread_mutex_t *var_pthread_safe_lock_vec = 0;
+static void pthread_safe_locking_fn(int mode, int n, const char *file, int line)
+{
+  if(mode & CRYPTO_LOCK) {
+    zcc_pthread_lock(var_pthread_safe_lock_vec + n);
+  } else {
+    zcc_pthread_unlock(var_pthread_safe_lock_vec + n);
+  }
+}
+
+static unsigned long pthread_safe_id_fn(void)
+{
+  return ((unsigned long)pthread_self());
+}
+
+struct CRYPTO_dynlock_value { 
+    pthread_mutex_t mutex; 
+};
+
+static CRYPTO_dynlock_value *pthread_safe_dynlock_create_fn(const char *file, int line)
+{
+    CRYPTO_dynlock_value *v = (CRYPTO_dynlock_value *)zcc::malloc(sizeof(CRYPTO_dynlock_value));
+    pthread_mutex_init(&(v->mutex), NULL);
+    return v;
+}
+
+static void pthread_safe_dynlock_lock_fn(int mode, struct CRYPTO_dynlock_value *value, const char *file, int line)
+{
+    if (mode &CRYPTO_LOCK) {
+        pthread_mutex_lock(&(value->mutex));
+    } else {
+        pthread_mutex_unlock(&value->mutex);
+    }
+}
+
+static void pthread_safe_dynlock_destroy_fn(struct CRYPTO_dynlock_value *value, const char *file, int line)
+{
+    pthread_mutex_destroy(&(value->mutex));
+    zcc::free(value);
+}
+
+static void pthread_safe_setup(void)
+{
+    var_pthread_safe_lock_vec = (pthread_mutex_t *)zcc::malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
+    for(int i = 0; i < CRYPTO_num_locks(); i++) {
+        pthread_mutex_init(var_pthread_safe_lock_vec + i, 0);
+    }
+    CRYPTO_set_id_callback(pthread_safe_id_fn);
+    CRYPTO_set_locking_callback(pthread_safe_locking_fn);
+
+    CRYPTO_set_dynlock_create_callback(pthread_safe_dynlock_create_fn);
+    CRYPTO_set_dynlock_lock_callback(pthread_safe_dynlock_lock_fn);
+    CRYPTO_set_dynlock_destroy_callback(pthread_safe_dynlock_destroy_fn);
+}
+
+static void pthread_safe_cleanup(void)
+{
+    if (!var_pthread_safe_lock_vec) {
+        return;
+    }
+
+    CRYPTO_set_id_callback(0);
+    CRYPTO_set_locking_callback(0);
+    CRYPTO_set_dynlock_create_callback(0);
+    CRYPTO_set_dynlock_lock_callback(0);
+    CRYPTO_set_dynlock_destroy_callback(0);
+
+    for(int i = 0; i < CRYPTO_num_locks(); i++) {
+        pthread_mutex_destroy(var_pthread_safe_lock_vec + i);
+    }
+    zcc::free(var_pthread_safe_lock_vec);
+    var_pthread_safe_lock_vec = 0;
+}
+/* }}} */
 
 namespace zcc
 {
 
-
+static bool ___openssl_init = false;
 void openssl_init(void)
 {
+    ___openssl_init = true;
     SSL_library_init();
+    pthread_safe_setup();
     OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
     SSL_load_error_strings();
 }
 
 void openssl_fini(void)
 {
+    if (___openssl_init == false) {
+        return;
+    }
+#if 0
+    CONF_modules_unload(1)
+    ENGINE_cleanup();
+#endif
+    ERR_free_strings();
     EVP_cleanup();
     CRYPTO_cleanup_all_ex_data(); 
     ERR_remove_state(0);
-    ERR_free_strings();
+    sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+    pthread_safe_cleanup();
+    ___openssl_init = false;
+}
+
+void openssl_phtread_fini(void)
+{
+    if (___openssl_init == false) {
+        return;
+    }
+    ERR_remove_state(0);
 }
 
 SSL_CTX *openssl_create_SSL_CTX_server(void)
@@ -109,12 +207,12 @@ int openssl_SSL_get_fd(SSL *ssl)
             if ((left_time = timeout_left(cirtical_time)) < 1) { ret = -1; goto over;} \
             if (!timed_wait_readable(_fd, left_time)) { ret = -1; goto over; } \
             break; \
-        case SSL_ERROR_ZERO_RETURN:  /* FIXME */ \
         case SSL_ERROR_SSL: \
         case SSL_ERROR_SYSCALL: \
+            if (var_openssl_debug) {zcc_info("openssl: found error(%m)"); } \
+        case SSL_ERROR_ZERO_RETURN:  /* FIXME */ \
         default: \
-            if (var_openssl_debug) {zcc_info("openssl: found error"); } \
-            ret = -1; goto over; \
+            /* ret = -1; */ goto over; \
             break; \
         } \
     } \
@@ -152,3 +250,8 @@ ssize_t openssl_timed_write(SSL * ssl, const void *buf, size_t len, long timeout
 }
 
 }
+
+/* Local variables:
+* End:
+* vim600: fdm=marker
+*/

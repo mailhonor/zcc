@@ -14,7 +14,6 @@ static void service_error(zcc::async_io &aio)
 {
     int fd = aio.get_fd();
     zcc_info("%d: error or idle too long", fd);
-    aio.fini();
     delete &aio;
     close(fd);
 }
@@ -25,7 +24,7 @@ static void after_read(zcc::async_io &aio)
     char rbuf[102400];
     char *p;
 
-    ret = aio.get_ret();
+    ret = aio.get_result();
     fd = aio.get_fd();
     if (ret < 1) {
         return service_error(aio);
@@ -63,7 +62,7 @@ static void after_write(zcc::async_io &aio)
     int ret;
     printf("before_write\n");
 
-    ret = aio.get_ret();
+    ret = aio.get_result();
 
     if (ret < 1) {
         return service_error(aio);
@@ -83,7 +82,7 @@ void myserver::simple_service(int fd)
 {
     time_t t = time(0);
     zcc::async_io *aio = new zcc::async_io;
-    aio->init(fd);
+    aio->bind(fd);
     aio->cache_printf_1024("welcome aio: %s\n", ctime(&t));
     aio->cache_flush(after_write, 1 * 1000);
 }

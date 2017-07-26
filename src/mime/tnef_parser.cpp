@@ -34,7 +34,7 @@ struct tnef_parser_mime_t {
 
 struct tnef_parser_t {
     char src_charset_def[32];
-    std::vector<tnef_parser_mime *> *___all_mimes;
+    vector<tnef_parser_mime *> *___all_mimes;
     mime_parser_cache_magic *mcm;
     /* */
     gm_pool *gmp;
@@ -490,7 +490,7 @@ tnef_parser::tnef_parser()
     gm_pool *gmp = new gm_pool();
     ___data = (tnef_parser_t *)gmp->calloc(1, sizeof(tnef_parser_t));
     ___data->gmp = gmp;
-    ___data->___all_mimes=new(gmp->calloc(1,sizeof(std::vector<tnef_parser_mime*>)))std::vector<tnef_parser_mime*>();
+    ___data->___all_mimes=new(gmp->calloc(1,sizeof(vector<tnef_parser_mime*>)))vector<tnef_parser_mime*>();
     ___data->mcm = new(gmp->calloc(1, sizeof(mime_parser_cache_magic)))mime_parser_cache_magic();
     ___data->mcm->gmp = gmp;
 }
@@ -498,11 +498,10 @@ tnef_parser::tnef_parser()
 tnef_parser::~tnef_parser()
 {
     gm_pool *gmp = ___data->gmp;
-    std::vector<tnef_parser_mime *>::iterator it = ___data->___all_mimes->begin();
-    for (; it != ___data->___all_mimes->end(); it++) {
-        (*it)->~tnef_parser_mime();
-        /* gmp->free(*it); */
-    } 
+    zcc_vector_walk_begin(*(___data->___all_mimes), m) {
+        m->~tnef_parser_mime();
+        /* gmp->free(m); */
+    } zcc_vector_walk_end;
     ___data->___all_mimes->~vector<tnef_parser_mime *>(); /* free */
     /* gmp->free(___data); */
 
@@ -552,7 +551,7 @@ size_t tnef_parser::size()
     return ___data->tnef_size;
 }
 
-const std::vector<tnef_parser_mime *> &tnef_parser::all_mimes()
+const vector<tnef_parser_mime *> &tnef_parser::all_mimes()
 {
     return (*(___data->___all_mimes));
 }
