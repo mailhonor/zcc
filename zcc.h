@@ -109,42 +109,6 @@ struct size_data_t {
     char *data;
 };
 
-inline unsigned int int_unpack(const char *buf)
-{
-    unsigned char *p = (unsigned char *)buf;
-    unsigned n = p[0];
-    n <<= 8; n |= p[1];
-    n <<= 8; n |= p[2];
-    n <<= 8; n |= p[3];
-    return n;
-}
-
-inline void int_pack(int num, char *buf)
-{
-    unsigned char *p = (unsigned char *)buf;
-    p[3] = num & 255;
-    num >>= 8; p[2] = num & 255;
-    num >>= 8; p[1] = num & 255;
-    num >>= 8; p[0] = num & 255;
-}
-
-inline unsigned int int_unpack3(const char *buf)
-{
-    unsigned char *p = (unsigned char *)buf;
-    unsigned n = p[0];
-    n <<= 8; n |= p[1];
-    n <<= 8; n |= p[2];
-    return n;
-}
-
-inline void int_pack3(int num, char *buf)
-{
-    unsigned char *p = (unsigned char *)buf;
-    p[2] = num & 255;
-    num >>= 8; p[1] = num & 255;
-    num >>= 8; p[0] = num & 255;
-}
-
 /* mlink  ############################################################ */
 #define zcc_mlink_append(head, tail, node, prev, next) {\
     typeof(head) _head_1106=head, _tail_1106=tail, _node_1106 = node;\
@@ -407,10 +371,10 @@ public:
     inline ~list() {}
     inline size_t size() { return ___size; }
     inline void clear() { clear_void(); }
-    inline void push(T * v) { push_void((const void *)v); }
-    inline void push_back(T * v) { push_void((const void *)v); }
+    inline void push(const T * v) { push_void((const void *)v); }
+    inline void push_back(const T * v) { push_void((const void *)v); }
     inline bool pop(T **v) { return pop_void((char **)v); }
-    inline void unshift(T * v) { push_void((const void *)v); }
+    inline void unshift(const T * v) { push_void((const void *)v); }
     inline bool shift(T **v) { return shift_void((char **)v); }
     inline void erase(node *n) { return erase_void(n); }
     inline node *first_node() { return ___head; }
@@ -554,7 +518,7 @@ public:
     void debug_show();
     void option_gm_pool(gm_pool &gmp);
     /* extend */
-    char *get_str(const char *key, const char *def = "");
+    char *get_str(const char *key, const char *def = blank_buffer);
     bool get_bool(const char *key, bool def);
     int get_int(const char *key, int def, int min, int max);
     long get_long(const char *key, long def, long min, long max);
@@ -592,6 +556,7 @@ public:
     inline ~basic_grid_node() {}
     inline char *key_void() { return ___data.key; }
     inline void *value_void() { return ___data.value; }
+    inline void set_value_void(const void *v) { ___data.value = (void *)(char *)v; }
     basic_grid_node *prev_void();
     basic_grid_node *next_void();
 private:
@@ -602,6 +567,8 @@ class basic_grid
 public:
     basic_grid();
     ~basic_grid();
+    inline size_t size_void() { return ___size; }
+    inline size_t length_void() { return ___size; }
     void clear_void();
     basic_grid_node *update_void(const char *key, const void *value, void **old_value = 0);
     void update_void(basic_grid_node *n, const void *value, void **old_value = 0);
@@ -638,14 +605,15 @@ public:
         inline ~node() {}
         inline char * key() { return key_void(); }
         inline T * value() { return (T *)(value_void()); }
+        inline void set_value(const T *v) { set_value_void((void *)v); }
         inline node *prev() { return (node *)(prev_void()); }
         inline node *next() { return (node *)(next_void()); }
     };
 public:
     inline grid() {}
     inline ~grid() {}
-    inline size_t size() { return ___size; }
-    inline size_t length() { return ___size; }
+    inline size_t size() { return size_void(); }
+    inline size_t length() { return size_void; }
     inline bool exists(const char *key)
     {
         return find_void(key)?true:false;
@@ -872,6 +840,17 @@ private:
 ssize_t size_data_unescape(const void *src_data, size_t src_size, char **result_data, size_t *result_size);
 size_t size_data_unescape_all(const void *src_data, size_t src_size, size_data_t *vec, size_t sdsize);
 size_t size_data_put_size(size_t size, char *buf);
+class size_data_parser
+{
+public:
+    size_data_parser(const void *src_data, size_t src_size);
+    ~size_data_parser();
+    int shift(const char **data, size_t *size);
+    int shift(std::string &data);
+private:
+    char *ptr;
+    size_t left;
+};
 
 /* encode ########################################################### */
 typedef unsigned char encode_type;
@@ -1231,22 +1210,22 @@ public:
     void set_context(const void *ctx);
     void * get_context();
     void bind(int fd, event_base &eb = default_evbase);
-    void tls_connect(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
-    void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
+    void tls_connect(SSL_CTX * ctx, void (*callback)(async_io &), long timeout = 0);
+    void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout = 0);
     SSL *detach_SSL();
     void fetch_rbuf(char *buf, int len);
     void fetch_rbuf(std::string &dest, int len);
-    void read(size_t max_len, void (*callback)(async_io &), long timeout);
-    void readn(size_t strict_len, void (*callback)(async_io &), long timeout);
-    void read_size_data(void (*callback)(async_io &), long timeout);
-    void read_delimiter(int delimiter, size_t max_len, void (*callback)(async_io &), long timeout);
-    void read_line(size_t max_len, void (*callback)(async_io &), long timeout);
+    void read(size_t max_len, void (*callback)(async_io &), long timeout = 0);
+    void readn(size_t strict_len, void (*callback)(async_io &), long timeout = 0);
+    void read_size_data(void (*callback)(async_io &), long timeout = 0);
+    void read_delimiter(int delimiter, size_t max_len, void (*callback)(async_io &), long timeout =0);
+    void read_line(size_t max_len, void (*callback)(async_io &), long timeout = 0);
     void cache_printf_1024(const char *fmt, ...);
     void cache_puts(const char *s);
     void cache_write(const void *buf, size_t len);
     void cache_write_size_data(const void *buf, size_t len);
     void cache_write_direct(const void *buf, size_t len);
-    void cache_flush(void (*callback)(async_io &), long timeout);
+    void cache_flush(void (*callback)(async_io &), long timeout = 0);
     size_t get_cache_size();
     void sleep(void (*callback)(async_io &), long timeout);
     event_base &get_event_base();
@@ -1281,6 +1260,9 @@ public:
     char ___data[117];
 };
 
+void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *aio);
+void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *aio);
+
 /* iopipe ########################################################### */
 typedef void (*iopipe_after_close_fn_t) (void *);
 class iopipe
@@ -1308,6 +1290,7 @@ void coroutine_base_loop();
 void coroutine_base_stop_notify();
 void coroutine_base_fini();
 void coroutine_go(void *(*start_job)(void *ctx), void *ctx);
+coroutine * coroutine_self();
 void coroutine_yield(coroutine *co = 0);
 void coroutine_exit(coroutine *co = 0);
 void coroutine_sleep(long s);
@@ -1329,7 +1312,6 @@ void coroutine_cond_broadcast(coroutine_cond_t *);
 const int var_master_server_status_fd = 3;
 const int var_master_master_status_fd = 4;
 const int var_master_server_listen_fd = 5;
-
 class master
 {
 public:
@@ -1339,6 +1321,7 @@ public:
     void load_server_config_from_dir(const char *config_path, vector<config *> &cfs);
     virtual void load_server_config(vector<config *> &cfs);
     virtual void before_service();
+    virtual void before_service_for_enduser();
     virtual void event_loop();
     void set_reload_signal(int sig);
 };
@@ -1350,6 +1333,7 @@ public:
     master_event_server();
     ~master_event_server();
     virtual void before_service();
+    virtual void before_service_for_enduser();
     virtual void event_loop();
     virtual void before_exit();
     virtual void simple_service(int fd);
@@ -1374,6 +1358,7 @@ public:
     master_coroutine_server();
     ~master_coroutine_server();
     virtual void before_service();
+    virtual void before_service_for_enduser();
     virtual void before_exit();
     virtual void service_register(const char *service_name, int fd, int fd_type) = 0;
     void run(int argc, char **argv);
@@ -1444,7 +1429,7 @@ extern basic_finder *(*finder_create_extend_fn)(const char *method, const char *
 void debug_kv_show(const char *k, const char *v);
 void debug_kv_show(const char *k, long v);
 
-char *build_unique_id(char *buf);
+char *build_unique_filename_id(char *buf);
 
 /* cdb ############################################################## */
 class cdb
@@ -1732,6 +1717,16 @@ void http_cookie_parse_request(dict &result, const char *raw_cookie);
 void http_cookie_build(std::string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
 
 extern bool var_httpd_debug;
+struct httpd_upload_file {
+    char *name;
+    char *filename;
+    char *saved_filename;
+    size_t size;
+};
+typedef struct httpd_upload_file httpd_upload_file;
+
+void httpd_upload_file_parse_pthread();
+
 class httpd
 {
 public:
@@ -1741,8 +1736,8 @@ public:
     void bind(SSL *ssl);
     bool run();
     virtual void handler();
-    virtual void get_post_data_hander();
-    void get_post_data_hander_default();
+    virtual void handler_after_request_header();
+    void get_post_data_default();
     void set_exception();
     void stop();
 
@@ -1764,6 +1759,7 @@ public:
     dict &request_post_variate();
     char *request_cookie(const char *name, const char *def_val = blank_buffer);
     dict &request_cookie();
+    list<httpd_upload_file *> &upload_files();
 
     /* response completly*/
     virtual void response_304(const char *etag);
@@ -1785,7 +1781,69 @@ public:
     bool response_flush();
     stream &get_stream();
     /* */
-    char ___data[192];
+    char ___data[216];
+};
+
+/* sqlite3 */
+class sqlite3_proxyd: public master_event_server
+{
+public:
+    sqlite3_proxyd();
+    ~sqlite3_proxyd();
+    void simple_service(int fd);
+    void before_service();
+    void before_exit();
+};
+
+extern bool var_sqlite3_proxy_debug;
+class sqlite3_proxy
+{
+public:
+    sqlite3_proxy(const char *_destination, std::string *_cache = 0);
+    ~sqlite3_proxy();
+    bool log(const char *sql, size_t size, long timeout = 0);
+    bool exec(const char *sql, size_t size, long timeout = 0);
+    bool query(const char *sql, size_t size, long timeout = 0);
+    int get_row(size_data_t **row);
+    inline const char *get_errmsg() { return cache->c_str(); }
+    inline size_t get_column() { return ncolumns; }
+private:
+    bool connect();
+    bool disconnect(bool tf = false);
+    char *destination;
+    iostream *fp;
+    std::string *cache;
+    short int ncolumns;
+    bool cache_flag;
+};
+
+/* memkv ****************************************************************/
+class memkvd: public master_event_server
+{
+public:
+    memkvd();
+    ~memkvd();
+    void before_service();
+    void simple_service(int fd);
+};
+
+class memkv
+{
+public:
+    memkv(const char *_destination);
+    ~memkv();
+    int set(const char *partition, const char *key, const char *val, ssize_t vlen = -1);
+    int set(const char *partition, const char *key, long val);
+    int del(const char *partition, const char *key);
+    int inc(const char *partition, const char *key, long num, long *result = 0);
+    int clear(const char *partition = 0);
+    int exists(const char *partition, const char *key);
+    int get(const char *partition, const char *key, std::string &result);
+    int get(const char *partition, const char *key, long *result);
+private:
+    int require(char op, const char *partition, const char *key, const char *val, ssize_t vlen, std::string *result);
+    char *destination;
+    iostream *fp;
 };
 
 }

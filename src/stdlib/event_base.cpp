@@ -517,9 +517,7 @@ static void ___async_io_cache_append(async_io_t * aio_data, aio_rwbuf_list_t * i
     char *buf = (char *)data;
     char *cdata;
     int i, p2;
-    aio_rwbuf_t *rwb;
-
-    rwb = ioc->tail;
+    aio_rwbuf_t *rwb = ioc->tail;
     p2 = 0;
     cdata = 0;
     if (rwb) {
@@ -528,7 +526,8 @@ static void ___async_io_cache_append(async_io_t * aio_data, aio_rwbuf_list_t * i
     }
     for (i = 0; i < len; i++) {
         if (!rwb || (p2 == var_async_io_rwbuf_size - 1)) {
-            rwb = (aio_rwbuf_t *) calloc(1, sizeof(aio_rwbuf_t));
+            rwb = (aio_rwbuf_t *)malloc(sizeof(aio_rwbuf_t));
+            rwb->long_flag = 0;
             rwb->next = 0;
             rwb->p1 = 0;
             rwb->p2 = 0;
@@ -801,7 +800,7 @@ static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
 static inline void async_io_read___inner(async_io_t * aio_data, int max_len, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
-    char buf[10240];
+    char buf[10240 + 10];
 
     aio_data->action_type = var_async_io_type_read;
     aio_data->callback = callback;
@@ -854,7 +853,7 @@ static inline void async_io_read___inner(async_io_t * aio_data, int max_len, asy
 static inline void async_io_read_n___inner(async_io_t * aio_data, int strict_len, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
-    char buf[10240];
+    char buf[10240 + 10];
 
     aio_data->action_type = var_async_io_type_read_n;
     aio_data->callback = callback;
@@ -936,9 +935,9 @@ over:
 static inline void async_io_read_size_data___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
-    char buf[10240];
+    char buf[10240 + 10];
 
-    aio_data->action_type = var_async_io_type_read_n;
+    aio_data->action_type = var_async_io_type_read_size_data;
     aio_data->callback = callback;
 
     while (1) {
@@ -946,7 +945,7 @@ static inline void async_io_read_size_data___inner(async_io_t * aio_data, async_
            rlen = ___async_io_read_size_data_check(aio_data);
            if ((rlen == -2) || (rlen == 0)) {
                aio_data->ret = (rlen?-1:0);
-               async_io_event_set(aio_data, var_async_io_event_disable, timeout);
+               async_io_event_set(aio_data, var_async_io_event_reserve, timeout);
                async_io_ready_do(aio_data);
                return;
            } else if (rlen > 0) {
@@ -967,7 +966,7 @@ static inline void async_io_read_size_data___inner(async_io_t * aio_data, async_
             }
         }
         if (!(aio_data->ssl)) {
-            rlen = read(aio_data->fd, buf, 10240);
+            rlen = syscall_read(aio_data->fd, buf, 10240);
         } else {
             rlen = async_io_ssl_read(aio_data, buf, 10240);
         }
@@ -1104,12 +1103,14 @@ static inline void async_io_write_cache_flush___inner(async_io_t * aio_data, asy
                     return;
                 }
             }
+#if 0
             if (retlen == 0){
                 aio_data->ret = -1;
                 async_io_event_set(aio_data, var_async_io_event_disable, 0);
                 async_io_ready_do(aio_data);
                 return;
             }
+#endif
         } else {
             retlen = async_io_ssl_write(aio_data, data, wlen);
             if ((retlen == 0) || aio_data->ssl_error_or_closed){
@@ -1287,10 +1288,9 @@ void async_io::fetch_rbuf(std::string &dest, int len)
 {
     async_io_t * aio_data = (async_io_t *)___data;
     dest.clear();
-    dest.append(len+1, 0);
+    dest.resize(len);
     char *buf = const_cast<char *>(dest.c_str());
     ___async_io_cache_shift(aio_data, &(aio_data->read_cache), buf, len);
-    dest.resize(len);
 }
 /* }}} */
 
@@ -1583,22 +1583,48 @@ long async_io_timeout_check(event_base_t * eb_data)
 /* {{{ async_io_list_do for others */
 void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *aio)
 {
-    rbtree_node_t *lh = (rbtree_node_t *)(*list_head), *lt = (rbtree_node_t *)(*list_tail);
-    async_io_t *aio_data = async_io_get_data(aio);
-    rbtree_node_t *a = &(aio_data->rbnode_time);
-    zcc_mlink_append(lh, lt, a, rbtree_left, rbtree_right);
-    *list_head = (async_io *)lh;
-    *list_tail = (async_io *)lt;
+    rbtree_node_t *h = 0, *t = 0, *n = &(async_io_get_data(aio)->rbnode_time);
+    h = t = 0;
+    if (*list_head) {
+        h = &(async_io_get_data(*list_head)->rbnode_time);
+    }
+    if (*list_tail) {
+        t = &(async_io_get_data(*list_tail)->rbnode_time);
+    }
+    zcc_mlink_append(h, t, n, rbtree_left, rbtree_right);
+    if (h == 0) {
+        *list_head = 0;
+    } else {
+        *list_head = (async_io *) zcc_container_of(h, async_io_t, rbnode_time);
+    }
+    if (t == 0) {
+        *list_tail = 0;
+    } else {
+        *list_tail = (async_io *) zcc_container_of(t, async_io_t, rbnode_time);
+    }
 }
 
 void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *aio)
 {
-    rbtree_node_t *lh = (rbtree_node_t *)(*list_head), *lt = (rbtree_node_t *)(*list_tail);
-    async_io_t *aio_data = async_io_get_data(aio);
-    rbtree_node_t *a = &(aio_data->rbnode_time);
-    zcc_mlink_detach(lh, lt, a, rbtree_left, rbtree_right);
-    *list_head = (async_io *)lh;
-    *list_tail = (async_io *)lt;
+    rbtree_node_t *h = 0, *t = 0, *n = &(async_io_get_data(aio)->rbnode_time);
+    h = t = 0;
+    if (*list_head) {
+        h = &(async_io_get_data(*list_head)->rbnode_time);
+    }
+    if (*list_tail) {
+        t = &(async_io_get_data(*list_tail)->rbnode_time);
+    }
+    zcc_mlink_detach(h, t, n, rbtree_left, rbtree_right);
+    if (h == 0) {
+        *list_head = 0;
+    } else {
+        *list_head = (async_io *) zcc_container_of(h, async_io_t, rbnode_time);
+    }
+    if (t == 0) {
+        *list_tail = 0;
+    } else {
+        *list_tail = (async_io *) zcc_container_of(t, async_io_t, rbnode_time);
+    }
 }
 /* }}} */
 
@@ -1632,6 +1658,8 @@ event_base::event_base()
     eb_data->eventfd_event->enable_read(evbase_notify_reader);
 
     pthread_mutex_init(&(eb_data->plocker), 0);
+
+    eb_data->plocker_flag = true;
 }
 
 event_base::~event_base()
@@ -1643,7 +1671,6 @@ event_base::~event_base()
     close(eb_data->epoll_fd);
     free(eb_data->epool_event_vector);
     pthread_mutex_destroy(&(eb_data->plocker));
-    eb_data->plocker_flag = true;
 }
 
 void event_base::notify()

@@ -220,6 +220,10 @@ void master_event_server::before_service()
 {
 }
 
+void master_event_server::before_service_for_enduser()
+{
+}
+
 void master_event_server::event_loop()
 {
     flag_inner_event_loop = true;
@@ -319,6 +323,7 @@ void master_event_server::run_begin(int argc, char ** argv)
     }
 
     before_service();
+    before_service_for_enduser();
 }
 
 void master_event_server::run_loop()

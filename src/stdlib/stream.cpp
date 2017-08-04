@@ -19,7 +19,7 @@ stream::stream()
     ___error = false;
     ___eof = false;
     ___flushed = false;
-    set_timeout(1000L * 3600 * 24 * 365 * 10);
+    set_timeout(-1);
 }
 
 stream::~stream()
@@ -32,7 +32,7 @@ stream::~stream()
 
 stream &stream::set_timeout(long timeout)
 {
-    if (timeout == -1) {
+    if (timeout < 1) {
         timeout = 1000L * 3600 * 24 * 365 * 10;
     }
     ___timeout = timeout_set(timeout);
@@ -319,7 +319,6 @@ int iostream::get_fd()
 {
     return _fd;
 }
-
 
 /* ssl ################################################################ */
 sslstream::sslstream(SSL *ssl)

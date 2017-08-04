@@ -824,6 +824,7 @@ void master::run(int argc, char **argv)
     init_all(*this, argc, argv);
     reload_server(*this);
     before_service();
+    before_service_for_enduser();
     sighup_reload_on = 0;
     while (1) {
         if (___event_loop_flag) {
@@ -883,6 +884,10 @@ void master::load_server_config(vector<config *> &cfs)
 }
 
 void master::before_service()
+{
+}
+
+void master::before_service_for_enduser()
 {
 }
 

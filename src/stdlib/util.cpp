@@ -32,7 +32,7 @@ static pthread_mutex_t build_unique_id_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static long build_unique_id_plus = 0;
 static pid_t build_unique_id_tid = 0;
-char *build_unique_id(char *buf)
+char *build_unique_filename_id(char *buf)
 {
     long plus;
 #if defined(PTHREAD_SPINLOCK_INITIALIZER)

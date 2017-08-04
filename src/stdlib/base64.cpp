@@ -133,10 +133,12 @@ retry:
         ___get_next_ch(c2, 1);
         ___get_next_ch(c3, 1);
         dealed_size2 = src_pos;
-        if (dealed_size && missing) {
-            break;
+        if (dealed_size) {
+            if (missing) {
+                break;
+            }
+            *dealed_size = dealed_size2;
         }
-        *dealed_size = dealed_size2;
         input[0] = b64dec[c0];
         if (input[0] == 0xff) {
             illegal = true;

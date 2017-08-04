@@ -19,7 +19,7 @@ ssize_t size_data_unescape(const void *src_data, size_t src_size, char **result_
     while (1) {
         ch = ((i++ == src_size) ? -1 : *buf++);
         if (ch == -1) {
-            return -1;
+            return 0;
         }
         len |= ((ch & 0177) << shift);
         if (ch & 0200) {
@@ -81,6 +81,48 @@ size_t size_data_put_size(size_t size, char *buf)
         ((unsigned char *)buf)[len++] = ch;
 	} while (left);
     return len;
+}
+
+size_data_parser::size_data_parser(const void *src_data, size_t src_size)
+{
+    ptr = (char *)src_data;
+    left = src_size;
+}
+
+size_data_parser::~size_data_parser()
+{
+}
+
+int size_data_parser::shift(const char **data, size_t *size)
+{
+    if (left < 1){
+        return 0;
+    }
+    int offset = size_data_unescape(ptr, left, (char **)data, size);
+    if (offset < 1) {
+        return offset;
+    }
+    ptr += offset;
+    left -= offset;
+    return 1;
+}
+
+int size_data_parser::shift(std::string &data)
+{
+    data.clear();
+    if (left < 1){
+        return 0;
+    }
+    char *result;
+    size_t rlen;
+    int offset = size_data_unescape(ptr, left, &result, &rlen);
+    if (offset < 1) {
+        return offset;
+    }
+    data.append(result, rlen);
+    ptr += offset;
+    left -= offset;
+    return 1;
 }
 
 }

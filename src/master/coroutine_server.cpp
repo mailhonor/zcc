@@ -130,6 +130,10 @@ void master_coroutine_server::before_service()
 {
 }
 
+void master_coroutine_server::before_service_for_enduser()
+{
+}
+
 void master_coroutine_server::before_exit()
 {
 }
@@ -183,6 +187,7 @@ void master_coroutine_server::run_begin(int argc, char ** argv)
     coroutine_base_init();
 
     before_service();
+    before_service_for_enduser();
 
     if (!flag_alone_mode) {
         close_on_exec(var_master_server_listen_fd);
