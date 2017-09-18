@@ -41,13 +41,15 @@ public:
     dict request_post;
     dict request_headers;
     dict request_cookies;
-    list<httpd_upload_file *> request_upload_files;
+    vector<httpd_upload_file *> request_upload_files;
     /* */
     bool request_keep_alive;
     bool response_initialization;
     bool response_content_type;
     bool get_post_data_myself;
     bool exception;
+    bool tls_mode;
+    bool ssl_auto_release;
 };
 
 void httpd_upload_file_parse(httpd *hddata, const char *data_filename);

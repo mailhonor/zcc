@@ -44,7 +44,6 @@ set::set()
 {
     rbtree_init(&___rbtree, ___cmp);
     ___size = 0;
-    ___gmp = 0;
 }
 
 set::~set()
@@ -53,11 +52,6 @@ set::~set()
     while ((n=first_node())) {
         erase(n);
     }
-}
-
-void set::option_gm_pool(gm_pool &gmp)
-{
-    ___gmp = &gmp;
 }
 
 set::node *set::enter(const char *key)
@@ -71,16 +65,8 @@ set::node *set::enter(const char *key)
     if (r_n != &(a_n.rbnode)) {
         a_np = zcc_container_of(r_n, node_t, rbnode);
     } else {
-        if (___gmp) {
-            a_np = (node_t *) (new(___gmp->calloc(1, sizeof(node)))node());
-        } else {
-            a_np = (node_t *) (new node());
-        }
-        if (___gmp) {
-            a_np->key = ___gmp->strdup(key);
-        } else {
-            a_np->key = strdup(key);
-        }
+        a_np = (node_t *) (new node());
+        a_np->key = strdup(key);
         rbtree_replace_node(&___rbtree, &(a_n.rbnode), &(a_np->rbnode));
         ___size++;
     }
@@ -99,10 +85,8 @@ void set::erase(node *n)
 {
     node_t *nt = (node_t *)n;
     rbtree_detach(&___rbtree, &(nt->rbnode));
-    if (___gmp == 0) {
-        free(nt->key);
-        delete(n);
-    }
+    free(nt->key);
+    delete(n);
 }
 
 set::node *set::find(const char *key)

@@ -30,6 +30,7 @@ void dorun(const char *fn)
 
 int main(int argc, char **argv)
 {
+    zcc::var_charset_debug = 1;
     zcc::vector<char *> fn_vec;
     zcc::var_progname = argv[0];
 

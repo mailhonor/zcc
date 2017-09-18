@@ -214,7 +214,7 @@ static int tnef_decode_message(tnef_parser_t * parser, ___mime_list_t * mime_lis
     return ret;
 }
 
-static int extract_gridi_attrs(tnef_parser_t * parser, ___mime_list_t * mime_list)
+static int extract_mapi_attrs(tnef_parser_t * parser, ___mime_list_t * mime_list)
 {
     int att_type, att_name;
     char *val;
@@ -373,7 +373,7 @@ static int tnef_decode_attachment(tnef_parser_t * parser, ___mime_list_t * mime_
         parser2.tnef_data = val;
         parser2.tnef_pos = val;
         parser2.tnef_size = val_len;
-        if (extract_gridi_attrs(&parser2, mime_list) == -1) {
+        if (extract_mapi_attrs(&parser2, mime_list) == -1) {
             return -1;
         }
         break;

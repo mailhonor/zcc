@@ -163,9 +163,9 @@ bool charset_detect_cjk(const char *data, size_t len, char *charset_result)
 
 /* ################################################################## */
 
-const char *charset_chinese[] = { "UTF-8", "GB18030", "BIG5", 0 };
-const char *charset_japanese[] = { "UTF-8", "EUC-JP", "JIS", "SHIFT-JIS", "ISO-2022-JP", 0 };
-const char *charset_korean[] = { "UTF-8", "KS_C_5601", "KS_C_5861", 0 };
-const char *charset_cjk[] = { "UTF-8", "GB18030", "BIG5", "EUC-JP", "JIS", "SHIFT-JIS", "ISO-2022-JP", "KS_C_5601", "KS_C_5861", 0 };
+const char *charset_chinese[] = { "UTF-8", "GB18030", "BIG5", "UTF-7", 0 };
+const char *charset_japanese[] = { "UTF-8", "EUC-JP", "JIS", "SHIFT-JIS", "ISO-2022-JP", "UTF-7", 0 };
+const char *charset_korean[] = { "UTF-8", "KS_C_5601", "KS_C_5861", "UTF-7", 0 };
+const char *charset_cjk[] = { "UTF-8", "GB18030", "BIG5", "EUC-JP", "JIS", "SHIFT-JIS", "ISO-2022-JP", "KS_C_5601", "KS_C_5861", "UTF-7", 0 };
 
 }

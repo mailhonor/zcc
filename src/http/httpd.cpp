@@ -28,7 +28,14 @@ httpd::~httpd()
     httpd_engine *httpddata = (httpd_engine *)___data;
     httpddata->loop_clear();
     if (httpddata->http_fp) {
+        SSL *s = 0;
+        if (httpddata->ssl_auto_release) {
+            s = ((sslstream *)(httpddata->http_fp))->get_SSL();
+        }
         delete httpddata->http_fp;
+        if (s) {
+            openssl_SSL_free(s);
+        }
     }
     httpddata->~httpd_engine();
 }
@@ -43,6 +50,28 @@ void httpd::bind(SSL *ssl)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     httpddata->http_fp = new sslstream(ssl);
+}
+
+bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
+{
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
+    httpd_engine *httpddata = (httpd_engine *)___data;
+    SSL *s = openssl_create_SSL(sslctx, sock);
+    if (!s) {
+        return false;
+    }
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
+    if (!openssl_timed_accept(s, timeout)) {
+        openssl_SSL_free(s);
+        return false;
+    }
+    httpddata->http_fp = new sslstream(s);
+    httpddata->ssl_auto_release = true;
+    return true;
 }
 
 void httpd::handler_after_request_header()
@@ -129,6 +158,11 @@ char *httpd::tmp_path_for_post()
     return const_cast<char *>("/tmp/");
 }
 
+char *httpd::gzip_file_suffix()
+{
+    return 0;
+}
+
 char *httpd::request_method()
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
@@ -139,6 +173,12 @@ char *httpd::request_uri()
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     return httpddata->uri;
+}
+
+char *httpd::request_path()
+{
+    httpd_engine *httpddata = (httpd_engine *)___data;
+    return httpddata->path;
 }
 
 char *httpd::request_version()
@@ -211,6 +251,12 @@ dict &httpd::request_cookie()
     return httpddata->request_cookies;
 }
 
+vector<httpd_upload_file *> &httpd::upload_files()
+{
+    httpd_engine *httpddata = (httpd_engine *)___data;
+    return httpddata->request_upload_files;
+}
+
 void httpd::response_500()
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
@@ -226,7 +272,7 @@ void httpd::response_500()
     http_fp->flush();
 }
 
-void httpd::response_file_by_absolute_path(const char *filename, const char *content_type)
+void httpd::response_file(const char *filename, const char *content_type)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     stream *http_fp = httpddata->http_fp;
@@ -234,21 +280,45 @@ void httpd::response_file_by_absolute_path(const char *filename, const char *con
         content_type = mime_type_from_filename(filename, var_mime_type_application_cotec_stream);
     }
     int fd;
-    while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
-        continue;
-    }
-    if (fd == -1) {
-        response_404();
-        return;
-    }
-
     struct stat st;
-    if (fstat(fd, &st) == -1) {
-        close(fd);
+    int times;
+    bool is_gzip = false;
+    for (times = 0; times < 2; times++) {
+        if (times == 0) {
+            if (zcc::empty(gzip_file_suffix())) {
+                continue;
+            }
+            if (!strcasestr(request_header("accept-encoding", ""), "gzip")) {
+                continue;
+            }
+            std::string fn(filename);
+            fn.push_back('.');
+            fn.append(gzip_file_suffix());
+            while ((fd = open(fn.c_str(), O_RDONLY)) == -1 && errno == EINTR) {
+                continue;
+            }
+            is_gzip = true;
+        } else {
+            while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
+                continue;
+            }
+            is_gzip = false;
+        }
+        if (fd == -1) {
+            continue;
+        }
+
+        if (fstat(fd, &st) == -1) {
+            close(fd);
+            continue;
+        }
+        break;
+    }
+    if (times == 2) {
         response_404();
         return;
     }
-    char *old_etag = request_header("if_none_match", "");
+    char *old_etag = request_header("if-none-match", "");
     autobuffer rwbuffer;
     rwbuffer.data = (char *)malloc(4096 + 1);
     char *new_etag = rwbuffer.data;
@@ -262,6 +332,9 @@ void httpd::response_file_by_absolute_path(const char *filename, const char *con
     response_header_content_type(content_type);
     response_header_content_length(st.st_size);
     response_header("Etag", new_etag);
+    if (is_gzip) {
+        response_header("Content-Encoding", "gzip");
+    }
     response_header("Last-Modified", st.st_mtime);
     if (httpddata->request_keep_alive) {
         response_header("Connection", "keep-alive");
@@ -316,13 +389,26 @@ void httpd::response_404()
     http_fp->flush();
 }
 
+void httpd::response_200(const char *data, size_t size)
+{
+    httpd_engine *httpddata = (httpd_engine *)___data;
+    stream *http_fp = httpddata->http_fp;
+    response_header_content_length((int)size);
+    response_header_over();
+    if (size > 0) {
+        http_fp->write(data, size);
+    }
+    response_flush();
+}
+
 void httpd::response_304(const char *etag)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     stream *http_fp = httpddata->http_fp;
-    std::string output = "Etag: ";
+    std::string output = "HTTP/1.1 304 Not Modified\r\n";
+    output += "Etag: ";
     output += etag;
-    output += "\r\nHTTP/1.1 304 Not Modified\r\n";
+    output += "\r\n";
     http_fp->write(output.c_str(), output.size());
     http_fp->flush();
 }
@@ -402,6 +488,12 @@ void httpd::response_header_over()
         response_header("Content-Type", "text/html");
     }
     httpddata->http_fp->puts("\r\n");
+}
+
+bool httpd::response_flush()
+{
+    httpd_engine *httpddata = (httpd_engine *)___data;
+    return httpddata->http_fp->flush();
 }
 
 }

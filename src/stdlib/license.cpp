@@ -103,7 +103,7 @@ bool license_mac_check_by_config(const char *salt, const char *config_file, cons
     zcc::config  cf;
     char *license;
 
-    cf.load_from_filename(config_file);
+    cf.load_by_filename(config_file);
     license = cf.get_str(key, "");
 
     if (empty(license)) {

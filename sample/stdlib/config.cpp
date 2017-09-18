@@ -26,7 +26,7 @@ int main(int argc, char **argv)
         usage();
         
     }
-    if (config.load_from_filename(argv[1]) == false) {
+    if (config.load_by_filename(argv[1]) == false) {
         printf("ERR open %s\n", argv[1]);
         exit(1);
     }

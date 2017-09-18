@@ -461,6 +461,26 @@ void coroutine_set_context(const void *ctx)
     }
     co->___context = const_cast<void *>(ctx);
 }
+
+void coroutine_enable_fd(int fd)
+{
+    coroutine_fd_attribute_create(fd);
+}
+
+void coroutine_disable_fd(int fd)
+{
+    coroutine_fd_attribute  *cfa = coroutine_fd_attribute_get(fd);
+    if (cfa) {
+        int flags;
+        if ((flags = syscall_fcntl(fd, F_GETFL, 0)) < 0) {
+            zcc_fatal("syscall_fcntl (%m)");
+        }
+        if (syscall_fcntl(fd, F_SETFL, (cfa->nonblock?flags | O_NONBLOCK : flags & ~O_NONBLOCK)) < 0) {
+            zcc_fatal("syscall_fcntl (%m)");
+        }
+        coroutine_fd_attribute_free(fd);
+    }
+}
 /* }}} */
 
 /* {{{ mutex cond */
@@ -805,16 +825,39 @@ void coroutine_base_loop()
 /* {{{ coroutine_poll */
 static int coroutine_poll(coroutine *co, struct pollfd fds[], nfds_t nfds, int timeout)
 {
-    if (co == 0) {
-        errno = EFAULT;
-        return -1;
-    }
     co->___active_list = 0;
     co->___ep_loop = 0;
 
     coroutine_base *cobs = co->___base;
     long now_ms = timeout_set(0);
     bool is_epoll_ctl = false;
+
+    do {
+        int fdcount = 0;
+        int last_fd = -1;
+        for (nfds_t i = 0; i < nfds; i++) {
+            fds[i].revents = 0;
+            int fd  = fds[i].fd;
+            if (fd < 0) {
+                continue;
+            }
+            fdcount++;
+            last_fd = fd;
+            if (fdcount > 1) {
+                break;
+            }
+        }
+        if (fdcount != 1) {
+            break;
+        }
+
+        coroutine_fd_attribute *cfa = coroutine_fd_attribute_get(last_fd);
+        if (cfa == 0) {
+            return syscall_poll(fds, nfds, timeout);
+        }
+
+    } while(0);
+
     for (nfds_t i = 0; i < nfds; i++) {
         fds[i].revents = 0;
         int fd  = fds[i].fd;
@@ -949,10 +992,10 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout)
         return zcc::syscall_poll(fds, nfds, 0);
     }
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    if (cobs == 0) {
+    if ((cobs == 0) || (cobs->current_coroutine == 0)) {
         return zcc::syscall_poll(fds, nfds, timeout);
     }
-	return zcc::coroutine_poll(cobs->current_coroutine, fds, nfds, timeout);
+    return  zcc::coroutine_poll(cobs->current_coroutine, fds, nfds, timeout);
 }
 /* }}} */
 

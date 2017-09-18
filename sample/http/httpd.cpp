@@ -30,7 +30,7 @@ public:
 
 void myhttpd::handler()
 {
-    response_file_by_absolute_path(file_output);
+    response_file(file_output);
 }
 
 static void ___usage()

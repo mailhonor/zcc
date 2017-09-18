@@ -45,17 +45,11 @@ dict::dict()
 {
     rbtree_init(&___rbtree, ___cmp);
     ___size = 0;
-    ___gmp = 0;
 }
 
 dict::~dict()
 {
     clear();
-}
-
-void dict::option_gm_pool(gm_pool &gmp)
-{
-    ___gmp = &gmp;
 }
 
 void dict::clear()
@@ -77,16 +71,8 @@ dict::node *dict::update(const char *key, const char *value, size_t len)
     if (r_n != &(a_n.rbnode)) {
         a_np = zcc_container_of(r_n, node_t, rbnode);
     } else {
-        if (___gmp) {
-            a_np = (node_t *) (new(___gmp->calloc(1, sizeof(node)))node());
-        } else {
-            a_np = (node_t *) (new node());
-        }
-        if (___gmp) {
-            a_np->key = ___gmp->strdup(key);
-        } else {
-            a_np->key = strdup(key);
-        }
+        a_np = (node_t *) (new node());
+        a_np->key = strdup(key);
         a_np->value = 0;
         rbtree_replace_node(&___rbtree, &(a_n.rbnode), &(a_np->rbnode));
         ___size++;
@@ -99,22 +85,12 @@ void dict::update(node *n, const char *value, size_t len)
 {
     node_t *nt = (node_t *)n;
     if (nt->value) {
-        if (___gmp == 0) {
-            free(nt->value);
-        }
+        free(nt->value);
     }
     if (len == var_size_max) {
-        if (___gmp) {
-            nt->value = ___gmp->strdup(value);
-        } else {
-            nt->value = strdup(value);
-        }
+        nt->value = strdup(value);
     } else {
-        if (___gmp) {
-            nt->value = ___gmp->memdupnull(value, len);
-        } else {
-            nt->value = memdupnull(value, len);
-        }
+        nt->value = memdupnull(value, len);
     }
 }
 
@@ -130,11 +106,9 @@ void dict::erase(node *n)
 {
     node_t *nt = (node_t *)n;
     rbtree_detach(&___rbtree, &(nt->rbnode));
-    if (___gmp == 0) {
-        free(nt->key);
-        free(nt->value);
-        delete(n);
-    }
+    free(nt->key);
+    free(nt->value);
+    delete(n);
 }
 
 dict::node *dict::find(const char *key, char **value)

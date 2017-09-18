@@ -205,7 +205,7 @@ static void after_send_response(async_io &aio)
         exception_do(aio);
         return;
     }
-    aio.read_size_data(after_recv_request);
+    aio.read_size_data(after_recv_request, 0);
 }
 
 static void response_status(async_io &aio, int status)
@@ -214,7 +214,7 @@ static void response_status(async_io &aio, int status)
     obuf[0] = status;
     obuf[1] = 0X80;
     aio.cache_write(obuf, 2);
-    aio.cache_flush(after_send_response);
+    aio.cache_flush(after_send_response, 0);
 }
 
 static void response_result(async_io &aio, char *data, int len)
@@ -228,7 +228,7 @@ static void response_result(async_io &aio, char *data, int len)
         data = buf;
     }
     aio.cache_write_size_data(data, len);
-    aio.cache_flush(after_send_response);
+    aio.cache_flush(after_send_response, 0);
 }
 /* }}} */
 
@@ -496,7 +496,7 @@ void memkvd::simple_service(int fd)
 {
     async_io *aio = new async_io();
     aio->bind(fd);
-    aio->read_size_data(after_recv_request);
+    aio->read_size_data(after_recv_request, 0);
 }
 
 void memkvd::before_service()

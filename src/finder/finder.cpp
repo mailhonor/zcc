@@ -130,6 +130,9 @@ bool finder::open(const char *url_raw)
 
 ssize_t finder::find(const char *query, std::string &result, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     result.clear();
     if (!___fder) {
         return -1;
@@ -166,6 +169,9 @@ void finder::close()
 /* ################################################## */
 ssize_t finder_once(const char *url, const char *query, std::string &result, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     finder fder;
     if (!fder.open(url)) {
         return -1;

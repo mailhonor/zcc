@@ -326,7 +326,7 @@ int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmi
         }
         if (1) {
             /* save header to tmp vector*/
-            size_data_t *sd = (size_data_t *)gmp.malloc(sizeof(size_data_t));;
+            size_data_t *sd = (size_data_t *)gmp.malloc(sizeof(size_data_t));
             sd->size = llen;
             sd->data = line;
             cmime->header_lines.push_back(sd);

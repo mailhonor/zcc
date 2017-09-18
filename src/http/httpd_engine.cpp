@@ -23,12 +23,12 @@ void httpd_engine::loop_clear()
     request_post.clear();
     request_headers.clear();
     request_cookies.clear();
-    zcc_list_walk_begin(request_upload_files, uf) {
+    zcc_vector_walk_begin(request_upload_files, uf) {
         free(uf->name);
         free(uf->filename);
         unlink(uf->saved_filename);
         free(uf);
-    } zcc_list_walk_end;
+    } zcc_vector_walk_end;
     request_upload_files.clear();
     request_keep_alive = false;
     response_initialization = false;

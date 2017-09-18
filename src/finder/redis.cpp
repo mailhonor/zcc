@@ -71,6 +71,9 @@ bool redis_finder::open(const char *url)
 
 ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
 #define ___TRIM_RN(mystr) { \
     const char *p = (mystr).c_str(); size_t len = (mystr).size(); \
     if ((len>0)&&(p[len-1] =='\n')) len--; \

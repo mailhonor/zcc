@@ -16,17 +16,11 @@ basic_list::basic_list()
     ___head = 0;
     ___tail = 0;
     ___size = 0;
-    ___gmp = 0;
 }
 
 basic_list::~basic_list()
 {
     clear_void();
-}
-
-void basic_list::option_gm_pool_void(gm_pool &gmp)
-{
-    ___gmp = &gmp;
 }
 
 void basic_list::clear_void()
@@ -35,10 +29,7 @@ void basic_list::clear_void()
     n = ___head;
     while(n) {
         nn = n->___next;
-        n->~node();
-        if (!___gmp) {
-            zcc::free(n);
-        }
+        delete n;
         n = nn;
     }
     ___head = 0;
@@ -49,7 +40,7 @@ void basic_list::clear_void()
 void basic_list::push_void(const void * v)
 {
     node *n;
-    n = new(___gmp?___gmp->malloc(sizeof(node)):zcc::malloc(sizeof(node)))node();
+    n = new node();
     n->___data = const_cast<void *>(v);
     zcc_mlink_append(___head, ___tail, n, ___prev, ___next);
     ___size ++;
@@ -66,10 +57,7 @@ bool basic_list::pop_void(char ** v)
     if (v) {
         *v = (char *)(n->___data);
     }
-    n->~node();
-    if (!___gmp) {
-        zcc::free(n);
-    }
+    delete n;
     ___size --;
     return true;
 }
@@ -77,7 +65,7 @@ bool basic_list::pop_void(char ** v)
 void basic_list::unshift_void(const void * v)
 {
     node *n;
-    n = new(___gmp?___gmp->malloc(sizeof(node)):zcc::malloc(sizeof(node)))node();
+    n = new node();
     n->___data = const_cast<void *>(v);
     zcc_mlink_prepend(___head, ___tail, n, ___prev, ___next);
     ___size ++;
@@ -94,10 +82,7 @@ bool basic_list::shift_void(char ** v)
     if (v) {
         *v = (char *)(n->___data);
     }
-    n->~node();
-    if (!___gmp) {
-        zcc::free(n);
-    }
+    delete n;
     ___size --;
     return true;
 }
@@ -108,10 +93,7 @@ void basic_list::erase_void(node *n)
         return;
     }
     zcc_mlink_detach(___head, ___tail, n, ___prev, ___next);
-    n->~node();
-    if (!___gmp) {
-        zcc::free(n);
-    }
+    delete n;
     ___size --;
 }
 

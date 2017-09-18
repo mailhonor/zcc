@@ -59,7 +59,7 @@ struct log_stream{
     std::string cache;
 };
 typedef struct log_stream log_stream;
-static grid<log_stream *> var_masterlog_streams;
+static map<log_stream *> var_masterlog_streams;
 
 void log_write_file(int fd, const char *content, size_t clen)
 {
@@ -158,20 +158,20 @@ static void log_save_content(char *logcontent)
 
 static void log_flush_all()
 {
-    zcc_grid_walk_begin(var_masterlog_streams, fileid, stream) {
+    zcc_map_walk_begin(var_masterlog_streams, fileid, stream) {
         if ((stream->fd != -1) && (stream->cache.size())) {
             log_write_file(stream->fd, stream->cache.c_str(), stream->cache.size());
         }
         stream->cache.clear();
-    } zcc_grid_walk_end;
+    } zcc_map_walk_end;
 
     if (___log_stop) {
-        zcc_grid_walk_begin(var_masterlog_streams, fileid, stream) {
+        zcc_map_walk_begin(var_masterlog_streams, fileid, stream) {
             if (stream->fd != -1) {
                 close(stream->fd);
             }
             delete stream;
-        } zcc_grid_walk_end;
+        } zcc_map_walk_end;
         var_masterlog_streams.clear();
     }
 }
@@ -325,7 +325,7 @@ public:
     int proc_limit;
     int proc_count;
     long stamp_next_start;
-    lgrid<listen_pair *> listens;
+    lmap<listen_pair *> listens;
 };
 
 class listen_pair
@@ -358,8 +358,8 @@ std::string config_path;
 
 static int ___reload_sig = SIGHUP;
 static int master_status_fd[2];
-static grid<listen_pair *> listen_pair_map;
-static lgrid<child_status *> child_status_map;
+static map<listen_pair *> listen_pair_map;
+static lmap<child_status *> child_status_map;
 static vector<server_info *> server_vector;
 
 static void start_one_child(server_info *server);
@@ -496,7 +496,7 @@ static void start_one_child(server_info *server)
         }
 
         int fdnext = var_master_server_listen_fd;
-        zcc_lgrid_walk_begin(server->listens, fd, lp2) {
+        zcc_lmap_walk_begin(server->listens, fd, lp2) {
             char iuffd[111];
             dup2(lp2->fd, fdnext);
             close(lp2->fd);
@@ -515,7 +515,7 @@ static void start_one_child(server_info *server)
 
 static void remove_old_child(master &ms)
 {
-    zcc_lgrid_walk_begin(child_status_map, pid, cs) {
+    zcc_lmap_walk_begin(child_status_map, pid, cs) {
         int fd = cs->fd;
         delete cs;
         close(fd);
@@ -533,28 +533,28 @@ static void remove_server(master &ms)
 
 static void set_listen_unused(master &ms)
 {
-    zcc_grid_walk_begin(listen_pair_map, key, lp) {
+    zcc_map_walk_begin(listen_pair_map, key, lp) {
         lp->set_unused();
-    } zcc_grid_walk_end;
+    } zcc_map_walk_end;
 }
 
 static void prepare_server_by_config(config *cf)
 {
     char *cmd, *listen, *fn, *module;
     server_info *server;
-    cmd = cf->get_str("zcmd", "");
-    listen = cf->get_str("zlisten", "");
+    cmd = cf->get_str("zcc_cmd", "");
+    listen = cf->get_str("zcc_listen", "");
     if (empty(cmd) || empty(listen)) {
         return;
     }
     fn = cf->get_str("z___Z_0428_fn", "");
-    module = cf->get_str("zmodule", "");
+    module = cf->get_str("zcc_module", "");
     server = new server_info();
     server_vector.push_back(server);
     server->config_fn = fn;
     server->cmd = cmd;
     server->module = module;
-    server->proc_limit = cf->get_int("zproc_limit", 1, 1, 1000);
+    server->proc_limit = cf->get_int("zcc_proc_limit", 1, 1, 1000);
     server->proc_count = 0;
 
     /* listens */
@@ -618,13 +618,13 @@ static void reload_config(master &ms)
 static void release_unused_listen(master &ms)
 {
     argv delete_list;
-    zcc_grid_walk_begin(listen_pair_map, key, lp) {
+    zcc_map_walk_begin(listen_pair_map, key, lp) {
         if (lp->used) {
             continue;
         }
         delete_list.push_back(key);
         delete lp;
-    } zcc_grid_walk_end;
+    } zcc_map_walk_end;
     zcc_argv_walk_begin(delete_list, key) {
         listen_pair_map.erase(key);
     } zcc_argv_walk_end;
@@ -747,7 +747,7 @@ static void init_all(master &ms, int argc, char **argv)
             continue;
         }
         if (!strcmp(optname, "-log")) {
-            default_config.update("zlog", optval);
+            default_config.update("zcc_log", optval);
             opti+=2;
             continue;
         }
@@ -871,7 +871,7 @@ void master::load_server_config_from_dir(const char *config_path, vector<config 
 
         cf = new config();
         snprintf(pn, 4096, "%s/%s", config_path, fn);
-        cf->load_from_filename(pn);
+        cf->load_by_filename(pn);
         cf->update("z___Z_0428_fn", fn);
         cfs.push_back(cf);
     }

@@ -307,11 +307,17 @@ iostream::~iostream()
 
 ssize_t iostream::read_fn(void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return timed_read(_fd, buf, size, timeout);
 }
 
 ssize_t iostream::write_fn(const void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return timed_write(_fd, buf, size, timeout);
 }
 
@@ -338,10 +344,16 @@ SSL *sslstream::get_SSL()
 
 ssize_t sslstream::read_fn(void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return openssl_timed_read(_ssl, buf, size, timeout);
 };
 ssize_t sslstream::write_fn(const void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return openssl_timed_write(_ssl, buf, size, timeout);
 };
 
@@ -399,10 +411,16 @@ bool tlsstream::tls_accept(SSL_CTX *ctx)
 
 ssize_t tlsstream::read_fn(void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return ((_ssl)?(openssl_timed_read(_ssl, buf, size, timeout)):(timed_read(_fd, buf, size, timeout)));
 };
 ssize_t tlsstream::write_fn(const void *buf, size_t size, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     return ((_ssl)?(openssl_timed_write(_ssl, buf, size, timeout)):(timed_write(_fd, buf, size, timeout)));
 };
 

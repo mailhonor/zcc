@@ -101,7 +101,7 @@ int main_parameter_run(int argc, char **argv)
 
     optval = argv[1];
     if (!strcmp(optname, "c")) {
-        if (default_config.load_from_filename(optval) == false) {
+        if (default_config.load_by_filename(optval) == false) {
             zcc_info("ERR load config error from %s", optval);
             exit(1);
         }
@@ -161,7 +161,7 @@ int main_parameter_run(int argc, char **argv)
 void main_parameter_run_over()
 {
     if (___chuser == 0) {
-        ___chuser = default_config.get_str("zrun_user", 0);
+        ___chuser = default_config.get_str("zcc_run_user", 0);
     }
     if (___chroot || ___chuser) {
         if (!chroot_user(___chroot, ___chuser)) {
@@ -171,7 +171,7 @@ void main_parameter_run_over()
     }
 
     if(!var_log_debug_enable) {
-        if (default_config.get_bool("zdebug", false)) {
+        if (default_config.get_bool("zcc_debug", false)) {
             var_log_debug_enable = true;
         }
     }

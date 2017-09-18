@@ -88,6 +88,9 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
         return false;
     }
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     fp->set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
@@ -117,6 +120,9 @@ bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
         return false;
     }
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     fp->set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
@@ -159,6 +165,9 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
 
     if (!connect() < 0) {
         return false;
+    }
+    if (timeout < 1) {
+        timeout = var_long_max;
     }
     fp->set_timeout(timeout);
 

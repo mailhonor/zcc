@@ -160,7 +160,7 @@ ssize_t writen(int fd, const void *buf, size_t size)
     ptr = (char *)buf;
 
     while (left > 0) {
-        if (!(timed_wait_writeable(fd, 3600 * 365 * 1000))) {
+        if (timed_wait_writeable(fd, 3600 * 365 * 1000) < 1) {
             break;
         }
         ret = write(fd, ptr, left);

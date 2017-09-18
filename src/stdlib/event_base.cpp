@@ -215,6 +215,9 @@ void event_timer::bind(event_base &evbase)
 
 void event_timer::start(event_timer_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     event_timer_t *timer = event_timer_get_data(this);
     event_base *eb = timer->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -646,6 +649,9 @@ static inline int async_io_ssl_init___inner(async_io_t * aio_data, async_io_cb_t
 {
     int rlen;
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     aio_data->action_type = var_async_io_type_ssl_init;
     aio_data->callback = callback;
 
@@ -669,6 +675,9 @@ static inline int async_io_ssl_init___inner(async_io_t * aio_data, async_io_cb_t
 
 static void async_io_ssl_init(async_io_t *aio_data, SSL_CTX * ctx, async_io_cb_t callback, long timeout, bool server_or_client)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
 
@@ -716,6 +725,9 @@ static void async_io_ready_do(async_io_t * aio_data)
 /* {{{ async_io_event_set */
 static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
     rbtree_t *timer_tree = &(eb_data->async_io_timeout_tree);
@@ -799,6 +811,9 @@ static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
 /* {{{ async_io_read___inner */
 static inline void async_io_read___inner(async_io_t * aio_data, int max_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     int magic, rlen;
     char buf[10240 + 10];
 
@@ -852,6 +867,9 @@ static inline void async_io_read___inner(async_io_t * aio_data, int max_len, asy
 /* {{{ async_io_read_n___inner */
 static inline void async_io_read_n___inner(async_io_t * aio_data, int strict_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     int magic, rlen;
     char buf[10240 + 10];
 
@@ -934,6 +952,9 @@ over:
 
 static inline void async_io_read_size_data___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     int magic, rlen;
     char buf[10240 + 10];
 
@@ -1017,6 +1038,9 @@ static inline int ___async_io_read_delimiter_check(async_io_t * aio_data, unsign
 
 static inline void async_io_read_delimiter___inner(async_io_t * aio_data, char delimiter, int max_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     int magic, rlen;
     char buf[10240 + 10];
     char *data;
@@ -1077,6 +1101,9 @@ static inline void async_io_read_delimiter___inner(async_io_t * aio_data, char d
 /* {{{ async_io_write_cache_flush___inner */
 static inline void async_io_write_cache_flush___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     aio_data->ret = 1;
     aio_data->action_type = var_async_io_type_write;
     aio_data->callback = callback;
@@ -1133,6 +1160,9 @@ static inline void async_io_write_cache_flush___inner(async_io_t * aio_data, asy
 /* {{{ async_io_sleep___inner */
 static inline void async_io_sleep___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     aio_data->action_type = var_async_io_type_sleep;
     aio_data->callback = callback;
     async_io_event_set(aio_data, var_async_io_event_disable, timeout);
@@ -1243,12 +1273,18 @@ void *async_io::get_context()
 /* {{{  async_io::tls_connect, tls_accept */
 void async_io::tls_connect(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     async_io_ssl_init(aio_data, ctx, callback, timeout, false);
 }
 
 void async_io::tls_accept(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     async_io_ssl_init(aio_data, ctx, callback, timeout, true);
 }
@@ -1297,6 +1333,9 @@ void async_io::fetch_rbuf(std::string &dest, int len)
 /* {{{ async_io::read */
 void async_io::read(size_t max_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -1316,6 +1355,9 @@ void async_io::read(size_t max_len, async_io_cb_t callback, long timeout)
 
 void async_io::readn(size_t strict_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -1335,6 +1377,9 @@ void async_io::readn(size_t strict_len, async_io_cb_t callback, long timeout)
 
 void async_io::read_size_data(async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -1355,6 +1400,9 @@ void async_io::read_size_data(async_io_cb_t callback, long timeout)
 
 void async_io::read_delimiter(int delimiter, size_t max_len, async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -1375,6 +1423,9 @@ void async_io::read_delimiter(int delimiter, size_t max_len, async_io_cb_t callb
 
 void async_io::read_line(size_t max_len, void (*callback)(async_io &), long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     read_delimiter('\n', max_len, callback, timeout);
 }
 /* }}} */
@@ -1446,6 +1497,9 @@ void async_io::cache_write_direct(const void *buf, size_t len)
 
 void async_io::cache_flush(async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);
@@ -1466,6 +1520,9 @@ void async_io::cache_flush(async_io_cb_t callback, long timeout)
 /* {{{ async_io::sleep */
 void async_io::sleep(async_io_cb_t callback, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = event_base_get_data(eb);

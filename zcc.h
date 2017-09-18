@@ -65,6 +65,14 @@ int iconv_close(iconv_t cd)
     } \
 }
 
+/* std */
+#define std_vector_walk_begin(var_your_vec, var_your_ptr) { \
+    typeof(var_your_vec) &___V_VEC = (var_your_vec); \
+    for (typeof(___V_VEC.begin()) var_std_vector_it = ___V_VEC.begin(); \
+            var_std_vector_it!=___V_VEC.end(); var_std_vector_it ++) { \
+        typeof(*(___V_VEC.begin())) var_your_ptr = (*var_std_vector_it); {
+#define std_vector_walk_end }}}
+
 namespace zcc
 {
 
@@ -79,6 +87,7 @@ namespace zcc
 
 /* ################################################################## */
 const size_t var_size_max = 18446744073709551615UL;
+const long var_long_max = 9223372036854775807L;
 const int var_fd_max = 102400;
 static inline bool empty(const void *ptr)
 {
@@ -92,11 +101,12 @@ union type_convert_t {
     const char *ptr_const_char;
     void * ptr_void;
     char * ptr_char;
-    long i_long;
-    int i_int;
+    long n_long;
+    double n_double;
+    int n_int;
 };
-#define zcc_char_ptr_to_int(_ptr, _int)  {zcc::type_convert_t _ct;_ct.ptr_char=(_ptr);_int=_ct.i_int;}
-#define zcc_int_to_char_ptr(_int, _ptr)  {zcc::type_convert_t _ct;_ct.i_int=(_int);_ptr=_ct.ptr_char;}
+#define zcc_char_ptr_to_int(_ptr, _int)  {zcc::type_convert_t _ct;_ct.ptr_char=(_ptr);_int=_ct.n_int;}
+#define zcc_int_to_char_ptr(_int, _ptr)  {zcc::type_convert_t _ct;_ct.n_int=(_int);_ptr=_ct.ptr_char;}
 
 #define zcc_str_n_case_eq(a, b, n)  ((zcc_char_tolower((a)[0])==zcc_char_tolower((b)[0])) && (!strncasecmp(a,b,n)))
 #define zcc_str_case_eq(a, b)       ((zcc_char_tolower((a)[0])==zcc_char_tolower((b)[0])) && (!strcasecmp(a,b)))
@@ -108,6 +118,42 @@ struct size_data_t {
     unsigned int size;
     char *data;
 };
+
+inline unsigned int int_unpack(const char *buf)
+{
+    unsigned char *p = (unsigned char *)buf;
+    unsigned n = p[0];
+    n <<= 8; n |= p[1];
+    n <<= 8; n |= p[2];
+    n <<= 8; n |= p[3];
+    return n;
+}
+
+inline void int_pack(int num, char *buf)
+{
+    unsigned char *p = (unsigned char *)buf;
+    p[3] = num & 255;
+    num >>= 8; p[2] = num & 255;
+    num >>= 8; p[1] = num & 255;
+    num >>= 8; p[0] = num & 255;
+}
+
+inline unsigned int int_unpack3(const char *buf)
+{
+    unsigned char *p = (unsigned char *)buf;
+    unsigned n = p[0];
+    n <<= 8; n |= p[1];
+    n <<= 8; n |= p[2];
+    return n;
+}
+
+inline void int_pack3(int num, char *buf)
+{
+    unsigned char *p = (unsigned char *)buf;
+    p[2] = num & 255;
+    num >>= 8; p[1] = num & 255;
+    num >>= 8; p[0] = num & 255;
+}
 
 /* mlink  ############################################################ */
 #define zcc_mlink_append(head, tail, node, prev, next) {\
@@ -271,57 +317,32 @@ std::string &size_data_escape(std::string &str, int i);
 std::string &size_data_escape(std::string &str, long i);
 
 /* vector ########################################################## */
-class basic_vector
-{
-public:
-    basic_vector();
-    ~basic_vector();
-    void push_back_void(const void * v);
-    void reserve_void(size_t size);
-    void resize_void(size_t size);
-    void option_gm_pool_void(gm_pool &gmp);
-    size_t ___capacity;
-    size_t ___size;
-    gm_pool *___gmp;
-    char **___data;
-};
-
+void vector_reserve(size_t, unsigned int *, unsigned int *, char **, size_t);
+void vector_resize(size_t, unsigned int *, unsigned int *, char **, size_t);
+void vector_erase(size_t, unsigned int *, unsigned int *, char **, size_t);
+void vector_pop(size_t, unsigned int *, unsigned int *, char **, char **v);
 template <typename T>
-class vector: private basic_vector
+class vector
 {
 public:
-    inline vector() {}
-    inline ~vector() {}
-    inline T operator[](size_t n) const { return (T)((long)___data[n]); }
-    inline void clear() { ___size = 0; }
-    inline size_t size() const { return ___size; }
-    inline void push_back(T v) { push_back_void((const void *)(long)v); }
-    inline void truncate(size_t n) {if (n < ___size) { ___size = n; }}
-    inline void reserve(size_t size) { reserve_void(size); }
-    inline void resize(size_t size) { resize_void(size); }
-    inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
+    inline vector() { _c = _s = 0; _d = 0; }
+    inline ~vector() { free(_d); }
+    inline T &operator[](size_t n) const { return _d[n]; }
+    inline void clear() { _s = 0; }
+    inline size_t size() const { return _s; }
+    inline void push_back(const T v){if(_c==_s){vector_reserve(sizeof(T),&_c,&_s,(char **)&_d, _c);}_d[_s++]=v;}
+    inline bool pop(T *v) {if(_s<1)return false;if(v)*v=_d[_s-1];_s--;return true;}
+    inline void reserve(size_t size) { vector_reserve(sizeof(T), &_c, &_s, (char **)&_d, size); }
+    inline void resize(size_t size) { vector_resize(sizeof(T), &_c, &_s, (char **)&_d, size); }
+    inline void erase(size_t n) { vector_erase(sizeof(T), &_c, &_s, (char **)&_d, n); }
+private:
+    unsigned int _c; /* capacity */
+    unsigned int _s; /* size */
+    T *_d; /* data */
 };
-
-template <typename T>
-class vector<T *>: private basic_vector
-{
-public:
-    inline vector() {}
-    inline ~vector() {}
-    inline T * operator[](size_t n) const { return (T *)(___data[n]); }
-    inline void clear() { ___size = 0; }
-    inline size_t size() const { return ___size; }
-    inline void push_back(T *v) { push_back_void((const void *)v); }
-    inline void truncate(size_t n) {if (n < ___size) { ___size = n; }}
-    inline void reserve(size_t size) { reserve_void(size); }
-    inline void resize(size_t size) { resize_void(size); }
-    inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
-    inline T* template_type() const { return 0; };
-};
-
 #define zcc_vector_walk_begin(var_your_vec, var_your_ptr) { \
     typeof(var_your_vec) &___V_VEC = (var_your_vec); \
-    typeof(___V_VEC.template_type()) var_your_ptr; \
+    typeof(___V_VEC[0]) var_your_ptr; \
      size_t var_zcc_vector_opti = 0, ___C_VEC=(___V_VEC).size(); \
     for (; var_zcc_vector_opti < ___C_VEC; var_zcc_vector_opti ++) { \
         var_your_ptr = (___V_VEC)[var_zcc_vector_opti]; {
@@ -345,7 +366,6 @@ public:
 public:
     basic_list();
     ~basic_list();
-    void option_gm_pool_void(gm_pool &gmp);
     void clear_void();
     void push_void(const void * v);
     bool pop_void(char **v);
@@ -355,7 +375,6 @@ public:
     node *___head;
     node *___tail;
     unsigned int ___size;
-    gm_pool *___gmp;
 };
 typedef basic_list::node list_node;
 template <typename T>
@@ -379,7 +398,6 @@ public:
     inline void erase(node *n) { return erase_void(n); }
     inline node *first_node() { return ___head; }
     inline node *last_node() { return ___tail; }
-    inline void option_gm_pool(gm_pool &gmp) { option_gm_pool_void(gmp); }
     inline T* template_type() const { return 0; }
 };
 
@@ -516,7 +534,6 @@ public:
     node *first_node();
     node *last_node();
     void debug_show();
-    void option_gm_pool(gm_pool &gmp);
     /* extend */
     char *get_str(const char *key, const char *def = blank_buffer);
     bool get_bool(const char *key, bool def);
@@ -529,7 +546,6 @@ public:
 private:
     rbtree_t ___rbtree;
     unsigned int ___size;
-    gm_pool *___gmp;
 };
 
 #define zcc_dict_walk_begin(var_your_dict, var_your_key_ptr, var_your_value_ptr) { \
@@ -543,62 +559,60 @@ private:
         var_your_value_ptr = var_zcc_dict_node->value(); (void)var_your_value_ptr; {
 #define zcc_dict_walk_end }}}
 
-/* grid INNER USE ################################################## */
-struct basic_grid_node_t {
+/* map INNER USE ################################################## */
+struct basic_map_node_t {
     char *key;
     void *value;
     rbtree_node_t rbnode;
 };
-typedef struct basic_grid_node_t basic_grid_node_t;
-class basic_grid_node {
+typedef struct basic_map_node_t basic_map_node_t;
+class basic_map_node {
 public:
-    inline basic_grid_node() {}
-    inline ~basic_grid_node() {}
+    inline basic_map_node() {}
+    inline ~basic_map_node() {}
     inline char *key_void() { return ___data.key; }
     inline void *value_void() { return ___data.value; }
     inline void set_value_void(const void *v) { ___data.value = (void *)(char *)v; }
-    basic_grid_node *prev_void();
-    basic_grid_node *next_void();
+    basic_map_node *prev_void();
+    basic_map_node *next_void();
 private:
-    basic_grid_node_t ___data;
+    basic_map_node_t ___data;
 };
-class basic_grid
+class basic_map
 {
 public:
-    basic_grid();
-    ~basic_grid();
+    basic_map();
+    ~basic_map();
     inline size_t size_void() { return ___size; }
     inline size_t length_void() { return ___size; }
     void clear_void();
-    basic_grid_node *update_void(const char *key, const void *value, void **old_value = 0);
-    void update_void(basic_grid_node *n, const void *value, void **old_value = 0);
+    basic_map_node *update_void(const char *key, const void *value, void **old_value = 0);
+    void update_void(basic_map_node *n, const void *value, void **old_value = 0);
     bool exists_void(const char *key) { return find_void(key)?true:false; }
     void erase_void(const char *key, void **old_value = 0);
-    void erase_void(basic_grid_node *n, void **old_value);
-    basic_grid_node *find_void(const char *key, void **value=0);
-    basic_grid_node *find_near_prev_void(const char *key, void **value=0);
-    basic_grid_node *find_near_next_void(const char *key, void **value=0);
-    basic_grid_node *first_node_void();
-    basic_grid_node *last_node_void();
-    void option_gm_pool_void(gm_pool &gmp);
+    void erase_void(basic_map_node *n, void **old_value);
+    basic_map_node *find_void(const char *key, void **value=0);
+    basic_map_node *find_near_prev_void(const char *key, void **value=0);
+    basic_map_node *find_near_next_void(const char *key, void **value=0);
+    basic_map_node *first_node_void();
+    basic_map_node *last_node_void();
     void option_long();
 private:
     unsigned char ___long_flag:1;
     unsigned int ___size:31;
     rbtree_t ___rbtree;
-    gm_pool *___gmp;
 };
 
 template <typename T>
-class grid
+class map
 {
 };
 
 template <typename T>
-class grid<T *>: private basic_grid
+class map<T *>: private basic_map
 {
 public:
-    class node: public basic_grid_node
+    class node: public basic_map_node
     {
     public:
         inline node() {}
@@ -610,94 +624,53 @@ public:
         inline node *next() { return (node *)(next_void()); }
     };
 public:
-    inline grid() {}
-    inline ~grid() {}
+    inline map() {}
+    inline ~map() {}
     inline size_t size() { return size_void(); }
     inline size_t length() { return size_void; }
-    inline bool exists(const char *key)
-    {
-        return find_void(key)?true:false;
-    }
-
-    inline void clear()
-    {
-        clear_void();
-    }
-
-    inline node *update(const char *key, const void *value, T **old_value = 0)
-    {
+    inline bool exists(const char *key) { return find_void(key)?true:false; }
+    inline void clear() { clear_void(); }
+    inline node *update(const char *key, const void *value, T **old_value = 0) {
         return (node *)update_void(key, value, (void **)old_value);
     }
-
-    inline void update(node *n, const void *value, T **old_value = 0)
-    {
-        update_void((basic_grid_node *)n, value, (void **)old_value);
+    inline void update(node *n, const void *value, T **old_value = 0) {
+        update_void((basic_map_node *)n, value, (void **)old_value);
     }
-
-    inline void erase(const char *key, T **old_value = 0)
-    {
-        erase_void(key, (void **)old_value);
-    }
-
-    inline void erase(node *n, T **old_value)
-    {
-        erase_void((basic_grid_node *)n, (void **)old_value);
-    }
-
-    inline node *find(const char *key, T **value=0)
-    {
-        return (node *)find_void(key, (void **)value);
-    }
-
-    inline node *find_near_prev(const char *key, T **value=0)
-    {
+    inline void erase(const char *key, T **old_value = 0) { erase_void(key, (void **)old_value); }
+    inline void erase(node *n, T **old_value) { erase_void((basic_map_node *)n, (void **)old_value); }
+    inline node *find(const char *key, T **value=0) { return (node *)find_void(key, (void **)value); }
+    inline node *find_near_prev(const char *key, T **value=0) {
         return (node *)find_near_prev_void(key, (void **)value);
     }
-
-    inline node *find_near_next(const char *key, T **value=0)
-    {
+    inline node *find_near_next(const char *key, T **value=0) {
         return (node *)find_near_next_void(key, (void **)value);
     }
-
-    inline node *first_node()
-    {
-        return (node *)first_node_void();
-    }
-
-    inline node *last_node()
-    {
-        return (node *)last_node_void();
-    }
-
-    inline void option_gm_pool(gm_pool &gmp)
-    {
-        option_gm_pool_void(gmp);
-    }
-    inline T * template_type() const  { return 0; }
+    inline node *first_node() { return (node *)first_node_void(); }
+    inline node *last_node() { return (node *)last_node_void(); }
 };
 
-#define zcc_grid_walk_begin(var_your_grid, var_your_key_ptr, var_your_value_ptr) { \
-    typeof(var_your_grid) &___V_GRID = (var_your_grid); \
-    typeof(___V_GRID.template_type()) var_your_value_ptr; \
-    typeof(___V_GRID.first_node()) var_zcc_grid_node = ___V_GRID.first_node(); \
-    typeof(___V_GRID.first_node()) var_zcc_grid_node_next; \
-    for (; var_zcc_grid_node; var_zcc_grid_node = var_zcc_grid_node_next) { \
-        var_zcc_grid_node_next = var_zcc_grid_node->next(); \
-        char * var_your_key_ptr = var_zcc_grid_node->key(); (void)var_your_key_ptr; \
-        var_your_value_ptr = (typeof(___V_GRID.template_type()))var_zcc_grid_node->value(); \
+#define zcc_map_walk_begin(var_your_map, var_your_key_ptr, var_your_value_ptr) { \
+    typeof(var_your_map) &___V_GRID = (var_your_map); \
+    typeof(___V_GRID.first_node()->value()) var_your_value_ptr; \
+    typeof(___V_GRID.first_node()) var_zcc_map_node = ___V_GRID.first_node(); \
+    typeof(___V_GRID.first_node()) var_zcc_map_node_next; \
+    for (; var_zcc_map_node; var_zcc_map_node = var_zcc_map_node_next) { \
+        var_zcc_map_node_next = var_zcc_map_node->next(); \
+        char * var_your_key_ptr = var_zcc_map_node->key(); (void)var_your_key_ptr; \
+        var_your_value_ptr = (typeof(___V_GRID.first_node()->value()))var_zcc_map_node->value(); \
         (void) var_your_value_ptr; {
-#define zcc_grid_walk_end }}}
+#define zcc_map_walk_end }}}
 
 template <typename T>
-class lgrid
+class lmap
 {
 };
 
 template <typename T>
-class lgrid<T *>: private basic_grid
+class lmap<T *>: private basic_map
 {
 public:
-    class node: public basic_grid_node
+    class node: public basic_map_node
     {
     public:
         inline node() {}
@@ -708,83 +681,42 @@ public:
         inline node *next() { return (node *)(next_void()); }
     };
 public:
-    inline lgrid() {option_long();}
-    inline ~lgrid() {}
+    inline lmap() {option_long();}
+    inline ~lmap() {}
     inline size_t size() { return ___size; }
     inline size_t length() { return ___size; }
-    inline bool exists(long key)
-    {
-        return find_void(key)?true:false;
-    }
-
-    inline void clear()
-    {
-        clear_void();
-    }
-
-    inline node *update(long key, const void *value, T **old_value = 0)
-    {
+    inline bool exists(long key) { return find_void(key)?true:false; }
+    inline void clear() { clear_void(); }
+    inline node *update(long key, const void *value, T **old_value = 0) {
         return (node *)update_void((char *)key, value, (void **)old_value);
     }
-
-    inline void update(node *n, const void *value, T **old_value = 0)
-    {
-        update_void((basic_grid_node *)n, value, (void **)old_value);
+    inline void update(node *n, const void *value, T **old_value = 0) {
+        update_void((basic_map_node *)n, value, (void **)old_value);
     }
-
-    inline void erase(long key, T **old_value = 0)
-    {
-        erase_void((char *)key, (void **)old_value);
-    }
-
-    inline void erase(node *n, T **old_value)
-    {
-        erase_void((basic_grid_node *)n, (void **)old_value);
-    }
-
-    inline node *find(long key, T **value=0)
-    {
-        return (node *)find_void((char *)key, (void **)value);
-    }
-
-    inline node *find_near_prev(long key, T **value=0)
-    {
+    inline void erase(long key, T **old_value = 0) { erase_void((char *)key, (void **)old_value); }
+    inline void erase(node *n, T **old_value) { erase_void((basic_map_node *)n, (void **)old_value); }
+    inline node *find(long key, T **value=0) { return (node *)find_void((char *)key, (void **)value); }
+    inline node *find_near_prev(long key, T **value=0) {
         return (node *)find_near_prev_void((char *)key, (void **)value);
     }
-
-    inline node *find_near_next(long key, T **value=0)
-    {
+    inline node *find_near_next(long key, T **value=0) {
         return (node *)find_near_next_void((char *)key, (void **)value);
     }
-
-    inline node *first_node()
-    {
-        return (node *)first_node_void();
-    }
-
-    inline node *last_node()
-    {
-        return (node *)last_node_void();
-    }
-
-    inline void option_gm_pool(gm_pool &gmp)
-    {
-        option_gm_pool_void(gmp);
-    }
-    inline T * template_type() const  { return 0; }
+    inline node *first_node() { return (node *)first_node_void(); }
+    inline node *last_node() { return (node *)last_node_void(); }
 };
 
-#define zcc_lgrid_walk_begin(var_your_lgrid, var_your_key_ptr, var_your_value_ptr) { \
-    typeof(var_your_lgrid) &___V_GRID = (var_your_lgrid); \
-    typeof(___V_GRID.template_type()) var_your_value_ptr; \
-    typeof(___V_GRID.first_node()) var_zcc_lgrid_node = ___V_GRID.first_node(); \
-    typeof(___V_GRID.first_node()) var_zcc_lgrid_node_next; \
-    for (; var_zcc_lgrid_node; var_zcc_lgrid_node = var_zcc_lgrid_node_next) { \
-        var_zcc_lgrid_node_next = var_zcc_lgrid_node->next(); \
-        long var_your_key_ptr = var_zcc_lgrid_node->key(); (void)var_your_key_ptr; \
-        var_your_value_ptr = (typeof(___V_GRID.template_type()))var_zcc_lgrid_node->value(); \
+#define zcc_lmap_walk_begin(var_your_lmap, var_your_key_ptr, var_your_value_ptr) { \
+    typeof(var_your_lmap) &___V_GRID = (var_your_lmap); \
+    typeof(___V_GRID.first_node()->value()) var_your_value_ptr; \
+    typeof(___V_GRID.first_node()) var_zcc_lmap_node = ___V_GRID.first_node(); \
+    typeof(___V_GRID.first_node()) var_zcc_lmap_node_next; \
+    for (; var_zcc_lmap_node; var_zcc_lmap_node = var_zcc_lmap_node_next) { \
+        var_zcc_lmap_node_next = var_zcc_lmap_node->next(); \
+        long var_your_key_ptr = var_zcc_lmap_node->key(); (void)var_your_key_ptr; \
+        var_your_value_ptr = (typeof(___V_GRID.first_node()->value()))var_zcc_lmap_node->value(); \
         (void) var_your_value_ptr; {
-#define zcc_lgrid_walk_end }}}
+#define zcc_lmap_walk_end }}}
 
 /* set INNER USE ################################################### */
 class set
@@ -819,11 +751,9 @@ public:
     node *find_near_next(const char *key);
     node *first_node();
     node *last_node();
-    void option_gm_pool(gm_pool &gmp);
 private:
     rbtree_t ___rbtree;
     unsigned int ___size;
-    gm_pool *___gmp;
 };
 
 #define zcc_set_walk_begin(var_your_set, var_your_key_ptr) {\
@@ -904,6 +834,7 @@ char *build_rfc1123_date_string(long t, char *buf);
 ssize_t get_localaddr(char * addr_list, size_t max_count);
 ssize_t get_hostaddr(const char *host, char * addr_list, size_t max_count);
 bool get_peername(int sockfd, int *host, int *port);
+bool get_peername(int sockfd, char *host, int *port);
 bool get_ipstring(int ip, char *str);
 
 /* 配置文件 ######################################################### */
@@ -939,7 +870,7 @@ class config:public dict
 public:
     config();
     ~config();
-    bool load_from_filename(const char *filename);
+    bool load_by_filename(const char *filename);
     /* table */
     void get_str_table(config_str_table_t * table);
     void get_int_table(config_int_table_t * table);
@@ -1026,10 +957,10 @@ int get_readable_count(int fd);
 ssize_t writen(int fd, const void *buf, size_t size);
 
 /* timed_io ######################################################## */
-bool timed_wait_readable(int fd, long timeout, bool *error = 0);
+int timed_wait_readable(int fd, long timeout);
 ssize_t timed_read(int fd, void *buf, size_t size, long timeout);
 ssize_t timed_readn(int fd, void *buf, size_t size, long timeout);
-bool timed_wait_writeable(int fd, long timeout, bool *error = 0);
+int timed_wait_writeable(int fd, long timeout);
 ssize_t timed_write(int fd, const void *buf, size_t size, long timeout);
 ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout);
 
@@ -1210,22 +1141,22 @@ public:
     void set_context(const void *ctx);
     void * get_context();
     void bind(int fd, event_base &eb = default_evbase);
-    void tls_connect(SSL_CTX * ctx, void (*callback)(async_io &), long timeout = 0);
-    void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout = 0);
+    void tls_connect(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
+    void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
     SSL *detach_SSL();
     void fetch_rbuf(char *buf, int len);
     void fetch_rbuf(std::string &dest, int len);
-    void read(size_t max_len, void (*callback)(async_io &), long timeout = 0);
-    void readn(size_t strict_len, void (*callback)(async_io &), long timeout = 0);
-    void read_size_data(void (*callback)(async_io &), long timeout = 0);
-    void read_delimiter(int delimiter, size_t max_len, void (*callback)(async_io &), long timeout =0);
-    void read_line(size_t max_len, void (*callback)(async_io &), long timeout = 0);
+    void read(size_t max_len, void (*callback)(async_io &), long timeout);
+    void readn(size_t strict_len, void (*callback)(async_io &), long timeout);
+    void read_size_data(void (*callback)(async_io &), long timeout);
+    void read_delimiter(int delimiter, size_t max_len, void (*callback)(async_io &), long timeout);
+    void read_line(size_t max_len, void (*callback)(async_io &), long timeout);
     void cache_printf_1024(const char *fmt, ...);
     void cache_puts(const char *s);
     void cache_write(const void *buf, size_t len);
     void cache_write_size_data(const void *buf, size_t len);
     void cache_write_direct(const void *buf, size_t len);
-    void cache_flush(void (*callback)(async_io &), long timeout = 0);
+    void cache_flush(void (*callback)(async_io &), long timeout);
     size_t get_cache_size();
     void sleep(void (*callback)(async_io &), long timeout);
     event_base &get_event_base();
@@ -1298,6 +1229,8 @@ void coroutine_msleep(long ms);
 void *coroutine_get_context(coroutine *co = 0);
 void coroutine_set_context(coroutine *co, const void *ctx);
 void coroutine_set_context(const void *ctx);
+void coroutine_enable_fd(int fd);
+void coroutine_disable_fd(int fd);
 coroutine_mutex_t * coroutine_mutex_create();
 void coroutine_mutex_free(coroutine_mutex_t *);
 void coroutine_mutex_lock(coroutine_mutex_t *);
@@ -1710,7 +1643,7 @@ public:
     dict &get_query_variate();
     char *get_fragment();
     void debug_show();
-    char ___data[88];
+    char ___data[80];
 };
 
 void http_cookie_parse_request(dict &result, const char *raw_cookie);
@@ -1734,6 +1667,7 @@ public:
     ~httpd();
     void bind(int sock);
     void bind(SSL *ssl);
+    bool bind(int sock, SSL_CTX *sslctx, long timeout);
     bool run();
     virtual void handler();
     virtual void handler_after_request_header();
@@ -1746,9 +1680,11 @@ public:
     virtual long request_header_timeout();
     virtual long max_length_for_post();
     virtual char *tmp_path_for_post();
+    virtual char *gzip_file_suffix();
 
     /* request */
     char *request_method();
+    char *request_path();
     char *request_uri();
     char *request_version();
     char *request_header(const char *name, const char *def_val = blank_buffer);
@@ -1759,13 +1695,15 @@ public:
     dict &request_post_variate();
     char *request_cookie(const char *name, const char *def_val = blank_buffer);
     dict &request_cookie();
-    list<httpd_upload_file *> &upload_files();
+    vector<httpd_upload_file *> &upload_files();
 
     /* response completly*/
     virtual void response_304(const char *etag);
     virtual void response_404();
     virtual void response_500();
-    void response_file_by_absolute_path(const char *filename, const char *content_type = 0);
+    void response_200(const char *data, size_t size);
+    inline void response_200(const char *data) { response_200(data, strlen(data)); }
+    void response_file(const char *filename, const char *content_type = 0);
 
     /* response header */
     void response_header_initialization(const char *initialization = 0);
@@ -1781,7 +1719,7 @@ public:
     bool response_flush();
     stream &get_stream();
     /* */
-    char ___data[216];
+    char ___data[176];
 };
 
 /* sqlite3 */
@@ -1801,9 +1739,9 @@ class sqlite3_proxy
 public:
     sqlite3_proxy(const char *_destination, std::string *_cache = 0);
     ~sqlite3_proxy();
-    bool log(const char *sql, size_t size, long timeout = 0);
-    bool exec(const char *sql, size_t size, long timeout = 0);
-    bool query(const char *sql, size_t size, long timeout = 0);
+    bool log(const char *sql, size_t size, long timeout);
+    bool exec(const char *sql, size_t size, long timeout);
+    bool query(const char *sql, size_t size, long timeout);
     int get_row(size_data_t **row);
     inline const char *get_errmsg() { return cache->c_str(); }
     inline size_t get_column() { return ncolumns; }
@@ -1845,6 +1783,84 @@ private:
     char *destination;
     iostream *fp;
 };
+
+/* json ##################################################### */
+#pragma pack(push, 1)
+class json;
+typedef map<json *>::node json_object_walker;
+const unsigned char json_type_null = 0;
+const unsigned char json_type_string = 1;
+const unsigned char json_type_long = 2;
+const unsigned char json_type_double = 3;
+const unsigned char json_type_object = 4;
+const unsigned char json_type_array = 5;
+const unsigned char json_type_bool = 6;
+const unsigned char json_type_unknown = 7;
+class json
+{
+public:
+    json();
+    json(const std::string &val);
+    json(const char *val);
+    json(const char *val, size_t size);
+    json(long val);
+    json(double val);
+    json(bool val);
+    ~json();
+    bool load_by_filename(const char *filename);
+    bool unserialize(const char *jstr);
+    bool unserialize(const char *jstr, size_t jsize);
+    void serialize(std::string &result, int flag = 0);
+    inline int get_type() { return ___type; }
+    inline bool is_string() { return ___type==json_type_string; }
+    inline bool is_long() { return ___type==json_type_long; }
+    inline bool is_double() { return ___type==json_type_double; }
+    inline bool is_object() { return ___type==json_type_object; }
+    inline bool is_array()  { return ___type==json_type_array; }
+    inline bool is_bool()   { return ___type==json_type_bool; }
+    inline bool is_null()   { return ___type==json_type_null; }
+    /* */
+    json *reset();
+    json *used_for_bool();
+    json *used_for_long();
+    json *used_for_double();
+    json *used_for_string();
+    json *used_for_array();
+    json *used_for_object();
+    /* get */
+    std::string *get_string_value();
+    long *get_long_value();
+    double *get_double_value();
+    bool *get_bool_value();
+    json * get_array_element(size_t idx);
+    json * get_object_element(const char *key);
+    json_object_walker *get_object_first_walker();
+    json_object_walker *get_object_last_walker();
+    size_t get_array_size();
+    size_t get_object_size();
+    /* set */
+    void push_back_array(json *j);
+    void set_array_element(size_t idx, json *j, json **old = 0);
+    void set_object_element(const char *key, json *j, json **old = 0);
+    /* */
+    json * erase_array_key(size_t idx);
+    json * erase_object_key(const char *key);
+    /* */
+    json * get_element_by_path(const char *path);
+    json * get_element_by_path_vec(const char *path0, ...);
+private:
+    void clear_value();
+    unsigned char ___type;
+    union {
+        bool b;
+        long number_long;
+        double number_double;
+        char string[sizeof(std::string)];
+        vector<json *> *v;
+        map<json *> *m;
+    } ___val;
+};
+#pragma pack(pop)
 
 }
 

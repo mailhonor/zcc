@@ -198,53 +198,60 @@ int openssl_SSL_get_fd(SSL *ssl)
         ret = excute_sentence; \
         if (ret > 0) { break; } \
         err = SSL_get_error(ssl, ret); \
-        switch (err) { \
-        case SSL_ERROR_WANT_WRITE: \
-            if ((left_time = timeout_left(cirtical_time)) < 1) { ret=-1; goto over; } \
-            if (!timed_wait_writeable(_fd, left_time)) { ret=-1; goto over; }\
-            break; \
-        case SSL_ERROR_WANT_READ: \
-            if ((left_time = timeout_left(cirtical_time)) < 1) { ret = -1; goto over;} \
-            if (!timed_wait_readable(_fd, left_time)) { ret = -1; goto over; } \
-            break; \
-        case SSL_ERROR_SSL: \
-        case SSL_ERROR_SYSCALL: \
-            if (var_openssl_debug) {zcc_info("openssl: found error(%m)"); } \
-        case SSL_ERROR_ZERO_RETURN:  /* FIXME */ \
-        default: \
-            /* ret = -1; */ goto over; \
-            break; \
+        if (err == SSL_ERROR_WANT_WRITE) { \
+            if ((left_time = timeout_left(cirtical_time)) < 1) { ret=-1; break; } \
+            if (timed_wait_writeable(_fd, left_time) < 1) { ret=-1; break; }\
+        } else if (err == SSL_ERROR_WANT_READ) { \
+            if ((left_time = timeout_left(cirtical_time)) < 1) { ret = -1; break;} \
+            if (timed_wait_readable(_fd, left_time) < 1) { ret = -1; break; } \
+        } else { \
+            if (var_openssl_debug) { zcc_info("openssl: found error ret=%d, status=%d", ret, err); } \
+            { ret = -1; break; } \
         } \
-    } \
-over: 
+    }
 
 
 bool openssl_timed_connect(SSL * ssl, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     ___Z_SSL_TIMED_DO(SSL_connect(ssl));
     return (ret==1);
 }
 
 bool openssl_timed_accept(SSL * ssl, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     ___Z_SSL_TIMED_DO(SSL_accept(ssl));
     return (ret==1);
 }
 
 bool openssl_timed_shutdown(SSL * ssl, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     ___Z_SSL_TIMED_DO(SSL_shutdown(ssl));
     return (ret==1);
 }
 
 ssize_t openssl_timed_read(SSL * ssl, void *buf, size_t len, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     ___Z_SSL_TIMED_DO(SSL_read(ssl, buf, len));
     return ret;
 }
 
 ssize_t openssl_timed_write(SSL * ssl, const void *buf, size_t len, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     ___Z_SSL_TIMED_DO(SSL_write(ssl, buf, len));
     return ret;
 }

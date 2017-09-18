@@ -111,6 +111,18 @@ bool get_peername(int sockfd, int *host, int *port)
     return true;
 }
 
+bool get_peername(int sockfd, char *host, int *port)
+{
+    int ihost;
+    if (!get_peername(sockfd, &ihost, port)) {
+        return false;
+    }
+    if (host) {
+        get_ipstring(ihost, host);
+    }
+    return true;
+}
+
 bool get_ipstring(int ip, char *str)
 {
     return (inet_ntop(AF_INET, &ip, str, 16) != 0);

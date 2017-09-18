@@ -21,7 +21,7 @@ config::~config()
 {
 }
 
-bool config::load_from_filename(const char *filename)
+bool config::load_by_filename(const char *filename)
 {
     FILE *fp;
     char buf[10240 + 1];

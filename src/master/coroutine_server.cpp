@@ -47,14 +47,14 @@ static void load_global_config_by_dir(const char *config_path)
             continue;
         }
         snprintf(pn, 4096, "%s/%s", config_path, fn);
-        default_config.load_from_filename(pn);
+        default_config.load_by_filename(pn);
     }
     closedir(dir);
 }
 
 static void *monitor_reload_signal(void *arg)
 {
-    timed_wait_readable(var_master_master_status_fd, -1);
+    timed_wait_readable(var_master_master_status_fd, 0);
     var_proc_stop = true;
     coroutine_base_stop_notify();
     return 0;

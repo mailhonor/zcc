@@ -63,7 +63,7 @@ static void proxy_exec(async_io &aio)
         obuf.push_back('O');
     }
     aio.cache_write_size_data(obuf.c_str(), obuf.size());
-    aio.cache_flush(after_response);
+    aio.cache_flush(after_response, 0);
 }
 
 static void proxy_query(async_io &aio)
@@ -115,7 +115,7 @@ static void proxy_query(async_io &aio)
     if (sql_stmt) {
         sqlite3_finalize(sql_stmt);
     }
-    aio.cache_flush(after_response);
+    aio.cache_flush(after_response, 0);
 }
 
 static void *pthread_proxy(void *arg)
@@ -289,7 +289,7 @@ static void after_response(async_io &aio)
         release_aio(aio);
         return;
     }
-    aio.read_size_data(after_get_request);
+    aio.read_size_data(after_get_request, 0);
 }
 
 sqlite3_proxyd::sqlite3_proxyd()
@@ -303,7 +303,7 @@ sqlite3_proxyd::~sqlite3_proxyd()
 void sqlite3_proxyd::before_service()
 {
     do {
-        sqlite3_proxy_filename = zcc::default_config.get_str("sqlite3_proxy_filename", "");
+        sqlite3_proxy_filename = zcc::default_config.get_str("zcc_sqlite3_proxy_filename", "");
         if(empty(sqlite3_proxy_filename)) {
             zcc_fatal("FATAL must set sqlite3_proxy_filename'value");
         }
@@ -340,7 +340,7 @@ void sqlite3_proxyd::simple_service(int fd)
 {
     async_io *aio = new async_io();
     aio->bind(fd);
-    aio->read_size_data(after_get_request);
+    aio->read_size_data(after_get_request, 0);
 }
 
 /* }}} */

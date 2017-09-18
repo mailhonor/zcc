@@ -68,6 +68,9 @@ bool cdb_finder::open(const char *url)
 
 ssize_t cdb_finder::find(const char *query, std::string &result, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     char buf[1024 + 1];
     snprintf(buf, 1024, "%s%s%s", ___prefix, query, ___suffix);
     return db.find(buf, strlen(query), result);

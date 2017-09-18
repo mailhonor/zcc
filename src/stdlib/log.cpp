@@ -111,7 +111,7 @@ struct sockaddr_un var_masterlog_client_un;
 
 static void vprintf_masterlog(const char *source_fn, size_t line_number, const char *fmt, va_list ap)
 {
-    char buf[10240 + 10];
+    char *buf = (char *)malloc(10240 + 10);
     int len = 0, tmplen;
     int left = 10240;
 
@@ -133,6 +133,7 @@ static void vprintf_masterlog(const char *source_fn, size_t line_number, const c
         left -= tmplen;
     }
     sendto(var_masterlog_sock,buf,len,0,(struct sockaddr *)(&var_masterlog_client_un),sizeof(struct sockaddr_un));
+    free(buf);
 }
 
 void log_use_masterlog(const char *dest, const char *facility, const char *identity)
@@ -156,12 +157,13 @@ void log_use_masterlog(const char *dest, const char *facility, const char *ident
         exit(1);
     }
     strcpy(var_masterlog_client_un.sun_path, dest);
+    coroutine_disable_fd(var_masterlog_sock);
 }
 
 /* log_use_by_config ###################################################### */
 bool log_use_by_config(char *progname)
 {
-    char *zlog = default_config.get_str("zlog", "");
+    char *zlog = default_config.get_str("zcc_log", "");
     argv lv;
     lv.split(zlog, ", ");
     char *type = lv[0];

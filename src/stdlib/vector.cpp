@@ -11,70 +11,64 @@
 namespace zcc
 {
 
-basic_vector:: basic_vector()
+void vector_reserve(size_t tsize, unsigned int *capacity, unsigned int *size, char **data, size_t reserver_size)
 {
-    ___size = 0;
-    ___capacity = 0;
-    ___gmp = 0;
-    ___data = 0;
-}
-
-basic_vector::~basic_vector()
-{
-    if (!___gmp) {
-        zcc::free(___data);
+    size_t left = *capacity - *size;
+    if (reserver_size == 0) {
+        reserver_size = 1;
     }
-}
-
-void basic_vector::push_back_void(const void * v)
-{
-    if (___capacity == 0) {
-        reserve_void(13);
-    }
-    if (___size == ___capacity) {
-        reserve_void(___capacity);
-    }
-    ___data[___size++] = (char *)v;
-    ___data[___size] = 0;
-}
-
-void basic_vector::reserve_void(size_t size)
-{
-    size_t left = ___capacity - ___size;
-    if (size <= left) {
+    if (reserver_size <= left) {
         return;
     }
-    size = size - left;
-    if (size < ___capacity) {
-        size = ___capacity;
+    size_t extend = reserver_size - left;
+    if (extend < *capacity) {
+        extend = *capacity;
     }
 
-    if (___gmp) {
-        char ** nd = (char **)___gmp->malloc(sizeof(char *) * (___capacity + size +1));
-        if (___data && ___size) {
-            memcpy(nd, ___data, sizeof(char *) * ___size);
+    *data = (char *)zcc::realloc(*data, (tsize * (*capacity + extend +1)));
+    *capacity += extend;
+}
+
+void vector_resize(size_t tsize, unsigned int *capacity, unsigned int *size, char **data, size_t resize)
+{
+    if (resize <= *size) {
+        *size = resize;
+        return;
+    }
+    if (resize > *capacity) {
+        vector_reserve(tsize, capacity, size, data, resize - *capacity);
+    }
+    memset(*data + tsize * (*size), 0, tsize * (resize - *size));
+    *size = resize;
+}
+
+void vector_erase(size_t tsize, unsigned int *capacity, unsigned int *size, char **data, size_t n)
+{
+    if (n >= *size) {
+        return;
+    }
+    size_t end = *size;
+    if (tsize == 8) {
+        long *ptr = (long *)*data;
+        for (size_t i = n; i < end; i++) {
+            ptr[i] = ptr[i+1];
         }
-        ___data = nd;
+    } else if (tsize == 4) {
+        int *ptr = (int *)*data;
+        for (size_t i = n; i < end; i++) {
+            ptr[i] = ptr[i+1];
+        }
+    } else if (tsize == 2) {
+        short int *ptr = (short *)*data;
+        for (size_t i = n; i < end; i++) {
+            ptr[i] = ptr[i+1];
+        }
     } else {
-        ___data = (char **)zcc::realloc(___data, (sizeof(char *) * (___capacity + size +1)));
+        for (size_t i = n; i < end; i++) {
+            memcpy(*data + tsize * i, *data + tsize * (i+1), tsize);
+        }
     }
-    ___data[___size] = 0;
-    ___capacity += size;
-}
-
-void basic_vector::resize_void(size_t size)
-{
-    if (size > ___capacity) {
-        reserve_void(size - ___capacity);
-    }
-    if (size  <  ___capacity) {
-        ___size = size;
-    }
-}
-
-void basic_vector::option_gm_pool_void(gm_pool &gmp)
-{
-    ___gmp = &gmp;
+    (*size) --;
 }
 
 }

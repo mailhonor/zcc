@@ -69,6 +69,9 @@ bool socketline_finder::open(const char *url)
 
 ssize_t socketline_finder::find(const char *query, std::string &result, long timeout)
 {
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     int i;
     long dtime = timeout_set(timeout);
 

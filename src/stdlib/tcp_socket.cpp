@@ -93,8 +93,7 @@ int accept(int sock, int type)
 {
     int fd = -1;
     while(1) {
-        bool fderror = false;
-        if ((!timed_wait_readable(sock, 1 * 1000, &fderror)) && (fderror)) {
+        if (timed_wait_readable(sock, 1 * 1000) < 0) {
             zcc_fatal("accept sock:%d error(%m)", sock);
         }
         if (var_proc_stop) {

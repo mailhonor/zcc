@@ -20,7 +20,7 @@ ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
  *                 2, peer closed.
  * when receive POLLRDHUP, maybe have some readable data.
  */
-bool timed_wait_readable(int fd, long timeout, bool *error)
+int timed_wait_readable(int fd, long timeout)
 {
     struct pollfd pollfd;
     long critical_time, left_time;
@@ -28,10 +28,9 @@ bool timed_wait_readable(int fd, long timeout, bool *error)
     pollfd.fd = fd;
     pollfd.events = POLLIN;
 
-    if (error) {
-        *error = false;
+    if (timeout < 1) {
+        timeout = var_long_max;
     }
-
     critical_time = timeout_set(timeout);
     for (;;) {
         if (timeout == -1) {
@@ -42,7 +41,7 @@ bool timed_wait_readable(int fd, long timeout, bool *error)
             left_time = timeout_left(critical_time);
         }
         if (left_time < 0) {
-            return false;
+            return 0;
         }
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
@@ -51,31 +50,22 @@ bool timed_wait_readable(int fd, long timeout, bool *error)
             }
             continue;
         case 0:
-            return false;
+            return 0;
         default:
             if (pollfd.revents & POLLIN) {
-                return true;
+                return 1;
             }
             if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP)) {
-                if (error) {
-                    *error = true;
-                }
-                return false;
+                return -1;
             }
             if (pollfd.revents & POLLRDHUP) {
-                if (error) {
-                    *error = true;
-                }
-                return false;
+                return -1;
             }
-            if (error) {
-                *error = true;
-            }
-            return false;
+            return -1;
         }
     }
 
-    return true;
+    return 1;
 }
 
 ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
@@ -83,6 +73,9 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
     ssize_t ret;
     long critical_time, left_time;
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     critical_time = timeout_set(timeout);
 
     for (;;) {
@@ -90,7 +83,7 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
         if (left_time < 1) {
             return -1;
         }
-        if (!timed_wait_readable(fd, left_time)) {
+        if (timed_wait_readable(fd, left_time) < 1) {
             return (-1);
         }
         if ((ret = syscall_read(fd, buf, size)) < 0) {
@@ -120,6 +113,9 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
     left = size;
     ptr = (char *)buf;
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     critical_time = timeout_set(timeout);
 
     while (left > 0) {
@@ -127,7 +123,7 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
         if (left_time < 1) {
             break;
         }
-        if (!(timed_wait_readable(fd, left_time))) {
+        if (timed_wait_readable(fd, left_time) < 1) {
             break;
         }
         ret = syscall_read(fd, ptr, left);
@@ -159,7 +155,7 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
 }
 
 /* write */
-bool timed_wait_writeable(int fd, long timeout, bool *error)
+int timed_wait_writeable(int fd, long timeout)
 {
     struct pollfd pollfd;
     long critical_time, left_time;
@@ -167,10 +163,9 @@ bool timed_wait_writeable(int fd, long timeout, bool *error)
     pollfd.fd = fd;
     pollfd.events = POLLOUT;
     
-    if (error) {
-        *error = false;
+    if (timeout < 1) {
+        timeout = var_long_max;
     }
-
     critical_time = timeout_set(timeout);
     for (;;) {
         if (timeout == -1) {
@@ -181,7 +176,7 @@ bool timed_wait_writeable(int fd, long timeout, bool *error)
             left_time = timeout_left(critical_time);
         }
         if (left_time < 0) {
-            return false;
+            return 0;
         }
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
@@ -190,28 +185,12 @@ bool timed_wait_writeable(int fd, long timeout, bool *error)
             }
             continue;
         case 0:
-            return false;
+            return 0;
         default:
             if (pollfd.revents & POLLOUT) {
-                return true;
+                return 1;
             }
-            return false;
-            if (pollfd.revents & (POLLNVAL | POLLERR | POLLHUP)) {
-                if (error) {
-                    *error = true;
-                }
-                return false;
-            }
-            if (pollfd.revents & POLLRDHUP) {
-                if (error) {
-                    *error = true;
-                }
-                return false;
-            }
-            if (error) {
-                *error = true;
-            }
-            return false;
+            return -1;
         }
     }
 
@@ -223,6 +202,9 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
     size_t ret;
     long critical_time, left_time;
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     critical_time = timeout_set(timeout);
 
     for (;;) {
@@ -230,7 +212,7 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
         if (left_time < 1) {
             return -1;
         }
-        if (!(timed_wait_writeable(fd, left_time))) {
+        if (timed_wait_writeable(fd, left_time) < 1) {
             return -1;
         }
         if ((ret = syscall_write(fd, buf, size)) < 0) {
@@ -263,6 +245,9 @@ ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
     long critical_time;
     long left_time;
 
+    if (timeout < 1) {
+        timeout = var_long_max;
+    }
     critical_time = timeout_set(timeout);
 
     left = size;
@@ -273,7 +258,7 @@ ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
         if (left_time < 1) {
             break;
         }
-        if ((ret = timed_wait_writeable(fd, left_time)) < 0) {
+        if (timed_wait_writeable(fd, left_time) < 1) {
             break;
         }
         ret = syscall_write(fd, ptr, left);

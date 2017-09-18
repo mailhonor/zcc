@@ -53,7 +53,7 @@ static void load_global_config_by_dir(const char *config_path)
             continue;
         }
         snprintf(pn, 4096, "%s/%s", config_path, fn);
-        default_config.load_from_filename(pn);
+        default_config.load_by_filename(pn);
     }
     closedir(dir);
 }
