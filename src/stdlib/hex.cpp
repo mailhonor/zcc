@@ -11,7 +11,7 @@
 namespace zcc
 {
 
-ssize_t hex_encode(const void *src, size_t src_size, std::string &str)
+ssize_t hex_encode(const void *src, size_t src_size, string &str)
 {
     unsigned char dec2hex[18] = "0123456789ABCDEF";
     unsigned char *src_c = (unsigned char *)src;
@@ -51,7 +51,7 @@ char hex_to_dec_table[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1
 };
 
-ssize_t hex_decode(const void *src, size_t src_size, std::string &str)
+ssize_t hex_decode(const void *src, size_t src_size, string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos;
@@ -69,7 +69,7 @@ ssize_t hex_decode(const void *src, size_t src_size, std::string &str)
     return str.size();
 }
 
-ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str)
+ssize_t url_hex_decode(const void *src, size_t src_size, string &str)
 {
     str.clear();
     int l, r;

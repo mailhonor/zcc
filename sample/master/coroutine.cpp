@@ -18,7 +18,7 @@ void * do_echo(void *arg)
     fp.printf_1024("welcome coroutine: %s\n", ctime(&t));
     fp.flush();
 
-    std::string line;
+    zcc::string line;
 
     while (!fp.is_exception()) {
         line.clear();

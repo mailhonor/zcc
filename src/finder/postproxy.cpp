@@ -17,7 +17,7 @@ public:
     postproxy_finder();
     ~postproxy_finder();
     bool open(const char *url);
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
     void disconnect();
     bool connect(long timeout);
 private:
@@ -45,7 +45,7 @@ postproxy_finder::~postproxy_finder()
 
 bool postproxy_finder::open(const char *url)
 {
-    std::string dest;
+    string dest;
     dict dt;
     if (!parse_url(url, dest, dt)) {
         return false;
@@ -69,7 +69,7 @@ bool postproxy_finder::open(const char *url)
     return true;
 }
 
-ssize_t postproxy_finder::find(const char *query, std::string &result, long timeout)
+ssize_t postproxy_finder::find(const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;
@@ -82,7 +82,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
 }
     int i, ret, status;
     long dtime = timeout_set(timeout);
-    std::string mystr;
+    string mystr;
 
     for (i = 0; i < 2; i++) {
         result.clear();
@@ -90,7 +90,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
             disconnect();
         }
         if (connect(timeout_left(dtime)) == false) {
-            sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
+            result.printf_1024("finder: %s : connection error((%m)", ___url);
             continue;
         }
         ___fp->set_timeout(timeout_left(dtime));
@@ -119,7 +119,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         ___fp->flush();
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : write error(%m)", ___url);
+            result.printf_1024("finder: %s : write error(%m)", ___url);
             continue;
         }
 
@@ -127,7 +127,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         ret = ___fp->gets(mystr, '\0');
         if ((ret != 7) || (strcmp(mystr.c_str(), "status"))) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, need status name", ___url);
+            result.printf_1024("finder: %s : read error, need status name", ___url);
             disconnect();
             return -1;
         }
@@ -135,7 +135,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         mystr.clear();
         ret = ___fp->gets(mystr, '\0');
         if ((ret != 2)) {
-            sprintf_1024(result, "finder: %s : read error, need status value", ___url);
+            result.printf_1024("finder: %s : read error, need status value", ___url);
             disconnect();
             return -1;
         }
@@ -145,7 +145,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         ret = ___fp->gets(mystr, '\0');
         if ((ret != 6) || (strcmp(mystr.c_str(), "value"))) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, need value name", ___url);
+            result.printf_1024("finder: %s : read error, need value name", ___url);
             disconnect();
             return -1;
         }
@@ -153,13 +153,13 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         ret = ___fp->gets(result, '\0');
         if ((ret<0)) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, need status value", ___url);
+            result.printf_1024("finder: %s : read error, need status value", ___url);
             disconnect();
             return -1;
         }
         if (___fp->get() < 0) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, need end", ___url);
+            result.printf_1024("finder: %s : read error, need end", ___url);
             disconnect();
             return -1;
         }
@@ -170,7 +170,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
             return 0;
         }
         result.clear();
-        sprintf_1024(result, "finder: %s : read error, postproxy, return %d", ___url, status);
+        result.printf_1024("finder: %s : read error, postproxy, return %d", ___url, status);
         disconnect();
         return -1;
     }

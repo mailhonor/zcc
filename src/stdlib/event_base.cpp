@@ -1320,7 +1320,7 @@ void async_io::fetch_rbuf(char *buf, int len)
     ___async_io_cache_shift(aio_data, &(aio_data->read_cache), buf, len);
 }
 
-void async_io::fetch_rbuf(std::string &dest, int len)
+void async_io::fetch_rbuf(string &dest, int len)
 {
     async_io_t * aio_data = (async_io_t *)___data;
     dest.clear();

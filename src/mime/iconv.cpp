@@ -22,7 +22,7 @@ static inline void ___clear_null(const char *data, size_t size)
     }
 }
 
-void mime_iconv(const char *from_charset, const char *data, size_t size, std::string &dest)
+void mime_iconv(const char *from_charset, const char *data, size_t size, string &dest)
 {
     char f_charset_buf[64];
     const char *f_charset;

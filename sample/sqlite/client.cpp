@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 
     zcc::sqlite3_proxy pr(server);
     if (op == 'q') {
-        if (pr.query(sentense, strlen(sentense)) == false) {
+        if (pr.query(sentense, strlen(sentense), 0) == false) {
             printf("error: %s\n", pr.get_errmsg());
             exit(1);
         }
@@ -63,13 +63,13 @@ int main(int argc, char **argv)
             printf("\n");
         }
     } else if (op == 'e') {
-        if (pr.exec(sentense, strlen(sentense)) == false) {
+        if (pr.exec(sentense, strlen(sentense), 0) == false) {
             printf("error: %s\n", pr.get_errmsg());
             exit(1);
         }
         printf("ok\n");
     } else if (op == 'l') {
-        if (pr.log(sentense, strlen(sentense)) == false) {
+        if (pr.log(sentense, strlen(sentense), 0) == false) {
             printf("error: %s\n", pr.get_errmsg());
             exit(1);
         }

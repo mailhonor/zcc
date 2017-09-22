@@ -20,7 +20,7 @@ namespace zcc
     break; \
 }
 
-ssize_t qp_decode_2045(const void *src, size_t src_size, std::string &str)
+ssize_t qp_decode_2045(const void *src, size_t src_size, string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
@@ -54,7 +54,7 @@ over:
     return str.size();
 }
 
-ssize_t qp_decode_2047(const void *src, size_t src_size, std::string &str)
+ssize_t qp_decode_2047(const void *src, size_t src_size, string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;

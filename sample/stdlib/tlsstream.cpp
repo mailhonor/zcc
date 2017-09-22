@@ -45,7 +45,7 @@ int main(int argc, char **argv)
 
     zcc::tlsstream fp(fd);
 
-    std::string str;
+    zcc::string str;
     if (fp.gets(str) < 1) {
         printf("=== get line from server error\n");
         return 1;

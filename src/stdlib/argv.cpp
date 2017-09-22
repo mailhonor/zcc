@@ -25,7 +25,7 @@ argv::~argv()
     free(___data);
 }
 
-void argv::push_back(const std::string &v)
+void argv::push_back(const string &v)
 {
     ___append(memdupnull(v.c_str(), v.size()));
 }
@@ -80,7 +80,7 @@ void argv::___append(const char *v)
 {
     if (___size == ___capacity) {
         ___capacity *= 2 ;
-        ___data = (char **)realloc(___data, ___capacity + 1);
+        ___data = (char **)realloc(___data, sizeof(char *) * (___capacity + 1));
     }
     ___data[___size++] = const_cast<char *>(v);
     ___data[___size] = 0;

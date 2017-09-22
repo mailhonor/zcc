@@ -122,7 +122,7 @@ static int find_value(char *buf, int len, char **value, int *value_len, char **n
     return 0;
 }
 
-void mime_header_line_get_params(const char *data, size_t len, std::string &val, dict &params)
+void mime_header_line_get_params(const char *data, size_t len, string &val, dict &params)
 {
     char *value, *nbuf;
     int value_len, nlen;
@@ -142,7 +142,7 @@ void mime_header_line_get_params(const char *data, size_t len, std::string &val,
 
     char *start, *key;
     int start_len, key_len;
-    std::string kbuf(128, 0);
+    string kbuf(128, 0);
 
     start = nbuf;
     start_len = nlen;
@@ -227,7 +227,7 @@ void mime_header_line_decode_content_type(const char *data, size_t len
 void mime_header_line_decode_content_disposition(const char *data, size_t len
         , char **val, size_t *v_len
         , char **filename, size_t *f_len
-        , std::string &filename_2231
+        , string &filename_2231
         , bool *filename_2231_with_charset
         )
 {

@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 
     zcc::iostream fp(fd);
 
-    std::string str;
+    zcc::string str;
 
     fp.gets(str);
     printf("S: %s", str.c_str());

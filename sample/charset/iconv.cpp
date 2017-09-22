@@ -53,8 +53,8 @@ int main(int argc, char **argv)
         ___usage(0);
     }
 
-    std::string content;
-    std::string result;
+    zcc::string content;
+    zcc::string result;
     zcc::stdin_get_contents(content);
 
     if ((zcc::charset_iconv(from_charset, content.c_str(), (size_t)(content.size())

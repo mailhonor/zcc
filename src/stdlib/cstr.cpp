@@ -13,7 +13,7 @@ static int (*___vsnprintf)(char *str, size_t size, const char *fmt, va_list ap) 
 namespace zcc
 {
 /* ################################################################## */
-/* std::string case convert.
+/* string case convert.
  * only support Enlish locale.
  */
 
@@ -423,7 +423,7 @@ size_t vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 /* ################################################################## */
 char *multi_strdup(size_t *offsets, size_t count, const char *first, ...)
 {
-    std::string tmp;
+    string tmp;
     va_list ap;
     char *v;
 
@@ -445,7 +445,7 @@ char *multi_strdup(size_t *offsets, size_t count, const char *first, ...)
 
 stringsdup::stringsdup()
 {
-    ___data = new std::string();
+    ___data = new string();
 }
 
 stringsdup::~stringsdup()

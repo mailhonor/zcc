@@ -55,7 +55,7 @@ struct memkv_node_int_t {
 };
 /* }}} */
 
-static std::string req_buf;
+static string req_buf;
 static char *req_partition, *req_key, *req_val;
 static int req_partition_len, req_key_len, req_val_len;
 static rbtree_t partition_tree;

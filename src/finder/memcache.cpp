@@ -17,7 +17,7 @@ public:
     memcache_finder();
     ~memcache_finder();
     bool open(const char *url);
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
     void disconnect();
     bool connect(long timeout);
 private:
@@ -44,7 +44,7 @@ memcache_finder::~memcache_finder()
 
 bool memcache_finder::open(const char *url)
 {
-    std::string dest;
+    string dest;
     dict dt;
     if (!parse_url(url, dest, dt)) {
         return false;
@@ -66,7 +66,7 @@ bool memcache_finder::open(const char *url)
     return true;
 }
 
-ssize_t memcache_finder::find(const char *query, std::string &result, long timeout)
+ssize_t memcache_finder::find(const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;
@@ -79,7 +79,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
 }
     int i, len;
     long dtime = timeout_set(timeout);
-    std::string mystr;
+    string mystr;
 
     for (i = 0; i < 2; i++) {
         result.clear();
@@ -88,7 +88,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         }
         if (connect(timeout_left(dtime)) == false) {
             result.clear();
-            sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
+            result.printf_1024("finder: %s : connection error((%m)", ___url);
             continue;
         }
         ___fp->set_timeout(timeout_left(dtime));
@@ -96,7 +96,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         ___fp->flush();
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : write error((%m)", ___url);
+            result.printf_1024("finder: %s : write error((%m)", ___url);
             continue;
         }
 
@@ -104,7 +104,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         ___fp->gets(mystr);
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error", ___url);
+            result.printf_1024("finder: %s : read error", ___url);
             disconnect();
             return -1;
         }
@@ -115,20 +115,20 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
 
         if ((sscanf(mystr.c_str(), "VALUE %*s %*s %d", &len) < 1) || (len < 0)) {
             result.clear();
-            sprintf_1024(result, "finder: %s : VALUE format error: %s", ___url, mystr.c_str());
+            result.printf_1024("finder: %s : VALUE format error: %s", ___url, mystr.c_str());
             disconnect();
             return -1;
         }
         if (len > 1024*1024) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, line too long: %d", ___url, len);
+            result.printf_1024("finder: %s : read error, line too long: %d", ___url, len);
             disconnect();
             return -1;
         }
         if (len > 0 ) {
             if (___fp->readn(result, len) != len) {
                 result.clear();
-                sprintf_1024(result, "finder: %s : read result error", ___url);
+                result.printf_1024("finder: %s : read result error", ___url);
                 disconnect();
                 return -1;
             }
@@ -137,7 +137,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         ___fp->gets(mystr);
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error", ___url);
+            result.printf_1024("finder: %s : read error", ___url);
             return -1;
         }
 
@@ -146,7 +146,7 @@ ssize_t memcache_finder::find(const char *query, std::string &result, long timeo
         ___TRIM_RN(mystr);
         if (strcmp(mystr.c_str(), "END")) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error, neeed END", ___url);
+            result.printf_1024("finder: %s : read error, neeed END", ___url);
             return -1;
         }
         return 1;

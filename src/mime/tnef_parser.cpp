@@ -461,7 +461,7 @@ const char *tnef_parser_mime::filename_utf8()
 {
     if (!___data->filename_utf8) {
         mime_parser_cache_magic mcm(*(___data->parser->mcm));
-        std::string &uname = mcm.require_string();
+        string &uname = mcm.require_string();
         mcm.true_data = ___data->filename;
         mime_header_line_get_utf8(___data->parser->src_charset_def,(char *)(&mcm), strlen(___data->filename), uname);
         ___data->filename_utf8 = ___data->parser->gmp->memdupnull(uname.c_str(), uname.size());

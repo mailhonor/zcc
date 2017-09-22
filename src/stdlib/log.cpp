@@ -103,7 +103,7 @@ void log_use_syslog(int facility, const char *identity)
 }
 
 /* MASTER LOG ########################################################## */
-std::string var_masterlog_listen;
+string var_masterlog_listen;
 static autobuffer var_masterlog_prefix;
 static int var_masterlog_prefix_len = 0;
 static int var_masterlog_sock = -1;
@@ -163,7 +163,7 @@ void log_use_masterlog(const char *dest, const char *facility, const char *ident
 /* log_use_by_config ###################################################### */
 bool log_use_by_config(char *progname)
 {
-    char *zlog = default_config.get_str("zcc_log", "");
+    char *zlog = default_config.get_str("zlog", "");
     argv lv;
     lv.split(zlog, ", ");
     char *type = lv[0];

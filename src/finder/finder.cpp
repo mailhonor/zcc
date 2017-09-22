@@ -18,7 +18,7 @@ basic_finder::basic_finder()
 {
 }
 
-bool basic_finder::parse_url(const char *url, std::string &destination, zcc::dict &parameters)
+bool basic_finder::parse_url(const char *url, string &destination, zcc::dict &parameters)
 {
     char buf[10240 + 1];
     char *ps, *p;
@@ -128,7 +128,7 @@ bool finder::open(const char *url_raw)
     return true;
 }
 
-ssize_t finder::find(const char *query, std::string &result, long timeout)
+ssize_t finder::find(const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;
@@ -167,7 +167,7 @@ void finder::close()
 }
 
 /* ################################################## */
-ssize_t finder_once(const char *url, const char *query, std::string &result, long timeout)
+ssize_t finder_once(const char *url, const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;

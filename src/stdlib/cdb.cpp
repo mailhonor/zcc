@@ -948,7 +948,7 @@ void cdb::close()
     ___fd = -1;
 }
 
-bool cdb::find(const void *key, size_t key_len, std::string &result)
+bool cdb::find(const void *key, size_t key_len, string &result)
 {
     ___cdb::cdb * db = (___cdb::cdb *)___db;
     int status;
@@ -1028,7 +1028,7 @@ bool cdb_walker::get_data(char **key, size_t *klen, char **val, size_t *vlen)
     return true;
 }
 
-bool cdb_walker::get_data(std::string &key, std::string &val)
+bool cdb_walker::get_data(string &key, string &val)
 {
     if (___pos >= ___end) {
         return false;

@@ -215,7 +215,7 @@ void mime_address_parser::parse(const char *line, size_t size)
     ___over = false;
 }
 
-bool mime_address_parser::shift(std::string &name, std::string &address)
+bool mime_address_parser::shift(string &name, string &address)
 {
     int ret;
     char *n, *a;
@@ -309,7 +309,7 @@ void mime_header_line_get_address_utf8(const char *src_charset_def , const char 
 {
     const char *name;
     mime_parser_cache_magic mcm(in_str);
-    std::string &dest = mcm.require_string();
+    string &dest = mcm.require_string();
 
     mime_header_line_get_address((char *)&mcm, in_len, rvec);
     zcc_vector_walk_begin(rvec, addr) {

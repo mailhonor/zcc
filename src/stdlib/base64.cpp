@@ -49,7 +49,7 @@ static const unsigned char b64dec[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 };
 
-ssize_t base64_encode(const void *src, size_t src_size, std::string &str, bool mime_flag)
+ssize_t base64_encode(const void *src, size_t src_size, string &str, bool mime_flag)
 {
     unsigned char *src_c = (unsigned char *)src;
     char tmp[5]= {0,0,0,0,0};
@@ -98,7 +98,7 @@ ssize_t base64_encode(const void *src, size_t src_size, std::string &str, bool m
     return str.size();
 }
 
-ssize_t base64_decode(const void *src, size_t src_size, std::string &str, size_t *dealed_size)
+ssize_t base64_decode(const void *src, size_t src_size, string &str, size_t *dealed_size)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
@@ -234,7 +234,7 @@ base64_decoder::~base64_decoder()
 {
 }
 
-ssize_t base64_decoder::decode(const void *src, size_t src_size, std::string &str)
+ssize_t base64_decoder::decode(const void *src, size_t src_size, string &str)
 {
     str.clear();
     tmpstring.clear();

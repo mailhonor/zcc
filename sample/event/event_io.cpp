@@ -8,7 +8,6 @@
 
 
 #include "zcc.h"
-#include <string>
 #include <time.h>
 
 static bool ___EXIT = false;
@@ -44,7 +43,7 @@ static void server_read(zcc::event_io &ev)
     int fd;
     const char *r;
     zcc::iostream *fp;
-    std::string rbuf;
+    zcc::string rbuf;
 
     fd = ev.get_fd();
 

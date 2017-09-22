@@ -17,7 +17,7 @@ public:
     socketline_finder();
     ~socketline_finder();
     bool open(const char *_url);
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
     void disconnect();
     bool connect(long timeout);
 private:
@@ -44,7 +44,7 @@ socketline_finder::~socketline_finder()
 
 bool socketline_finder::open(const char *url)
 {
-    std::string dest;
+    string dest;
     dict dt;
     if (!parse_url(url, dest, dt)) {
         return false;
@@ -67,7 +67,7 @@ bool socketline_finder::open(const char *url)
     return true;
 }
 
-ssize_t socketline_finder::find(const char *query, std::string &result, long timeout)
+ssize_t socketline_finder::find(const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;
@@ -82,7 +82,7 @@ ssize_t socketline_finder::find(const char *query, std::string &result, long tim
         }
         if (connect(timeout_left(dtime)) == false) {
             result.clear();
-            sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
+            result.printf_1024("finder: %s : connection error((%m)", ___url);
             continue;
         }
         ___fp->set_timeout(timeout_left(dtime));
@@ -90,14 +90,14 @@ ssize_t socketline_finder::find(const char *query, std::string &result, long tim
         ___fp->flush();
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : write error((%m)", ___url);
+            result.printf_1024("finder: %s : write error((%m)", ___url);
             continue;
         }
 
         ___fp->gets(result);
         if (___fp->is_exception()) {
             result.clear();
-            sprintf_1024(result, "finder: %s : read error", ___url);
+            result.printf_1024("finder: %s : read error", ___url);
             disconnect();
             return -1;
         }

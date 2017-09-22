@@ -11,11 +11,11 @@
 namespace zcc
 {
 
-#define proxy_set_errmsg(fmt, args...)      sprintf_1024(*cache, fmt, ##args)
+#define proxy_set_errmsg(fmt, args...)      cache->printf_1024(fmt, ##args)
 
 bool var_sqlite3_proxy_set_errmsg = false;
 
-sqlite3_proxy::sqlite3_proxy(const char *_destination, std::string *_cache)
+sqlite3_proxy::sqlite3_proxy(const char *_destination, string *_cache)
 {
     destination = strdup(_destination);
     fp = 0;
@@ -23,7 +23,7 @@ sqlite3_proxy::sqlite3_proxy(const char *_destination, std::string *_cache)
         cache = cache;
         cache_flag = false;
     } else {
-        cache = new std::string();
+        cache = new string();
         cache_flag = true;
     }
 }
@@ -79,7 +79,7 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int slen;
-    std::string &cbuf = *cache;
+    string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -111,7 +111,7 @@ bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int len, slen;
-    std::string &cbuf = *cache;
+    string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -157,7 +157,7 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int len, slen;
-    std::string &cbuf = *cache;
+    string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -207,7 +207,7 @@ int sqlite3_proxy::get_row(size_data_t **row)
     size_data_t *sdvector;
     char buf[32];
     int len;
-    std::string &cbuf = *cache;
+    string &cbuf = *cache;
 
     if (!fp) {
         proxy_set_errmsg("read from %s", destination);

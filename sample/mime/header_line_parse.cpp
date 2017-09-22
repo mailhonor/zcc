@@ -43,7 +43,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     char buf[102400+10];
-    std::string line, result;
+    zcc::string line, result;
 
     while(1) {
         if (ferror(fp) || feof(fp)) {

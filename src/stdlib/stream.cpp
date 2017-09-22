@@ -111,7 +111,7 @@ ssize_t stream::readn(void *buf, size_t size)
     return -1;
 }
 
-ssize_t stream::readn(std::string &str, size_t size)
+ssize_t stream::readn(string &str, size_t size)
 {
     size_t left_size = size;
     int ch;
@@ -164,7 +164,7 @@ ssize_t stream::gets(void *buf, size_t size, int delimiter)
     return -1;
 }
 
-ssize_t stream::gets(std::string &str, int delimiter)
+ssize_t stream::gets(string &str, int delimiter)
 {
     int ch;
     ssize_t rlen = 0;

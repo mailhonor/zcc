@@ -56,7 +56,7 @@ static pthread_cond_t var_masterlog_cond = PTHREAD_COND_INITIALIZER;
 struct log_stream{
     long hour_id;
     int fd;
-    std::string cache;
+    string cache;
 };
 typedef struct log_stream log_stream;
 static map<log_stream *> var_masterlog_streams;
@@ -147,7 +147,7 @@ static void log_save_content(char *logcontent)
             return;
         }
     }
-    sprintf_1024(stream->cache, "%02d:%02d %s[%s] ", tm.tm_min, tm.tm_sec, identity, pids);
+    stream->cache.printf_1024("%02d:%02d %s[%s] ", tm.tm_min, tm.tm_sec, identity, pids);
     stream->cache.append(content);
     stream->cache.append("\n");
     if (stream->cache.size() > 1024 * (100 -1)) {
@@ -319,9 +319,9 @@ public:
     inline server_info(){ proc_limit = proc_count = 0; stamp_next_start = 0; }
     inline ~server_info() { }
     void start_all();
-    std::string config_fn;
-    std::string cmd;
-    std::string module;
+    string config_fn;
+    string cmd;
+    string module;
     int proc_limit;
     int proc_count;
     long stamp_next_start;
@@ -335,7 +335,7 @@ public:
     ~listen_pair();
     void set_unused();
     bool used;
-    std::string service_name;
+    string service_name;
     int fd;
     int iuf;
     server_info *server;
@@ -354,7 +354,7 @@ public:
 
 static bool debug_mode = 0;
 static int sighup_reload_on = 0;
-std::string config_path;
+string config_path;
 
 static int ___reload_sig = SIGHUP;
 static int master_status_fd[2];
@@ -542,19 +542,19 @@ static void prepare_server_by_config(config *cf)
 {
     char *cmd, *listen, *fn, *module;
     server_info *server;
-    cmd = cf->get_str("zcc_cmd", "");
-    listen = cf->get_str("zcc_listen", "");
+    cmd = cf->get_str("zcmd", "");
+    listen = cf->get_str("zlisten", "");
     if (empty(cmd) || empty(listen)) {
         return;
     }
     fn = cf->get_str("z___Z_0428_fn", "");
-    module = cf->get_str("zcc_module", "");
+    module = cf->get_str("zmodule", "");
     server = new server_info();
     server_vector.push_back(server);
     server->config_fn = fn;
     server->cmd = cmd;
     server->module = module;
-    server->proc_limit = cf->get_int("zcc_proc_limit", 1, 1, 1000);
+    server->proc_limit = cf->get_int("zproc_limit", 1, 1, 1000);
     server->proc_count = 0;
 
     /* listens */

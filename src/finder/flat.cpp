@@ -17,7 +17,7 @@ public:
     flat_finder();
     ~flat_finder();
     bool open(const char *url);
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
 private:
     bool load_dict(const char *fn);
     dict ___dict;
@@ -36,7 +36,7 @@ flat_finder::~flat_finder()
 
 bool flat_finder::open(const char *url)
 {
-    std::string dest;
+    string dest;
     dict dt;
     if (!parse_url(url, dest, dt)) {
         return false;
@@ -50,7 +50,7 @@ bool flat_finder::open(const char *url)
     }
     return true;
 }
-ssize_t flat_finder::find(const char *query, std::string &result, long timeout)
+ssize_t flat_finder::find(const char *query, string &result, long timeout)
 {
     char *v;
     

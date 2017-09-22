@@ -9,6 +9,7 @@
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 
 #include "zcc.h"
+#include <ctype.h>
 
 namespace zcc
 {
@@ -22,19 +23,19 @@ json::json()
 json::json(const char *val)
 {
     ___type = json_type_string;
-    new (___val.string) std::string(val);
+    new (___val.str) string(val);
 }
 
 json::json(const char *val, size_t size)
 {
     ___type = json_type_string;
-    new (___val.string) std::string(val, size);
+    new (___val.str) string(val, size);
 }
 
-json::json(const std::string &val)
+json::json(const string &val)
 {
     ___type = json_type_string;
-    new (___val.string) std::string(val);
+    new (___val.str) string(val);
 }
 
 json::json(long val)
@@ -116,16 +117,16 @@ json *json::used_for_object()
     return this;
 }
 
-std::string *json::get_string_value()
+string *json::get_string_value()
 {
     if (___type == json_type_null) {
-        new (___val.string) std::string();
+        new (___val.str) string();
         ___type = json_type_string;
     }
     if (___type != json_type_string) {
         return 0;
     }
-    return (std::string *)(___val.string);
+    return (string *)(___val.str);
 }
 
 long *json::get_long_value()
@@ -300,7 +301,7 @@ json * json::get_element_by_path(const char *path)
     if (empty(path)) {
         return this;
     }
-    std::string tmp(path);
+    string tmp(path);
     char *p, *key = (char *)(void *)tmp.c_str();
     json *jn = this;
     while (jn) {
@@ -387,9 +388,8 @@ json * json::get_element_by_path_vec(const char *path0, ...)
 void json::clear_value()
 {
     if (___type == json_type_string) {
-        if (___val.string) {
-            typedef std::string ___std_string;
-            ((___std_string *)(___val.string))->~___std_string();
+        if (___val.str) {
+            ((string *)(___val.str))->~string();
         }
     } else if (___type == json_type_array) {
         if (___val.v) {

@@ -12,7 +12,7 @@
 namespace zcc
 {
 
-void mime_header_line_unescape(const char *data, size_t size, std::string &dest)
+void mime_header_line_unescape(const char *data, size_t size, string &dest)
 {
     int ch;
     char *src = (char *)(data);
@@ -82,7 +82,7 @@ size_t mime_header_line_unescape(const char *data, size_t size, char *dest, size
     return rlen;
 }
 
-void mime_header_line_get_first_token(const char *line, size_t len, std::string &val)
+void mime_header_line_get_first_token(const char *line, size_t len, string &val)
 {
     char *v;
     size_t l;
@@ -220,7 +220,7 @@ size_t mime_header_line_get_elements(const char *in_src, size_t in_len, mime_hea
     return mt_count;
 }
 
-void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, size_t in_len, std::string &dest)
+void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, size_t in_len, string &dest)
 {
     int ret, i, plen, mt_count;
     char *p;
@@ -228,8 +228,8 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, 
     mime_parser_cache_magic mcm(in_src);
    
     in_src = mcm.true_data;
-    std::string &bq_join = mcm.require_string();
-    std::string &out_string = mcm.require_string();
+    string &bq_join = mcm.require_string();
+    string &out_string = mcm.require_string();
 
     if (in_len > var_mime_header_line_max_length) {
         in_len = var_mime_header_line_max_length;

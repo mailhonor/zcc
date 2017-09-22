@@ -7,6 +7,7 @@
  */
 
 #include "zcc.h"
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -54,7 +55,7 @@ static void proxy_exec(async_io &aio)
         }
     }
 
-    std::string obuf;
+    string obuf;
     obuf.clear();
     if (err) {
         obuf.push_back('E');
@@ -74,7 +75,7 @@ static void proxy_query(async_io &aio)
     char *sql = (char *)aio.get_context();
     int len = *((int *)sql);
     sql += sizeof(int) + 1;
-    std::string obuf;
+    string obuf;
     do {
         if (sqlite3_prepare_v2(sqlite3_handler, sql, len, &sql_stmt, 0) != SQLITE_OK) {
             err = 1;
@@ -82,7 +83,7 @@ static void proxy_query(async_io &aio)
         }
         obuf.clear();
         ncolumn = sqlite3_column_count(sql_stmt);
-        sprintf_1024(obuf, "O%d", ncolumn);
+        obuf.printf_1024("O%d", ncolumn);
         aio.cache_write_size_data(obuf.c_str(), obuf.size());
 
         obuf.clear();
@@ -97,7 +98,7 @@ static void proxy_query(async_io &aio)
             for (coi=0;coi<ncolumn;coi++) {
                 char *d = (char *)sqlite3_column_blob(sql_stmt, coi);
                 int l = sqlite3_column_bytes(sql_stmt, coi);
-                size_data_escape(obuf, d, l);
+                obuf.size_data_escape(d, l);
             }
             aio.cache_write_size_data(obuf.c_str(), obuf.size());
         }
@@ -303,7 +304,7 @@ sqlite3_proxyd::~sqlite3_proxyd()
 void sqlite3_proxyd::before_service()
 {
     do {
-        sqlite3_proxy_filename = zcc::default_config.get_str("zcc_sqlite3_proxy_filename", "");
+        sqlite3_proxy_filename = zcc::default_config.get_str("zsqlite3_proxy_filename", "");
         if(empty(sqlite3_proxy_filename)) {
             zcc_fatal("FATAL must set sqlite3_proxy_filename'value");
         }

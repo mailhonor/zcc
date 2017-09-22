@@ -16,7 +16,7 @@ namespace zcc
 static void _debug_show_addr(mail_parser *parser, const char *h, const mime_address &addr)
 {
     const char *fmt = "%15s: %s\n";
-    std::string tmpstr;
+    string tmpstr;
     parser->header_line(h, tmpstr);
     printf(fmt, h, tmpstr.c_str());
     printf(fmt, "", addr.address());
@@ -28,7 +28,7 @@ static void _debug_show_addr_vector(mail_parser *parser, const char *h, const ve
 {
     const char *fmt = "%15s: %s\n";
     char nh[256];
-    std::string tmpstr;
+    string tmpstr;
     int i = 0;
 
     parser->header_line(h, tmpstr);
@@ -50,7 +50,7 @@ static void _debug_show_addr_vector(mail_parser *parser, const char *h, const ve
 void mail_parser::debug_show()
 {
     const char *fmt = "%15s: %s\n";
-    std::string tmpstr;
+    string tmpstr;
     size_t i = 0;
 
     printf(fmt, "Date", date());

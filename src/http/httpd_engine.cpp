@@ -209,7 +209,7 @@ void httpd_engine::request_data_do_true()
 
     if (ctype == 'u') {
         /* application/x-www-form-urlencoded */
-        std::string mbuf;
+        string mbuf;
         mbuf.reserve(request_content_length);
         if (http_fp->readn(mbuf, request_content_length) < request_content_length) {
             exception = true;

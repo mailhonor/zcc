@@ -49,7 +49,7 @@ int main(int argc, char **argv)
     if (zcc::empty(fn)) {
         ___usage();
     }
-    std::string fcon, result;
+    zcc::string fcon, result;
     zcc::file_get_contents_sample(fn, fcon);
     if (encode_flag) {
         zcc::base64_encode(fcon.c_str(), fcon.length(), result, mime_flag);
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
         zcc::base64_decode(fcon.c_str(), fcon.length(), result);
 #else
         zcc::base64_decoder decoder;
-        std::string tmp;
+        zcc::string tmp;
         for (size_t i = 0; i < fcon.length() + 1; i++) {
             /* i == fcon.length , *(fcon.c_str()) == 0, means over */
             if (decoder.decode(fcon.c_str() + i, 1, tmp) < 0) {

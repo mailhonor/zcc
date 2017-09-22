@@ -291,7 +291,7 @@ void httpd::response_file(const char *filename, const char *content_type)
             if (!strcasestr(request_header("accept-encoding", ""), "gzip")) {
                 continue;
             }
-            std::string fn(filename);
+            string fn(filename);
             fn.push_back('.');
             fn.append(gzip_file_suffix());
             while ((fd = open(fn.c_str(), O_RDONLY)) == -1 && errno == EINTR) {
@@ -405,7 +405,7 @@ void httpd::response_304(const char *etag)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     stream *http_fp = httpddata->http_fp;
-    std::string output = "HTTP/1.1 304 Not Modified\r\n";
+    string output = "HTTP/1.1 304 Not Modified\r\n";
     output += "Etag: ";
     output += etag;
     output += "\r\n";
@@ -451,7 +451,7 @@ void httpd::response_header(const char *name, long d)
 
 void httpd::response_header_content_type(const char *value, const char *charset)
 {
-    std::string val;
+    string val;
     val.append(value);
     if (!empty(charset)) {
         val.append("; chrset=");
@@ -471,7 +471,7 @@ void httpd::response_header_content_length(long length)
 
 void httpd::response_header_set_cookie(const char *name, const char *value, long expires, const char *path, const char *domain, bool secure, bool httponly)
 {
-    std::string result;
+    string result;
     http_cookie_build(result, name, value, expires, path, domain, secure, httponly);
     response_header("Set-Cookie", result.c_str());
 }

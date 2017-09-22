@@ -84,7 +84,7 @@ const char *mail_parser_mime::disposition()
         mime_parser_cache_magic mcm(___data->parser->mcm);
         char *val, *fn;
         size_t vlen, f_len;
-        std::string &fn2231 = mcm.require_string();
+        string &fn2231 = mcm.require_string();
         bool with_charset;
         fn2231.clear();
         mime_header_line_decode_content_disposition(start, blen, &val, &vlen, &fn, &f_len, fn2231, &with_charset);
@@ -135,7 +135,7 @@ const char *mail_parser_mime::name_utf8()
     }
     ___data->name_utf8 = blank_buffer;
     mime_parser_cache_magic mcm(___data->parser->mcm);
-    std::string &uname = mcm.require_string();
+    string &uname = mcm.require_string();
     uname.clear();
     mcm.true_data = ___data->name;
     mime_header_line_get_utf8(___data->parser->src_charset_def, (char *)(&mcm), strlen(___data->name), uname);
@@ -162,7 +162,7 @@ const char *mail_parser_mime::filename_utf8()
     }
     ___data->filename_utf8 = blank_buffer;
     mime_parser_cache_magic mcm(___data->parser->mcm);
-    std::string &uname = mcm.require_string();
+    string &uname = mcm.require_string();
     uname.clear();
     if (*(___data->filename2231)) {
         mcm.true_data = ___data->filename2231;
@@ -363,7 +363,7 @@ size_t mail_parser_mime::header_line(const char *header_name, char **result, int
     return sdn->size;
 }
 
-bool mail_parser_mime::header_line(const char *header_name, std::string &result, int n)
+bool mail_parser_mime::header_line(const char *header_name, string &result, int n)
 {
     char *data;
     size_t len;
@@ -376,7 +376,7 @@ bool mail_parser_mime::header_line(const char *header_name, std::string &result,
     return false;
 }
 
-void mail_parser_mime::decoded_content(std::string &dest)
+void mail_parser_mime::decoded_content(string &dest)
 {
     mail_parser_inner *parser = ___data->parser;
     char *in_src = parser->mail_data + ___data->body_offset;
@@ -396,7 +396,7 @@ void mail_parser_mime::decoded_content(std::string &dest)
     dest.append(in_src, in_len);
 }
 
-void mail_parser_mime::decoded_content_utf8(std::string &dest)
+void mail_parser_mime::decoded_content_utf8(string &dest)
 {
     mail_parser_inner *parser = ___data->parser;
     char *in_src = parser->mail_data + ___data->body_offset;
@@ -406,7 +406,7 @@ void mail_parser_mime::decoded_content_utf8(std::string &dest)
     const char *str;
     size_t str_len;
     mime_parser_cache_magic mcm(___data->parser->mcm);
-    std::string &tmp_cache_buf = mcm.require_string();
+    string &tmp_cache_buf = mcm.require_string();
 
     dest.clear();
     tmp_cache_buf.clear();
@@ -576,7 +576,7 @@ const char *mail_parser::subject_utf8()
         ___data->subject_utf8 = blank_buffer;
         mime_parser_cache_magic mcm(___data->mcm);
         mcm.true_data = ___data->subject;
-        std::string &uname = mcm.require_string();
+        string &uname = mcm.require_string();
         uname.clear();
         mime_header_line_get_utf8(___data->src_charset_def, (char *)(&mcm), strlen(___data->subject), uname);
         ___data->subject_utf8 = ___data->gmp->memdupnull(uname.c_str(), uname.size());
@@ -626,7 +626,7 @@ const mime_address &mail_parser::from_utf8()
         ___data->from_flag = 2;
         mime_parser_cache_magic mcm(___data->mcm);
         mcm.true_data = const_cast<char *>(___data->from.name());
-        std::string &uname = mcm.require_string();
+        string &uname = mcm.require_string();
         uname.clear();
         mime_header_line_get_utf8(___data->src_charset_def, (char *)(&mcm), strlen(mcm.true_data), uname);
         ___data->from.set_values(0, 0, ___data->gmp->memdupnull(uname.c_str(), uname.size()));
@@ -668,7 +668,7 @@ const vector<mime_address *> &mail_parser::to()
     if (utf8_tf && (___data->tcb_flag!=2)) { \
         ___data->tcb_flag = 2; \
         mime_parser_cache_magic mcm(___data->mcm); \
-        std::string &dest = mcm.require_string(); \
+        string &dest = mcm.require_string(); \
         dest.clear(); \
         zcc_vector_walk_begin(___data->tcb, addr) { \
             const char * name = addr->name(); \
@@ -777,7 +777,7 @@ size_t mail_parser::header_line(const char *header_name, char **data, int n)
     return ___data->top_mime->header_line(header_name, data, n);
 }
 
-bool mail_parser::header_line(const char *header_name, std::string &result, int n)
+bool mail_parser::header_line(const char *header_name, string &result, int n)
 {
     return ___data->top_mime->header_line(header_name, result, n);
 }

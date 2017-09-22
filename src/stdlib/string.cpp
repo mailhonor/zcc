@@ -7,13 +7,14 @@
  */
 
 #include "zcc.h"
+#include <stdarg.h>
 
+#if 0
 static int (*___vsnprintf)(char *str, size_t size, const char *fmt, va_list ap) = vsnprintf;
-
 namespace zcc
 {
 
-std::string &sprintf_1024(std::string &str, const char *fmt, ...)
+string &sprintf_1024(string &str, const char *fmt, ...)
 {
     va_list ap;
     char buf[1024+1];
@@ -25,19 +26,19 @@ std::string &sprintf_1024(std::string &str, const char *fmt, ...)
     return str;
 }
 
-std::string &tolower(std::string &str)
+string &tolower(string &str)
 {
     tolower(str.c_str());
     return str;
 }
 
-std::string &toupper(std::string &str)
+string &toupper(string &str)
 {
     toupper(str.c_str());
     return str;
 }
 
-std::string &size_data_escape(std::string &str, const void *data, size_t n)
+string &size_data_escape(string &str, const void *data, size_t n)
 {
     int ch, left;
     if (n == 0) {
@@ -60,14 +61,14 @@ std::string &size_data_escape(std::string &str, const void *data, size_t n)
     return str;
 }
 
-std::string &size_data_escape(std::string &str, int i)
+string &size_data_escape(string &str, int i)
 {
     char buf[32];
     size_t n = sprintf(buf, "%d", i);
     return size_data_escape(str, buf, n);
 }
 
-std::string &size_data_escape(std::string &str, long i)
+string &size_data_escape(string &str, long i)
 {
     char buf[32];
     size_t n = sprintf(buf, "%ld", i);
@@ -75,66 +76,10 @@ std::string &size_data_escape(std::string &str, long i)
 }
 
 }
+#endif
 
-
-#if 0
-
-namespace zcc
-{
-
-class string
-{
-public:
-    string();
-    string(const string &_x);
-    string(const char *str);
-    string(const char *str, size_t size);
-    string(size_t n, int ch);
-    string(size_t size);
-    ~string();
-
-    inline /* const */ char *c_str() const {___data[___size] = 0; return ___data;}
-    inline size_t empty() const { return !___size; }
-    inline size_t size() const { return ___size; }
-    inline size_t length() const { return ___size; }
-    inline size_t capability() const { return ___capacity; }
-    inline void push_back(int ch){(___size<___capacity)?(___data[___size++]=ch):put_do(ch);}
-    inline string &put(int ch) { push_back(ch); return *this; }
-    inline void clear() { ___size = 0; }
-    string &resize(size_t n);
-    string &reserve(size_t n);
-    inline string &truncate(size_t n) { return resize(n); }
-    inline string &append(int ch) { push_back(ch); return *this; }
-    string &append(string &s);
-    string &append(const char *str);
-    string &append(const char *str, size_t n);
-    string &append(size_t n, int ch);
-    string &printf_1024(const char *format, ...);
-
-    inline string & operator=(const char *str) { clear(); return append(str); }
-    inline string & operator=(const string &s) { clear(); return append(s.___data, s.___size); }
-    inline string & operator+=(const char *str) { return append(str); }
-    inline string & operator+=(const string &s) { return append(s.___data, s.___size); }
-    inline string & operator+=(int ch) { return append(ch); }
-    inline int operator[](size_t n) { return ___data[n]; }
-
-    string &size_data_escape(const void *data, size_t n = 0);
-    string &size_data_escape(int i);
-    string &size_data_escape(long i);
-
-private:
-    void _init_buf(size_t size);
-    int put_do(int ch);
-private:
-    char *___data;
-    unsigned int ___size;
-    unsigned int ___capacity;
-};
-
-}
-
+#if 1
 static void * (*___memcpy___)(void *dest, const void *src, size_t n) = memcpy;
-
 namespace zcc
 {
 
@@ -150,6 +95,7 @@ string::string(const string &_x)
     if (s) {
         _init_buf(s<13?13:s);
         ___memcpy___(___data, _x.___data, s);
+        ___size = s;
     } else {
         ___data = blank_buffer;
         ___size = ___capacity = 0;
@@ -161,12 +107,14 @@ string::string(const char *str)
     size_t len = strlen(str);
     _init_buf(len<13?13:len);
     ___memcpy___(___data, str, len);
+    ___size = len;
 }
 
 string::string(const char *str, size_t size)
 {
     _init_buf(size<13?13:size);
     ___memcpy___(___data, str, size);
+    ___size = size;
 }
 
 string::string(size_t n, int ch)
@@ -174,10 +122,9 @@ string::string(size_t n, int ch)
     ___data = blank_buffer;
     ___size = ___capacity = 0;
     if (n) {
-        reserve(n);
-        char *ptr = ___data + ___size;
-        resize(___size + n);
-        memset(ptr, ch, n);
+        _init_buf(n<13?13:n);
+        memset(___data, ch, n);
+        ___size = n;
     }
 }
 

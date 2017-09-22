@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 {
     char *eml_fn = 0, *eml_data;
     int times = 1000, i, eml_size;
-    std::string eml_data_buf;
+    zcc::string eml_data_buf;
     long t;
 
     zcc_main_parameter_begin() {

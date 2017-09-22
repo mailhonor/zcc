@@ -16,7 +16,7 @@ namespace zcc
 void http_cookie_parse_request(dict &result, const char *raw_cookie)
 {
     char *q, *p, *ps = const_cast<char *>(raw_cookie);
-    std::string name(32, 0), value(128, 0);
+    string name(32, 0), value(128, 0);
     while(1) {
         while(*ps) {
             if ((*ps == ' ') || (*ps == '\t')) {
@@ -42,7 +42,7 @@ void http_cookie_parse_request(dict &result, const char *raw_cookie)
             }
             name.clear();
             name.append(ps, q - ps);
-            tolower(name);
+            tolower(name.c_str());
             value.clear();
             q ++;
             url_hex_decode(q, p - q, value);
@@ -55,7 +55,7 @@ void http_cookie_parse_request(dict &result, const char *raw_cookie)
     }
 }
 
-void http_cookie_build(std::string &result, const char *name, const char *value, long expires, const char *path, const char *domain, bool secure, bool httponly)
+void http_cookie_build(string &result, const char *name, const char *value, long expires, const char *path, const char *domain, bool secure, bool httponly)
 {
     int ch;
     char *p;
@@ -88,7 +88,7 @@ void http_cookie_build(std::string &result, const char *name, const char *value,
         result.append("; expires=");
         result.append(timestringbuf);
         result.append("; Max-Age=");
-        sprintf_1024(result, "%ld", expires - time(0));
+        result.printf_1024("%ld", expires - time(0));
     }
 
     if (!empty(path)) {

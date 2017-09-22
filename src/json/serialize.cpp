@@ -9,13 +9,14 @@
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 
 #include "zcc.h"
+#include <ctype.h>
 
 namespace zcc
 {
 
 bool json::load_by_filename(const char *filename)
 {
-    std::string content;
+    string content;
     if (file_get_contents(filename, content) < 0) {
         return false;
     }
@@ -60,7 +61,7 @@ static inline size_t ___ncr_decode(size_t ins, char *wchar)
     return 0;
 }
 
-static inline bool ___fetch_string(char *&ps, char *str_end, std::string &str)
+static inline bool ___fetch_string(char *&ps, char *str_end, string &str)
 {
     char begin = *ps ++, ch, ch2, ch3;
     while (ps < str_end) {
@@ -134,7 +135,7 @@ static inline bool ___fetch_string(char *&ps, char *str_end, std::string &str)
     return false;
 }
 
-static inline bool ___fetch_string2(char *&ps, char *str_end, std::string &str)
+static inline bool ___fetch_string2(char *&ps, char *str_end, string &str)
 {
     char ch;
     while (ps < str_end) {
@@ -154,7 +155,7 @@ static inline bool ___fetch_string2(char *&ps, char *str_end, std::string &str)
 static bool json_unserialize(json *j, const char *jstr, size_t jsize)
 {
     j->reset();
-    std::string tmpkey(128, 0);
+    string tmpkey(128, 0);
     char *ps = (char *)jstr, *str_end = ps + jsize;
     vector<json *> json_vec;
     json_vec.push_back(j);
@@ -266,7 +267,7 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
         if ((*ps == '"') || (*ps == '\'')) {
             tmpkey.clear();
             ___fetch_string(ps, str_end, tmpkey);
-            std::string *val = current_json->get_string_value();
+            string *val = current_json->get_string_value();
             if (val == 0) {
                 return false;
             }
@@ -345,7 +346,7 @@ bool json::unserialize(const char *jstr, size_t jsize)
     return r;
 }
 
-static inline void ___serialize_string(std::string &result, const char *data, size_t size)
+static inline void ___serialize_string(string &result, const char *data, size_t size)
 {
     result.push_back('"');
     char *ps = (char *)data;
@@ -382,12 +383,12 @@ static inline void ___serialize_string(std::string &result, const char *data, si
     result.push_back('"');
 }
 
-static inline void ___serialize_string(std::string &result, const std::string &str)
+static inline void ___serialize_string(string &result, const string &str)
 {
     ___serialize_string(result, str.c_str(), str.size());
 }
 
-void json::serialize(std::string &result, int flag)
+void json::serialize(string &result, int flag)
 {
     json *current_json;
     size_t idx = 0;
@@ -426,15 +427,15 @@ void json::serialize(std::string &result, int flag)
             continue;
         }
         if (current_json->is_long()) {
-            sprintf_1024(result, "%ld", *(current_json->get_long_value()));
+            result.printf_1024("%ld", *(current_json->get_long_value()));
             continue;
         }
         if (current_json->is_double()) {
             long l = *(current_json->get_double_value());
             if ((l > 1000 * 1000 * 1000 * 1000L) || (l < -1000 * 1000 * 1000 * 1000L)){
-                sprintf_1024(result, "%e", l);
+                result.printf_1024("%e", l);
             } else {
-                sprintf_1024(result, "%ld", l);
+                result.printf_1024("%ld", l);
             }
             continue;
         }

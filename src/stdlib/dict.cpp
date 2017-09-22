@@ -246,7 +246,7 @@ long dict::get_size(const char *key, long def, long min, long max)
 void dict::parse_url_query(const char *query)
 {
     char *q, *p, *ps = const_cast<char *>(query);
-    std::string name(32, 0), value(128, 0);
+    string name(32, 0), value(128, 0);
     while(1) {
         p = ps;
         while((*p != '\0') && (*p != '&')) {
@@ -265,7 +265,7 @@ void dict::parse_url_query(const char *query)
             }
             name.clear();
             name.append(ps, q - ps);
-            tolower(name);
+            tolower(name.c_str());
             value.clear();
             q ++;
             url_hex_decode(q, p - q, value);
@@ -278,7 +278,7 @@ void dict::parse_url_query(const char *query)
     }
 }
 
-char *dict::build_url_query(std::string &query, bool strict)
+char *dict::build_url_query(string &query, bool strict)
 {
     bool first = true;
     for (dict::node *n = first_node();n;n=n->next()) {

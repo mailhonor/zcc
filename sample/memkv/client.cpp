@@ -34,7 +34,7 @@ int main(int argc, char **argv)
     
     zcc::memkv mkv(server);
 
-    std::string string_result;
+    zcc::string string_result;
     long int_result;
 #define ftest(sentence) { \
     printf("%-50s", #sentence);\

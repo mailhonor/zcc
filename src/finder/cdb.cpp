@@ -17,7 +17,7 @@ public:
     cdb_finder();
     ~cdb_finder();
     bool open(const char *_url);
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
     void disconnect();
 private:
     const char *___url;
@@ -39,7 +39,7 @@ cdb_finder::~cdb_finder()
 
 bool cdb_finder::open(const char *url)
 {
-    std::string dest;
+    string dest;
     dict dt;
     if (!parse_url(url, dest, dt)) {
         return false;
@@ -66,7 +66,7 @@ bool cdb_finder::open(const char *url)
     return true;
 }
 
-ssize_t cdb_finder::find(const char *query, std::string &result, long timeout)
+ssize_t cdb_finder::find(const char *query, string &result, long timeout)
 {
     if (timeout < 1) {
         timeout = var_long_max;

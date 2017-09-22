@@ -75,7 +75,7 @@ bool file_put_contents(const char *filename, const void *data, size_t len)
     return true;
 }
 
-ssize_t file_get_contents(const char *filename, std::string &str)
+ssize_t file_get_contents(const char *filename, string &str)
 {
     int fd;
     int errno2;
@@ -118,7 +118,7 @@ ssize_t file_get_contents(const char *filename, std::string &str)
     return (ssize_t)rlen;
 }
 
-ssize_t file_get_contents_sample(const char *filename, std::string &str)
+ssize_t file_get_contents_sample(const char *filename, string &str)
 {
     ssize_t ret = file_get_contents(filename, str);
     if (ret < 0) {
@@ -128,7 +128,7 @@ ssize_t file_get_contents_sample(const char *filename, std::string &str)
     return ret;
 }
 
-ssize_t stdin_get_contents(std::string &str)
+ssize_t stdin_get_contents(string &str)
 {
     int fd = 0;
     int errno2;

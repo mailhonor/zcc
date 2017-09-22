@@ -15,7 +15,7 @@ const size_t var_mime_header_line_max_element   = 10240;
 
 struct mime_parser_cache_magic_t {
     int used;
-    std::string *tmp_string[10];
+    string *tmp_string[10];
     char line_cache[var_mime_header_line_max_length + 10];         /* var_mime_header_line_max_length */
 }; 
 typedef struct mime_parser_cache_magic_t mime_parser_cache_magic_t;
@@ -33,7 +33,7 @@ public:
     mime_parser_cache_magic(const mime_parser_cache_magic &_x);
     mime_parser_cache_magic(const void *data);
     ~mime_parser_cache_magic();
-    std::string &require_string();
+    string &require_string();
 };
 
 class mail_parser_mime_inner

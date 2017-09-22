@@ -22,7 +22,7 @@ static void ___usage(const char *arg = 0)
 
 static void do_search(void)
 {
-    std::string result;
+    string result;
     int ret;
 
     if (___finder_url == NULL || ___finder_query == NULL) {

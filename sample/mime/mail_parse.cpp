@@ -62,7 +62,7 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
         snprintf(tmpname, 255, "atts/%s", sname);
         name_char_validate(tmpname+5);
     }
-    std::string dcon;
+    zcc::string dcon;
     mime->decoded_content(dcon);
 
     printf("save attachment %s\n", tmpname);

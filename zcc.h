@@ -15,7 +15,7 @@
 #error only support X64
 #endif
 
-#include <string>
+#include <memory>
 
 #include <errno.h>
 #include <stdarg.h>
@@ -243,9 +243,59 @@ public:
     char *data;
 };
 
+/* string ################################################## */
+class string
+{
+public:
+    string();
+    string(const string &_x);
+    string(const char *str);
+    string(const char *str, size_t size);
+    string(size_t n, int ch);
+    string(size_t size);
+    ~string();
+
+    inline /* const */ char *c_str() const {___data[___size] = 0; return ___data;}
+    inline size_t empty() const { return !___size; }
+    inline size_t size() const { return ___size; }
+    inline size_t length() const { return ___size; }
+    inline size_t capability() const { return ___capacity; }
+    inline void push_back(int ch){(___size<___capacity)?(___data[___size++]=ch):put_do(ch);}
+    inline string &put(int ch) { push_back(ch); return *this; }
+    inline void clear() { ___size = 0; }
+    string &resize(size_t n);
+    string &reserve(size_t n);
+    inline string &truncate(size_t n) { return resize(n); }
+    inline string &append(int ch) { push_back(ch); return *this; }
+    string &append(string &s);
+    string &append(const char *str);
+    string &append(const char *str, size_t n);
+    string &append(size_t n, int ch);
+    string &printf_1024(const char *format, ...);
+
+    inline string & operator=(const char *str) { clear(); return append(str); }
+    inline string & operator=(const string &s) { clear(); return append(s.___data, s.___size); }
+    inline string & operator+=(const char *str) { return append(str); }
+    inline string & operator+=(const string &s) { return append(s.___data, s.___size); }
+    inline string & operator+=(int ch) { return append(ch); }
+    inline int operator[](size_t n) { return ___data[n]; }
+
+    string &size_data_escape(const void *data, size_t n = 0);
+    string &size_data_escape(int i);
+    string &size_data_escape(long i);
+
+private:
+    void _init_buf(size_t size);
+    int put_do(int ch);
+private:
+    char *___data;
+    unsigned int ___size;
+    unsigned int ___capacity;
+};
+
 /* ################################################################## */
 /* log, 通用 */
-extern std::string var_masterlog_listen;
+extern string var_masterlog_listen;
 extern bool var_log_fatal_catch;
 extern bool var_log_debug_enable;
 extern void (*log_vprintf) (const char *source_fn, size_t line_number, const char *fmt, va_list ap);
@@ -307,14 +357,6 @@ private:
     ___piece_group_t *___space_piece_group_tail;
     rbtree_t ___piece_group_tree;
 };
-
-/* std::string ########################################################## */
-std::string &sprintf_1024(std::string &str, const char *fmt, ...);
-std::string &tolower(std::string &str);
-std::string &toupper(std::string &str);
-std::string &size_data_escape(std::string &str, const void *data, size_t n);
-std::string &size_data_escape(std::string &str, int i);
-std::string &size_data_escape(std::string &str, long i);
 
 /* vector ########################################################## */
 void vector_reserve(size_t, unsigned int *, unsigned int *, char **, size_t);
@@ -463,7 +505,7 @@ public:
     char *dup();
     vector<size_t> &offsets();
 private:
-    std::string *___data;
+    string *___data;
     vector<size_t> ___offsets;
 };
 
@@ -476,7 +518,7 @@ public:
     inline size_t size() const { return ___size; }
     inline char ** data() const { return ___data; }
     inline char * operator[](size_t n) const { return (char *)(___data[n]); }
-    void push_back(const std::string &v);
+    void push_back(const string &v);
     void push_back(const char *v);
     void push_back(const char *v, size_t n);
     void truncate(size_t n);
@@ -542,7 +584,7 @@ public:
     long get_second(const char *key, long def, long min, long max);
     long get_size(const char *key, long def, long min, long max);
     void parse_url_query(const char *query);
-    char *build_url_query(std::string &query, bool strict = true);
+    char *build_url_query(string &query, bool strict = true);
 private:
     rbtree_t ___rbtree;
     unsigned int ___size;
@@ -776,7 +818,7 @@ public:
     size_data_parser(const void *src_data, size_t src_size);
     ~size_data_parser();
     int shift(const char **data, size_t *size);
-    int shift(std::string &data);
+    int shift(string &data);
 private:
     char *ptr;
     size_t left;
@@ -791,8 +833,8 @@ const encode_type var_encode_base32 = 2;
 const encode_type var_encode_qp = 3;
 const encode_type var_encode_unknown = 126;
 
-ssize_t base64_encode(const void *src, size_t src_size, std::string &dest, bool mime_flag = false);
-ssize_t base64_decode(const void *src, size_t src_size, std::string &dest, size_t *dealed_size = 0);
+ssize_t base64_encode(const void *src, size_t src_size, string &dest, bool mime_flag = false);
+ssize_t base64_decode(const void *src, size_t src_size, string &dest, size_t *dealed_size = 0);
 ssize_t base64_encode_get_min_len(size_t in_len, bool mime_flag = false);
 ssize_t base64_decode_get_valid_len(const void *src, size_t src_size);
 class base64_decoder
@@ -800,20 +842,20 @@ class base64_decoder
 public:
     base64_decoder();
     ~base64_decoder();
-    ssize_t decode(const void *src, size_t src_size, std::string &str);
+    ssize_t decode(const void *src, size_t src_size, string &str);
 private:
-    std::string tmpstring;
+    string tmpstring;
     char leftbuf[9];
 };
 
-ssize_t qp_decode_2045(const void *src, size_t src_size, std::string &dest);
-ssize_t qp_decode_2047(const void *src, size_t src_size, std::string &dest);
+ssize_t qp_decode_2045(const void *src, size_t src_size, string &dest);
+ssize_t qp_decode_2047(const void *src, size_t src_size, string &dest);
 ssize_t qp_decode_get_valid_len(const void *src, size_t src_size);
 
 extern char hex_to_dec_table[];
-ssize_t hex_encode(const void *src, size_t src_size, std::string &dest);
-ssize_t hex_decode(const void *src, size_t src_size, std::string &dest);
-ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str);
+ssize_t hex_encode(const void *src, size_t src_size, string &dest);
+ssize_t hex_decode(const void *src, size_t src_size, string &dest);
+ssize_t url_hex_decode(const void *src, size_t src_size, string &str);
 
 size_t ncr_decode(size_t ins, char *wchar);
 
@@ -892,9 +934,9 @@ const char *mime_type_from_filename(const char *filename, const char *def = blan
 /* file ############################################################## */
 ssize_t file_get_size(const char *filename);
 bool file_put_contents(const char *filename, const void *data, size_t len);
-ssize_t file_get_contents(const char *filename, std::string &str);
-ssize_t file_get_contents_sample(const char *filename, std::string &str);
-ssize_t stdin_get_contents(std::string &str);
+ssize_t file_get_contents(const char *filename, string &str);
+ssize_t file_get_contents_sample(const char *filename, string &str);
+ssize_t stdin_get_contents(string &str);
 class file_mmap
 {
 public:
@@ -1019,9 +1061,9 @@ public:
         return ((read_buf_p1<read_buf_p2)?(read_buf[read_buf_p1++]):(get_char_do()));
     }
     ssize_t readn(void *buf, size_t size);
-    ssize_t readn(std::string &str, size_t size);
+    ssize_t readn(string &str, size_t size);
     ssize_t gets(void *buf, size_t size, int delimiter='\n');
-    ssize_t gets(std::string &str, int delimiter = '\n');
+    ssize_t gets(string &str, int delimiter = '\n');
     ssize_t size_data_get_size();
     /* write */
     inline stream &put(int ch) {
@@ -1145,7 +1187,7 @@ public:
     void tls_accept(SSL_CTX * ctx, void (*callback)(async_io &), long timeout);
     SSL *detach_SSL();
     void fetch_rbuf(char *buf, int len);
-    void fetch_rbuf(std::string &dest, int len);
+    void fetch_rbuf(string &dest, int len);
     void read(size_t max_len, void (*callback)(async_io &), long timeout);
     void readn(size_t strict_len, void (*callback)(async_io &), long timeout);
     void read_size_data(void (*callback)(async_io &), long timeout);
@@ -1312,7 +1354,7 @@ ssize_t charset_iconv(const char *from_charset, const char *src, size_t src_len
         , ssize_t omit_invalid_bytes_limit, size_t *omit_invalid_bytes_count);
 
 ssize_t charset_iconv(const char *from_charset, const char *src, size_t src_len
-        , const char *to_charset, std::string &dest
+        , const char *to_charset, string &dest
         , size_t *src_converted_len
         , ssize_t omit_invalid_bytes_limit, size_t *omit_invalid_bytes_count);
 
@@ -1331,9 +1373,9 @@ public:
     basic_finder();
     inline virtual ~basic_finder() {}
     virtual bool open(const char *url) = 0;
-    virtual ssize_t find(const char *query, std::string &result, long timeout) = 0;
+    virtual ssize_t find(const char *query, string &result, long timeout) = 0;
     inline virtual void disconnect() { }
-    bool parse_url(const char *url, std::string &destination, dict &parameters);
+    bool parse_url(const char *url, string &destination, dict &parameters);
 };
 
 class finder
@@ -1343,7 +1385,7 @@ public:
     ~finder();
     bool open(const char *url);
     void close();
-    ssize_t find(const char *query, std::string &result, long timeout);
+    ssize_t find(const char *query, string &result, long timeout);
     inline void disconnect() {if (___fder) ___fder->disconnect(); }
     inline void option_uppercase() { ___uppercase = true; ___lowercase = false; }
     inline void option_lowercase() { ___lowercase = true; ___uppercase = false; }
@@ -1353,7 +1395,7 @@ private:
     bool ___lowercase;
 };
 
-ssize_t finder_once(const char *url, const char *query, std::string &result, long timeout);
+ssize_t finder_once(const char *url, const char *query, string &result, long timeout);
 int finder_main(int argc, char **argv);
 
 extern basic_finder *(*finder_create_extend_fn)(const char *method, const char *url);
@@ -1375,7 +1417,7 @@ public:
     bool open(const char *db_fn);
     bool open(int fd);
     void close();
-    bool find(const void *key, size_t klen, std::string &result);
+    bool find(const void *key, size_t klen, string &result);
     bool find(const void *key, size_t klen, char **val, size_t *vlen);
     inline int get_fd() { return ___fd; }
 private:
@@ -1390,7 +1432,7 @@ public:
     cdb_walker(cdb &db);
     ~cdb_walker();
     bool get_data(char **key, size_t *klen, char **val, size_t *vlen);
-    bool get_data(std::string &key, std::string &val);
+    bool get_data(string &key, string &val);
     void clear();
 private:
     unsigned char *___data;
@@ -1417,12 +1459,12 @@ private:
 class mail_parser_mime;
 class mail_parser;
 
-void mime_iconv(const char *from_charset, const char *data, size_t size, std::string &dest);
+void mime_iconv(const char *from_charset, const char *data, size_t size, string &dest);
 size_t mime_iconv(const char *from_charset, const char *data, size_t size, char *dest, size_t dest_size);
 
-void mime_header_line_unescape(const char *in_str, size_t in_len, std::string &dest);
+void mime_header_line_unescape(const char *in_str, size_t in_len, string &dest);
 size_t mime_header_line_unescape(const char *in_str, size_t in_len, char *dest, size_t dest_size);
-void mime_header_line_get_first_token(const char *in_str, size_t in_len, std::string &value);
+void mime_header_line_get_first_token(const char *in_str, size_t in_len, string &value);
 size_t mime_header_line_get_first_token(const char *in_str, size_t in_len, char **value);
 struct mime_header_line_element_t {
     char charset[32];
@@ -1434,11 +1476,11 @@ typedef struct mime_header_line_element_t mime_header_line_element_t;
 size_t mime_header_line_get_elements(const char *in_str, size_t in_len
         , mime_header_line_element_t * vec, size_t ele_max_count);
 
-void mime_header_line_get_utf8(const char *src_charset_def, const char *in_str, size_t in_len, std::string &dest);
+void mime_header_line_get_utf8(const char *src_charset_def, const char *in_str, size_t in_len, string &dest);
 void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_str, size_t in_len
-        , std::string &dest , bool with_charset = true);
+        , string &dest , bool with_charset = true);
 
-void mime_header_line_get_params(const char *in_str, size_t in_len, std::string &value, dict &params);
+void mime_header_line_get_params(const char *in_str, size_t in_len, string &value, dict &params);
 void mime_header_line_decode_content_type(const char *data, size_t len
         , char **val, size_t *v_len
         , char **boundary, size_t *b_len
@@ -1447,7 +1489,7 @@ void mime_header_line_decode_content_type(const char *data, size_t len
 void mime_header_line_decode_content_disposition(const char *data, size_t len
         , char **val, size_t *v_len
         , char **filename, size_t *f_len
-        , std::string &filename_2231
+        , string &filename_2231
         , bool *filename_2231_with_charset);
 void mime_header_line_decode_content_transfer_encoding(const char *data, size_t len, char **val, size_t *v_len);
 
@@ -1480,7 +1522,7 @@ public:
     mime_address_parser();
     ~mime_address_parser();
     void parse(const char *line, size_t size);
-    bool shift(std::string &name, std::string &address);
+    bool shift(string &name, string &address);
     bool shift(char **name, char **address);
 private:
     char *___cache;
@@ -1527,10 +1569,10 @@ public:
     const vector<size_data_t *> &header_line();
     /* sn == 0: first, sn == -1: last */
     size_t header_line(const char *header_name, char **data, int n = 0);
-    bool header_line(const char *header_name, std::string &result, int n = 0);
+    bool header_line(const char *header_name, string &result, int n = 0);
     bool header_line(const char *header_name, vector<const size_data_t *> &vec);
-    void decoded_content(std::string &dest);
-    void decoded_content_utf8(std::string &dest);
+    void decoded_content(string &dest);
+    void decoded_content_utf8(string &dest);
 /* private: */
     inline mail_parser_mime_inner *get_inner_data() { return ___data; }
 private:
@@ -1579,7 +1621,7 @@ public:
     const vector<size_data_t *> &header_line();
     /* sn == 0: first, sn == -1: last */;
     size_t header_line(const char *header_name, char **data, int n = 0);
-    bool header_line(const char *header_name, std::string &result, int n = 0);
+    bool header_line(const char *header_name, string &result, int n = 0);
     bool header_line(const char *header_name, vector<const size_data_t *> &vec);
 /* private: */
     inline mail_parser_inner *get_inner_data() { return ___data; }
@@ -1647,7 +1689,7 @@ public:
 };
 
 void http_cookie_parse_request(dict &result, const char *raw_cookie);
-void http_cookie_build(std::string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
+void http_cookie_build(string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
 
 extern bool var_httpd_debug;
 struct httpd_upload_file {
@@ -1737,7 +1779,7 @@ extern bool var_sqlite3_proxy_debug;
 class sqlite3_proxy
 {
 public:
-    sqlite3_proxy(const char *_destination, std::string *_cache = 0);
+    sqlite3_proxy(const char *_destination, string *_cache = 0);
     ~sqlite3_proxy();
     bool log(const char *sql, size_t size, long timeout);
     bool exec(const char *sql, size_t size, long timeout);
@@ -1750,7 +1792,7 @@ private:
     bool disconnect(bool tf = false);
     char *destination;
     iostream *fp;
-    std::string *cache;
+    string *cache;
     short int ncolumns;
     bool cache_flag;
 };
@@ -1776,10 +1818,10 @@ public:
     int inc(const char *partition, const char *key, long num, long *result = 0);
     int clear(const char *partition = 0);
     int exists(const char *partition, const char *key);
-    int get(const char *partition, const char *key, std::string &result);
+    int get(const char *partition, const char *key, string &result);
     int get(const char *partition, const char *key, long *result);
 private:
-    int require(char op, const char *partition, const char *key, const char *val, ssize_t vlen, std::string *result);
+    int require(char op, const char *partition, const char *key, const char *val, ssize_t vlen, string *result);
     char *destination;
     iostream *fp;
 };
@@ -1800,7 +1842,7 @@ class json
 {
 public:
     json();
-    json(const std::string &val);
+    json(const string &val);
     json(const char *val);
     json(const char *val, size_t size);
     json(long val);
@@ -1810,7 +1852,7 @@ public:
     bool load_by_filename(const char *filename);
     bool unserialize(const char *jstr);
     bool unserialize(const char *jstr, size_t jsize);
-    void serialize(std::string &result, int flag = 0);
+    void serialize(string &result, int flag = 0);
     inline int get_type() { return ___type; }
     inline bool is_string() { return ___type==json_type_string; }
     inline bool is_long() { return ___type==json_type_long; }
@@ -1828,7 +1870,7 @@ public:
     json *used_for_array();
     json *used_for_object();
     /* get */
-    std::string *get_string_value();
+    string *get_string_value();
     long *get_long_value();
     double *get_double_value();
     bool *get_bool_value();
@@ -1855,7 +1897,7 @@ private:
         bool b;
         long number_long;
         double number_double;
-        char string[sizeof(std::string)];
+        char str[sizeof(string)];
         vector<json *> *v;
         map<json *> *m;
     } ___val;

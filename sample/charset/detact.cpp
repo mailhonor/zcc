@@ -17,7 +17,7 @@ void ___usage(char *arg)
 void dorun(const char *fn)
 {
     char charset[64];
-    std::string content;
+    zcc::string content;
 
     zcc::file_get_contents_sample(fn, content);
 

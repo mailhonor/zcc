@@ -50,7 +50,7 @@ int memkv::inc(const char *partition, const char *key, long num, long *result)
 {
     int r;
     if (result) {
-        std::string v;
+        string v;
         r = require(memkv_op_type_inc, partition, key, (char *)num, -2, &v);
         *result = atoll(v.c_str());
     } else {
@@ -69,22 +69,22 @@ int memkv::exists(const char *partition, const char *key)
     return require(memkv_op_type_clear, partition, key, blank_buffer, 0, 0);
 }
 
-int memkv::get(const char *partition, const char *key, std::string &result)
+int memkv::get(const char *partition, const char *key, string &result)
 {
     return require(memkv_op_type_get, partition, key, blank_buffer, 0, &result);
 }
 
 int memkv::get(const char *partition, const char *key, long *result)
 {
-    std::string v;
+    string v;
     int r = require(memkv_op_type_get, partition, key, blank_buffer, 0, &v);
     *result = atoll(v.c_str());
     return r;
 }
 
-int memkv::require(char op, const char *part, const char *key, const char *val, ssize_t vlen, std::string *result)
+int memkv::require(char op, const char *part, const char *key, const char *val, ssize_t vlen, string *result)
 {
-    std::string instr;
+    string instr;
     instr.push_back(op);
     if (!part) {
         part = blank_buffer;
@@ -92,12 +92,12 @@ int memkv::require(char op, const char *part, const char *key, const char *val, 
     if (!key) {
         key = blank_buffer;
     }
-    size_data_escape(instr, part, strlen(part));
-    size_data_escape(instr, key, strlen(key));
+    instr.size_data_escape(part);
+    instr.size_data_escape(key);
     if (vlen == -2) {
-        size_data_escape(instr, (long)val);
+        instr.size_data_escape((long)val);
     } else {
-        size_data_escape(instr, val, vlen);
+        instr.size_data_escape(val, vlen);
     }
     for (int times = 0; times < 2; times ++) {
         if (times && fp) {
