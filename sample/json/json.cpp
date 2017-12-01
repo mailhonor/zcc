@@ -20,7 +20,7 @@ int main(int argc, char **argv)
         printf("can not open %s (%m)\n", argv[1]);
     }
 
-    zcc::string result;
+    std::string result;
     zcc::json jo;
     jo.unserialize(fmap.data(), fmap.size());
 

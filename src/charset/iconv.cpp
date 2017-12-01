@@ -180,10 +180,10 @@ ssize_t charset_iconv(
     return out_converted_len;
 }
 
-/* string */
+/* std::string */
 ssize_t charset_iconv(
         const char *from_charset, const char *src, size_t src_len
-        , const char *to_charset,  string &dest
+        , const char *to_charset,  std::string &dest
         , size_t *src_converted_len
         , ssize_t omit_invalid_bytes_limit, size_t *omit_invalid_bytes_count
         )
@@ -196,6 +196,7 @@ ssize_t charset_iconv(
     int out_converted_len = 0;
     char *str_running;
     int len_running;
+    dest.clear();
 
     memset(ic, 0, sizeof(charset_iconv_t));
     ic->from_charset = (char *)(from_charset);

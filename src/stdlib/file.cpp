@@ -75,13 +75,14 @@ bool file_put_contents(const char *filename, const void *data, size_t len)
     return true;
 }
 
-ssize_t file_get_contents(const char *filename, string &str)
+ssize_t file_get_contents(const char *filename, std::string &str)
 {
     int fd;
     int errno2;
     ssize_t ret;
     char buf[4096 + 1];
     size_t *rlen = 0;
+    str.clear();
 
     while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
         continue;
@@ -118,8 +119,9 @@ ssize_t file_get_contents(const char *filename, string &str)
     return (ssize_t)rlen;
 }
 
-ssize_t file_get_contents_sample(const char *filename, string &str)
+ssize_t file_get_contents_sample(const char *filename, std::string &str)
 {
+    str.clear();
     ssize_t ret = file_get_contents(filename, str);
     if (ret < 0) {
         zcc_info("ERR load from %s (%m)", filename);
@@ -128,13 +130,14 @@ ssize_t file_get_contents_sample(const char *filename, string &str)
     return ret;
 }
 
-ssize_t stdin_get_contents(string &str)
+ssize_t stdin_get_contents(std::string &str)
 {
     int fd = 0;
     int errno2;
     ssize_t ret;
     char buf[4096 + 1];
     size_t *rlen = 0;
+    str.clear();
 
     while(1) {
         ret = syscall_read(fd, buf, 4096);

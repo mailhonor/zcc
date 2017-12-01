@@ -11,15 +11,9 @@
 int main(int argc, char **argv)
 {
     char *url = 0;
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-url")) {
-            url = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
-
-    if (!url) {
+    zcc::main_parameter_run(argc, argv);
+    url = zcc::default_config.get_str("url");
+    if (zcc::empty(url)) {
         printf("USAGE: %s -url http_url_string\n", argv[0]);
         exit(1);
     }

@@ -16,7 +16,7 @@ namespace zcc
 static void _debug_show_addr(mail_parser *parser, const char *h, const mime_address &addr)
 {
     const char *fmt = "%15s: %s\n";
-    string tmpstr;
+    std::string tmpstr;
     parser->header_line(h, tmpstr);
     printf(fmt, h, tmpstr.c_str());
     printf(fmt, "", addr.address());
@@ -24,17 +24,17 @@ static void _debug_show_addr(mail_parser *parser, const char *h, const mime_addr
     printf(fmt, "", addr.name_utf8());
 }
 
-static void _debug_show_addr_vector(mail_parser *parser, const char *h, const vector<mime_address *> &address)
+static void _debug_show_addr_vector(mail_parser *parser, const char *h, const std::list<mime_address *> &address)
 {
     const char *fmt = "%15s: %s\n";
     char nh[256];
-    string tmpstr;
+    std::string tmpstr;
     int i = 0;
 
     parser->header_line(h, tmpstr);
     printf(fmt, h, tmpstr.c_str());
 
-    zcc_vector_walk_begin(address, addr) {
+    std_list_walk_begin(address, addr) {
         if (i == 0) {
             sprintf(nh, "%s (1)", h);
         } else {
@@ -44,13 +44,13 @@ static void _debug_show_addr_vector(mail_parser *parser, const char *h, const ve
         printf(fmt, nh, addr->address());
         printf(fmt, "", addr->name());
         printf(fmt, "", addr->name_utf8());
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 }
 
 void mail_parser::debug_show()
 {
     const char *fmt = "%15s: %s\n";
-    string tmpstr;
+    std::string tmpstr;
     size_t i = 0;
 
     printf(fmt, "Date", date());
@@ -80,22 +80,22 @@ void mail_parser::debug_show()
     {
         i = 0;
         printf("\n");
-        const vector<char *> &rf = references();
+        const std::list<char *> &rf = references();
         header_line("References", tmpstr);
         printf(fmt, "References", tmpstr.c_str());
-        zcc_vector_walk_begin(rf, r) {
+        std_list_walk_begin(rf, r) {
             if (i==0) {
                 printf(fmt, "References", r);
             } else {
                 printf(fmt, "", r);
             }
             i++;
-        } zcc_vector_walk_end;
+        } std_list_walk_end;
     }
 
-    const vector<mail_parser_mime *> &allm = all_mimes();
+    const std::list<mail_parser_mime *> &allm = all_mimes();
     i = 0;
-    zcc_vector_walk_begin(allm, m) {
+    std_list_walk_begin(allm, m) {
         printf("\n");
         char buf[128];
         sprintf(buf, "Mime (%zd)", i+1);
@@ -119,15 +119,15 @@ void mail_parser::debug_show()
         sprintf(buf, "%zd,%zd,%zd,%zd", m->header_offset(), m->header_size(), m->body_offset(), m->body_size());
         printf(fmt, "", buf);
         i++;
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 
     i = 0;
-    const vector<mail_parser_mime *> &textm = text_mimes();
-    zcc_vector_walk_begin(textm, m) {
+    const std::list<mail_parser_mime *> &textm = text_mimes();
+    std_list_walk_begin(textm, m) {
         printf("\n");
         (*m).decoded_content_utf8(tmpstr);
         printf(fmt, m->type(),  tmpstr.c_str());
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 }
 
 }

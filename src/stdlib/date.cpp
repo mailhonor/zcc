@@ -12,12 +12,14 @@
 namespace zcc
 {
 
-char *build_rfc1123_date_string(long t, char *buf)
+char *build_rfc1123_date_string(long t, std::string &result)
 {
     struct tm tmbuf;
+    char buf[64];
     gmtime_r((time_t *)(&t), &tmbuf);
+    result.append(buf);
     strftime(buf, 32, "%a, %d %b %Y %H:%M:%S GMT", &tmbuf);
-    return buf;
+    return (char *)result.c_str();
 }
 
 }

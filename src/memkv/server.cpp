@@ -55,7 +55,7 @@ struct memkv_node_int_t {
 };
 /* }}} */
 
-static string req_buf;
+static std::string req_buf;
 static char *req_partition, *req_key, *req_val;
 static int req_partition_len, req_key_len, req_val_len;
 static rbtree_t partition_tree;
@@ -502,9 +502,9 @@ void memkvd::simple_service(int fd)
 void memkvd::before_service()
 {
     rbtree_init(&partition_tree, memkv_cmp);
-    node_partition_pmp.option_piece_size(sizeof(memkv_node_partition_t));
-    node_string_pmp.option_piece_size(sizeof(memkv_node_string_t));
-    node_int_pmp.option_piece_size(sizeof(memkv_node_int_t));
+    node_partition_pmp.set_piece_size(sizeof(memkv_node_partition_t));
+    node_string_pmp.set_piece_size(sizeof(memkv_node_string_t));
+    node_int_pmp.set_piece_size(sizeof(memkv_node_int_t));
 }
 /* }}} */
 

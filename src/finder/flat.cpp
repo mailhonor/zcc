@@ -17,7 +17,7 @@ public:
     flat_finder();
     ~flat_finder();
     bool open(const char *url);
-    ssize_t find(const char *query, string &result, long timeout);
+    ssize_t find(const char *query, std::string &result, long timeout);
 private:
     bool load_dict(const char *fn);
     dict ___dict;
@@ -36,21 +36,17 @@ flat_finder::~flat_finder()
 
 bool flat_finder::open(const char *url)
 {
-    string dest;
-    dict dt;
-    if (!parse_url(url, dest, dt)) {
+    http_url urlobj(url);
+    if (zcc::empty(urlobj.get_destination())) {
         return false;
     }
-    if (dest.empty()) {
+    if (!load_dict(urlobj.get_destination())) {
         return false;
     }
-    ___url = strdup(url);
-    if (!load_dict(dest.c_str())) {
-        return false;
-    }
+    ___url = strdup(urlobj.get_destination());
     return true;
 }
-ssize_t flat_finder::find(const char *query, string &result, long timeout)
+ssize_t flat_finder::find(const char *query, std::string &result, long timeout)
 {
     char *v;
     
@@ -111,7 +107,7 @@ bool flat_finder::load_dict(const char *fn)
             len--;
         }
         p[len] = 0;
-        ___dict.update(buf, p);
+        ___dict[buf] = p;
     }
     if (ferror(fp)) {
         zcc_info("finder: create %s, read error(%m)", ___url);

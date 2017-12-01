@@ -49,13 +49,12 @@ static const unsigned char b64dec[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 };
 
-ssize_t base64_encode(const void *src, size_t src_size, string &str, bool mime_flag)
+ssize_t base64_encode(const void *src, size_t src_size, std::string &str, bool mime_flag)
 {
     unsigned char *src_c = (unsigned char *)src;
     char tmp[5]= {0,0,0,0,0};
     size_t src_pos;
     int mime_count = 0;
-    str.clear();
 
     for (src_pos = 0; src_pos < src_size;) {
         tmp[0] = b64enc[src_c[src_pos] >> 2];
@@ -98,7 +97,7 @@ ssize_t base64_encode(const void *src, size_t src_size, string &str, bool mime_f
     return str.size();
 }
 
-ssize_t base64_decode(const void *src, size_t src_size, string &str, size_t *dealed_size)
+ssize_t base64_decode(const void *src, size_t src_size, std::string &str, size_t *dealed_size)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
@@ -108,7 +107,6 @@ ssize_t base64_decode(const void *src, size_t src_size, string &str, size_t *dea
     bool illegal = false;
     bool missing = false;
     size_t dealed_size2 = 0;
-    str.clear();
 
 #define ___get_next_ch(c0123, br)    while(1){ \
     if(src_pos >= src_size){ if(br) {c0123='='; missing = true; break;}  goto over; } \
@@ -234,9 +232,8 @@ base64_decoder::~base64_decoder()
 {
 }
 
-ssize_t base64_decoder::decode(const void *src, size_t src_size, string &str)
+ssize_t base64_decoder::decode(const void *src, size_t src_size, std::string &str)
 {
-    str.clear();
     tmpstring.clear();
     tmpstring.append(leftbuf);
     leftbuf[0] = 0;

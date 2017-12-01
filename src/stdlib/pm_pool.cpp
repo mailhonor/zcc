@@ -72,7 +72,7 @@ pm_pool::~pm_pool()
     }
 }
 
-void pm_pool::option_piece_size(size_t piece_size, size_t element_count_of_group)
+void pm_pool::set_piece_size(size_t piece_size, size_t element_count_of_group)
 {
     if (piece_size  < sizeof(short int)) {
         zcc_fatal("piece_size must >= %zd", sizeof(short int)/2);

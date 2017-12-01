@@ -13,31 +13,33 @@ int main()
     zcc::pm_pool *pm = new zcc::pm_pool();
     pm->option_piece_size(10, 5);
 
-    zcc::list<char *> ms;
+    std::list<char *> ms;
 
     for (size_t i = 0; i < 1000; i++) {
-        ms.push((char *)pm->require());
+        ms.push_back((char *)pm->require());
     }
 
     bool tf = true;
-    zcc_list_walk_begin(ms, p) {
+    std_list_walk_begin(ms, p) {
         if (tf) {
             pm->release(p);
             tf = false;
         } else {
             tf = true;
         }
-    } zcc_list_walk_end;
+    } std_list_walk_end;
 
     tf = false;
-    zcc_list_walk_begin(ms, p) {
+    std_list_walk_begin(ms, p) {
         if (tf) {
             pm->release(p);
             tf = false;
         } else {
             tf = true;
         }
-    } zcc_list_walk_end;
+    } std_list_walk_end;
+
+    delete pm;
 
     return 0;
 }

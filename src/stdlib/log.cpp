@@ -103,7 +103,7 @@ void log_use_syslog(int facility, const char *identity)
 }
 
 /* MASTER LOG ########################################################## */
-string var_masterlog_listen;
+std::string var_masterlog_listen;
 static autobuffer var_masterlog_prefix;
 static int var_masterlog_prefix_len = 0;
 static int var_masterlog_sock = -1;
@@ -127,11 +127,11 @@ static void vprintf_masterlog(const char *source_fn, size_t line_number, const c
     }
     if (left > 1) {
         snprintf(buf + len, left, " [%s:%ld]",  source_fn, (long)line_number);
-        vsnprintf(buf + len, left, fmt, ap);
         tmplen = strlen(buf + len);
         len += tmplen;
         left -= tmplen;
     }
+    buf[len] = 0;
     sendto(var_masterlog_sock,buf,len,0,(struct sockaddr *)(&var_masterlog_client_un),sizeof(struct sockaddr_un));
     free(buf);
 }
@@ -139,7 +139,6 @@ static void vprintf_masterlog(const char *source_fn, size_t line_number, const c
 void log_use_masterlog(const char *dest, const char *facility, const char *identity)
 {
     log_vprintf = vprintf_masterlog;
-
     char buf[256];
     snprintf(buf, 255, "%s,%s,%d,", facility, identity, getpid());
     var_masterlog_prefix.data = strdup(buf);
@@ -161,11 +160,10 @@ void log_use_masterlog(const char *dest, const char *facility, const char *ident
 }
 
 /* log_use_by_config ###################################################### */
-bool log_use_by_config(char *progname)
+bool log_use_by(char *progname, char *log_info)
 {
-    char *zlog = default_config.get_str("zlog", "");
     argv lv;
-    lv.split(zlog, ", ");
+    lv.split(log_info, ", ");
     char *type = lv[0];
     if ((lv.size()== 0) || empty(type)) {
         return false;

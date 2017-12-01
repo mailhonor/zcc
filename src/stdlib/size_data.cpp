@@ -107,9 +107,8 @@ int size_data_parser::shift(const char **data, size_t *size)
     return 1;
 }
 
-int size_data_parser::shift(string &data)
+int size_data_parser::shift(std::string &data)
 {
-    data.clear();
     if (left < 1){
         return 0;
     }

@@ -97,7 +97,7 @@ static double ___chinese_score(const char *fromcode, char *str, int len, int omi
     return ((double)score / (count + omit_invalid_bytes_count));
 }
 
-bool charset_detect(const char *data, size_t len, char *charset_result, const char **charset_list)
+bool charset_detect(const char *data, size_t size, std::string &charset_result, const char **charset_list)
 {
     size_t i;
     ssize_t ret, max_i;
@@ -107,9 +107,10 @@ bool charset_detect(const char *data, size_t len, char *charset_result, const ch
     int out_string_len = 4096 * 5 + 16;
     char out_string[out_string_len + 1];
     size_t converted_len, omit_invalid_bytes_count;
+    charset_result.clear();
 
     list_len = 0;
-    len_to_use = (len>4096?4096:len);
+    len_to_use = (size>4096?4096:size);
     csp = charset_list;
     for (fromcode = *csp; fromcode; csp++, fromcode = *csp) {
         list_len++;
@@ -151,14 +152,14 @@ bool charset_detect(const char *data, size_t len, char *charset_result, const ch
     if (max_i == (ssize_t)-1) {
         return false;
     }
-    strcpy(charset_result, charset_list[max_i]);
+    charset_result.append(charset_list[max_i]);
 
     return true;
 }
 
-bool charset_detect_cjk(const char *data, size_t len, char *charset_result)
+bool charset_detect_cjk(const char *data, size_t size, std::string &charset_result)
 {
-    return charset_detect(data, len, charset_result, charset_cjk);
+    return charset_detect(data, size, charset_result, charset_cjk);
 }
 
 /* ################################################################## */

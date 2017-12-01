@@ -31,8 +31,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    config.update("abc", "SDFfff");
-    config.update("abc", "SDFfff");
+    config["abc"] = "SDFfff";
+    config["abc"] = "SDFfff";
 
     config.debug_show();
 

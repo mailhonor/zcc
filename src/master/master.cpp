@@ -21,21 +21,10 @@
 #include <sys/wait.h>
 #include <time.h>
 
-static inline int ___zcc_flock(int fd, int operation)
-{
-    return flock(fd, operation);
-}
-
-static void ___usage()
-{
-    printf("USAGE: %s\n", zcc::var_progname);
-    exit(1);
-}
-
 namespace zcc
 {
 
-#define zdebug(fmt, args...) {if(debug_mode){zcc_info(fmt, ##args);}}
+#define zdebug(fmt, args...) {if(var_log_debug_enable){zcc_info(fmt, ##args);}}
 
 static void set_signal_handler();
 
@@ -50,18 +39,19 @@ static const int var_masterlog_timeunit_day = 1;
 static const int var_masterlog_timeunit_hour = 1;
 static int var_masterlog_timeunit = 1;
 static int var_masterlog_sock = -1;
-static list<char *> var_masterlog_content_list;
+static std::list<char *> var_masterlog_content_list;
 static pthread_mutex_t var_masterlog_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t var_masterlog_cond = PTHREAD_COND_INITIALIZER;
 struct log_stream{
     long hour_id;
     int fd;
-    string cache;
+    std::string cache;
 };
 typedef struct log_stream log_stream;
-static map<log_stream *> var_masterlog_streams;
+static std::map<std::string, log_stream *> var_masterlog_streams;
+static std::map<std::string, log_stream *>::iterator var_masterlog_streams_iterator;
 
-void log_write_file(int fd, const char *content, size_t clen)
+static void log_write_file(int fd, const char *content, size_t clen)
 {
     size_t wrotelen = 0;
     while (clen > wrotelen) {
@@ -101,12 +91,9 @@ static void log_save_content(char *logcontent)
     *p = 0;
     char *content = p + 1;
 
-    struct timeval tv;
+    time_t tl = time(0);
     struct tm tm;
-    if (gettimeofday(&tv, 0) < 0) {
-        return;
-    }
-    if (!gmtime_r(&(tv.tv_sec), &tm)) {
+    if (!localtime_r(&tl, &tm)) {
         return;
     }
     long hour_id;
@@ -115,12 +102,15 @@ static void log_save_content(char *logcontent)
     } else {
         hour_id = tm.tm_year * (100 * 100 * 100) + tm.tm_mon * (100 * 100) + tm.tm_mday * 100;
     }
-    if (!var_masterlog_streams.find(fileid, &stream)) {
+    var_masterlog_streams_iterator = var_masterlog_streams.find(fileid);
+    if (var_masterlog_streams_iterator == var_masterlog_streams.end()) {
         stream = new log_stream();
         stream->fd = -1;
         stream->hour_id = 0;
         stream->cache.reserve(1024 * 100);
-        var_masterlog_streams.update(fileid, stream, 0);
+        var_masterlog_streams[fileid] = stream;
+    } else {
+        stream = var_masterlog_streams_iterator->second;
     }
     if (stream->hour_id != hour_id) {
         if (stream->fd != -1) {
@@ -147,7 +137,7 @@ static void log_save_content(char *logcontent)
             return;
         }
     }
-    stream->cache.printf_1024("%02d:%02d %s[%s] ", tm.tm_min, tm.tm_sec, identity, pids);
+    sprintf_1024(stream->cache, "%02d:%02d:%02d %s[%s] ", tm.tm_hour, tm.tm_min, tm.tm_sec, identity, pids);
     stream->cache.append(content);
     stream->cache.append("\n");
     if (stream->cache.size() > 1024 * (100 -1)) {
@@ -158,20 +148,20 @@ static void log_save_content(char *logcontent)
 
 static void log_flush_all()
 {
-    zcc_map_walk_begin(var_masterlog_streams, fileid, stream) {
+    std_map_walk_begin(var_masterlog_streams, fileid, stream) {
         if ((stream->fd != -1) && (stream->cache.size())) {
             log_write_file(stream->fd, stream->cache.c_str(), stream->cache.size());
         }
         stream->cache.clear();
-    } zcc_map_walk_end;
+    } std_map_walk_end;
 
     if (___log_stop) {
-        zcc_map_walk_begin(var_masterlog_streams, fileid, stream) {
+        std_map_walk_begin(var_masterlog_streams, fileid, stream) {
             if (stream->fd != -1) {
                 close(stream->fd);
             }
             delete stream;
-        } zcc_map_walk_end;
+        } std_map_walk_end;
         var_masterlog_streams.clear();
     }
 }
@@ -184,13 +174,14 @@ static void *log_save_pthread(void *arg)
     char *logcontent;
     while(1) {
         cond_timeout.tv_sec = time(0) + 1;
-        cond_timeout.tv_nsec = 0;
+        cond_timeout.tv_nsec = 300;
         pthread_cond_timedwait(&var_masterlog_cond, &var_masterlog_mutex, &cond_timeout);
         zcc_pthread_unlock(&var_masterlog_mutex);
 
-        while (var_masterlog_content_list.size()) {
+        while (!var_masterlog_content_list.empty()) {
             zcc_pthread_lock(&var_masterlog_mutex);
-            var_masterlog_content_list.shift(&logcontent);
+            logcontent = var_masterlog_content_list.front();
+            var_masterlog_content_list.pop_front();
             zcc_pthread_unlock(&var_masterlog_mutex);
             log_save_content(logcontent);
             free(logcontent);
@@ -198,12 +189,12 @@ static void *log_save_pthread(void *arg)
 
         if (time(0) > last_stamp) {
             log_flush_all();
+            last_stamp = time(0) + 1;
         }
         if (___log_stop) {
             log_flush_all();
             break;
         }
-        last_stamp = time(0) + 10;
     }
     return 0;
 }
@@ -296,7 +287,7 @@ static void *log_recv_pthread(void *arg)
 
         char *buf_insert = (char *)memdupnull(logbuf, num);
         zcc_pthread_lock(&var_masterlog_mutex);
-        var_masterlog_content_list.push(buf_insert);
+        var_masterlog_content_list.push_back(buf_insert);
         zcc_pthread_unlock(&var_masterlog_mutex);
         pthread_cond_signal(&var_masterlog_cond);
         if (___log_stop) {
@@ -319,13 +310,12 @@ public:
     inline server_info(){ proc_limit = proc_count = 0; stamp_next_start = 0; }
     inline ~server_info() { }
     void start_all();
-    string config_fn;
-    string cmd;
-    string module;
+    std::string config_fn;
+    std::string cmd;
     int proc_limit;
     int proc_count;
     long stamp_next_start;
-    lmap<listen_pair *> listens;
+    std::map<int, listen_pair *> listens;
 };
 
 class listen_pair
@@ -335,7 +325,7 @@ public:
     ~listen_pair();
     void set_unused();
     bool used;
-    string service_name;
+    std::string service_name;
     int fd;
     int iuf;
     server_info *server;
@@ -352,15 +342,15 @@ public:
     long stamp;
 };
 
-static bool debug_mode = 0;
 static int sighup_reload_on = 0;
-string config_path;
+static int sigterm_stop_on = 0;
+std::string config_path;
 
 static int ___reload_sig = SIGHUP;
 static int master_status_fd[2];
-static map<listen_pair *> listen_pair_map;
-static lmap<child_status *> child_status_map;
-static vector<server_info *> server_vector;
+static std::map<std::string, listen_pair *> listen_pair_map;
+static std::map<int, child_status *> child_status_map;
+static std::list<server_info *> server_vector;
 
 static void start_one_child(server_info *server);
 
@@ -458,7 +448,7 @@ static void start_one_child(server_info *server)
         cs->status_ev.set_context(cs);
         cs->status_ev.enable_read(child_strike);
         cs->stamp = timeout_set(0);
-        child_status_map.update(cs->fd, cs, 0);
+        child_status_map[cs->fd] = cs;
         return;
     } else {
         argv exec_argv;
@@ -473,39 +463,37 @@ static void start_one_child(server_info *server)
         close(master_status_fd[1]);
 
         exec_argv.push_back(server->cmd);
-        exec_argv.push_back("-M");
+        exec_argv.push_back("--MASTER");
 
         if (!config_path.empty()) {
-            exec_argv.push_back("-global_config");
+            exec_argv.push_back("-server-config-path");
             exec_argv.push_back(config_path.c_str());
 
             if (!server->config_fn.empty()) {
-                exec_argv.push_back("--c");
+                exec_argv.push_back("-config");
                 snprintf(buf, 4096, "%s/%s", config_path.c_str(), server->config_fn.c_str());
                 exec_argv.push_back(buf);
             }
         }
-        if (!server->module.empty()) {
-            exec_argv.push_back("--module");
-            exec_argv.push_back(server->module);
-        }
 
         if (var_masterlog_enable) {
-            exec_argv.push_back("-log-listen");
+            exec_argv.push_back("-master-log-listen");
             exec_argv.push_back(var_masterlog_listen.c_str());
         }
 
         int fdnext = var_master_server_listen_fd;
-        zcc_lmap_walk_begin(server->listens, fd, lp2) {
-            char iuffd[111];
+        std::string service_fork;
+        std_map_walk_begin(server->listens, fd, lp2) {
             dup2(lp2->fd, fdnext);
             close(lp2->fd);
-            snprintf(iuffd, 100, "-s%s", lp2->service_name.c_str());
-            exec_argv.push_back(iuffd);
-            sprintf(iuffd, "%c%d", lp2->iuf, fdnext);
-            exec_argv.push_back(iuffd);
+            sprintf_1024(service_fork, "%s:%c%d,", lp2->service_name.c_str(), lp2->iuf, fdnext);
             fdnext++;
-        } zcc_list_walk_end;
+        } std_map_walk_end;
+        if (service_fork.size() > 1) {
+            service_fork.resize(service_fork.size()-1);
+            exec_argv.push_back("-server-service");
+            exec_argv.push_back(service_fork.c_str());
+        }
 
         execvp(server->cmd.c_str(), (char **)(memdup(exec_argv.data(), (exec_argv.size() + 1) * sizeof(char *))));
 
@@ -515,46 +503,44 @@ static void start_one_child(server_info *server)
 
 static void remove_old_child(master &ms)
 {
-    zcc_lmap_walk_begin(child_status_map, pid, cs) {
+    std_map_walk_begin(child_status_map, pid, cs) {
         int fd = cs->fd;
         delete cs;
         close(fd);
-    } zcc_list_walk_end;
+    } std_map_walk_end;
     child_status_map.clear();
 }
 
 static void remove_server(master &ms)
 {
-    zcc_vector_walk_begin(server_vector, info) {
+    std_list_walk_begin(server_vector, info) {
         delete info;
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
     server_vector.clear();
 }
 
 static void set_listen_unused(master &ms)
 {
-    zcc_map_walk_begin(listen_pair_map, key, lp) {
+    std_map_walk_begin(listen_pair_map, key, lp) {
         lp->set_unused();
-    } zcc_map_walk_end;
+    } std_map_walk_end;
 }
 
 static void prepare_server_by_config(config *cf)
 {
-    char *cmd, *listen, *fn, *module;
+    char *cmd, *listen, *fn;
     server_info *server;
-    cmd = cf->get_str("zcmd", "");
-    listen = cf->get_str("zlisten", "");
+    cmd = cf->get_str("server-command", "");
+    listen = cf->get_str("server-service", "");
     if (empty(cmd) || empty(listen)) {
         return;
     }
-    fn = cf->get_str("z___Z_0428_fn", "");
-    module = cf->get_str("zmodule", "");
+    fn = cf->get_str("___Z_0428_fn", "");
     server = new server_info();
     server_vector.push_back(server);
     server->config_fn = fn;
     server->cmd = cmd;
-    server->module = module;
-    server->proc_limit = cf->get_int("zproc_limit", 1, 1, 1000);
+    server->proc_limit = cf->get_int("server-proc-count", 1, 1, 1000);
     server->proc_count = 0;
 
     /* listens */
@@ -578,14 +564,17 @@ static void prepare_server_by_config(config *cf)
         }
 
         listen_pair *lp;
-        if (!listen_pair_map.find(uri, &lp)){
+        std::map<std::string, zcc::listen_pair*>::iterator pit = listen_pair_map.find(uri);
+        if (pit == listen_pair_map.end()) {
             lp = new listen_pair();
-            listen_pair_map.update(uri, lp, 0);
+            listen_pair_map[uri] = lp;
             lp->fd = zcc::listen(uri, (int *)&(lp->iuf));
             if (lp->fd < 0) {
                 zcc_fatal("master: open %s error\n", uri);
             }
             close_on_exec(lp->fd);
+        } else {
+            lp = pit->second;
         }
         if (lp->used) {
             zcc_fatal("master: open %s twice", uri);
@@ -593,13 +582,13 @@ static void prepare_server_by_config(config *cf)
         lp->used = true;
         lp->service_name = service;
         lp->server = server;
-        server->listens.update(lp->fd, lp, 0);
+        server->listens[lp->fd] = lp;
     }
 }
 
 static void reload_config(master &ms)
 {
-    vector<config *> cfs;
+    std::list<config *> cfs;
 
     ms.load_server_config(cfs);
     if (___load_server_config_flag) {
@@ -609,22 +598,22 @@ static void reload_config(master &ms)
         ms.load_server_config_from_dir(config_path.c_str(), cfs);
     }
 
-    zcc_vector_walk_begin(cfs, cf) {
+    std_list_walk_begin(cfs, cf) {
         prepare_server_by_config(cf);
         delete cf;
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 }
 
 static void release_unused_listen(master &ms)
 {
     argv delete_list;
-    zcc_map_walk_begin(listen_pair_map, key, lp) {
+    std_map_walk_begin(listen_pair_map, key, lp) {
         if (lp->used) {
             continue;
         }
         delete_list.push_back(key);
         delete lp;
-    } zcc_map_walk_end;
+    } std_map_walk_end;
     zcc_argv_walk_begin(delete_list, key) {
         listen_pair_map.erase(key);
     } zcc_argv_walk_end;
@@ -636,9 +625,9 @@ static void start_all_child(master &ms)
     if (timeout_set(0) < ___next_start_all_child_stamp) {
         return;
     }
-    zcc_vector_walk_begin(server_vector, info) {
+    std_list_walk_begin(server_vector, info) {
         info->start_all();
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
     ___next_start_all_child_stamp = timeout_set(0) + 100;
 }
 
@@ -673,7 +662,7 @@ static bool master_lock_pfile(char *lock_file)
     }
     close_on_exec(lock_fd);
 
-    if (___zcc_flock(lock_fd, LOCK_EX | LOCK_NB) < 0) {
+    if (::flock(lock_fd, LOCK_EX | LOCK_NB) < 0) {
         close(lock_fd);
         return false;
     } else {
@@ -693,10 +682,19 @@ static void sighup_handler(int sig)
     sighup_reload_on = sig;
 }
 
+static void sigterm_handler(int sig)
+{
+    sigterm_stop_on = sig;
+}
+
 static void set_signal_handler()
 {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
+
+    signal(SIGTERM, sigterm_handler);
+
+
     struct sigaction sig;
     sigemptyset(&sig.sa_mask);
     sig.sa_flags = 0;
@@ -710,48 +708,19 @@ static bool ___init_flag = false;
 static void init_all(master &ms, int argc, char **argv)
 {
     char *lock_file = 0;
-    int try_lock = 0;
+    bool try_lock = false;
 
     if (___init_flag) {
         zcc_fatal("master: master::run only permit be excuted once");
     }
     ___init_flag = true;
 
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-t")) {
-            try_lock = 1;
-            opti+=1;
-            continue;
-        }
-        if (!strcmp(optname, "-d")) {
-            debug_mode = 1;
-            opti+=1;
-            continue;
-        }
-        if (!optval) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-c")) {
-            config_path = optval;
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-p")) {
-            lock_file = optval;
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-log-service")) {
-            var_masterlog_service = optval;
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-log")) {
-            default_config.update("zcc_log", optval);
-            opti+=2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    main_parameter_run(argc, argv);
+
+    try_lock = default_config.get_bool("try-lock", false); 
+    config_path = default_config.get_str("C", "");
+    lock_file = default_config.get_str("pid-file", "");
+    var_masterlog_service = default_config.get_str("log-service");
 
     if (empty(lock_file)) {
         lock_file = (char *)"master.pid";
@@ -794,20 +763,19 @@ static void init_all(master &ms, int argc, char **argv)
     close_on_exec(master_status_fd[0]);
 
     /* SELF LOG */
-    if (!var_test_mode) {
-        log_use_by_config(argv[0]);
-    }
+    log_use_by(argv[0], default_config.get_str("server-log"));
 }
 
 static void fini_all(master &ms)
 {
+    ___log_stop = true;
+    pthread_cond_signal(&var_masterlog_cond);
+
     remove_old_child(ms);
     remove_server(ms);
     set_listen_unused(ms);
     release_unused_listen(ms);
-    ___log_stop = true;
-    pthread_cond_signal(&var_masterlog_cond);
-    msleep(100);
+    msleep(1000);
 }
 
 
@@ -827,13 +795,11 @@ void master::run(int argc, char **argv)
     before_service_for_enduser();
     sighup_reload_on = 0;
     while (1) {
+        if (sigterm_stop_on) {
+            break;
+        }
         if (___event_loop_flag) {
             event_loop();
-        }
-        if (var_proc_timeout) {
-            if (time(0) * 1000 > var_proc_timeout) {
-                break;
-            }
         }
         default_evbase.dispatch(100);
         if (sighup_reload_on) {
@@ -846,7 +812,7 @@ void master::run(int argc, char **argv)
     fini_all(*this);
 }
 
-void master::load_server_config_from_dir(const char *config_path, vector<config *> &cfs)
+void master::load_server_config_from_dir(const char *config_path, std::list<config *> &cfs)
 {
     DIR *dir;
     struct dirent ent, *ent_list;
@@ -872,13 +838,13 @@ void master::load_server_config_from_dir(const char *config_path, vector<config 
         cf = new config();
         snprintf(pn, 4096, "%s/%s", config_path, fn);
         cf->load_by_filename(pn);
-        cf->update("z___Z_0428_fn", fn);
+        (*cf)["___Z_0428_fn"] =  fn;
         cfs.push_back(cf);
     }
     closedir(dir);
 }
 
-void master::load_server_config(vector<config *> &cfs)
+void master::load_server_config(std::list<config *> &cfs)
 {
     ___load_server_config_flag = true;
 }

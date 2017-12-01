@@ -10,7 +10,7 @@
 
 void ___usage(const char *p = 0)
 {
-    printf("USAGE: %s --l address\n", zcc::var_progname);
+    printf("USAGE: %s --zlisten address\n", zcc::var_progname);
     exit(1);
 }
 
@@ -55,12 +55,7 @@ void *do_listen(void *context)
 
 int main(int argc, char **argv)
 {
-    zcc::var_progname = argv[0];
-    zcc_main_parameter_begin() {
-        if (!optval) {
-            ___usage();
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
     zcc::coroutine_base_init();
     zcc::coroutine_go(do_listen, 0);
     zcc::coroutine_base_loop();

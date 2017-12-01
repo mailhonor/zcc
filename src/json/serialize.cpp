@@ -16,7 +16,7 @@ namespace zcc
 
 bool json::load_by_filename(const char *filename)
 {
-    string content;
+    std::string content;
     if (file_get_contents(filename, content) < 0) {
         return false;
     }
@@ -61,7 +61,7 @@ static inline size_t ___ncr_decode(size_t ins, char *wchar)
     return 0;
 }
 
-static inline bool ___fetch_string(char *&ps, char *str_end, string &str)
+static inline bool ___fetch_string(char *&ps, char *str_end, std::string &str)
 {
     char begin = *ps ++, ch, ch2, ch3;
     while (ps < str_end) {
@@ -135,7 +135,7 @@ static inline bool ___fetch_string(char *&ps, char *str_end, string &str)
     return false;
 }
 
-static inline bool ___fetch_string2(char *&ps, char *str_end, string &str)
+static inline bool ___fetch_string2(char *&ps, char *str_end, std::string &str)
 {
     char ch;
     while (ps < str_end) {
@@ -155,9 +155,9 @@ static inline bool ___fetch_string2(char *&ps, char *str_end, string &str)
 static bool json_unserialize(json *j, const char *jstr, size_t jsize)
 {
     j->reset();
-    string tmpkey(128, 0);
+    std::string tmpkey(128, 0);
     char *ps = (char *)jstr, *str_end = ps + jsize;
-    vector<json *> json_vec;
+    std::vector<json *> json_vec;
     json_vec.push_back(j);
     json *current_json, *new_json, *old_json;
     while(ps < str_end) {
@@ -165,9 +165,11 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
         if (ps == str_end) {
             break;
         }
-        if (!json_vec.pop(&current_json)) {
+        if (json_vec.empty()) {
             break;
         }
+        current_json = json_vec.back();
+        json_vec.pop_back();
         if (current_json->is_object()) {
             int comma_count = 0;
             while(ps < str_end) {
@@ -188,7 +190,7 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
                 ps ++;
                 continue;
             }
-            if ((current_json->get_object_size()>0) && (comma_count == 0)) {
+            if ((current_json->object_get_size()>0) && (comma_count == 0)) {
                 return false;
             }
             tmpkey.clear();
@@ -198,7 +200,7 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
                 ___fetch_string2(ps, str_end, tmpkey);
             }
             new_json = new json();
-            current_json->set_object_element(tmpkey.c_str(), new_json, &old_json);
+            current_json->object_add_element(tmpkey.c_str(), new_json, &old_json);
             if (old_json) {
                 delete old_json;
                 return false;
@@ -234,20 +236,20 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
             if (*ps == ']') {
                 for (int i = 0; i < comma_count; i++) {
                     new_json = new json();
-                    current_json->push_back_array(new_json);
+                    current_json->array_add_element(new_json);
                 }
                 ps ++;
                 continue;
             }
             for (int i = 0; i < comma_count -1; i++) {
                 new_json = new json();
-                current_json->push_back_array(new_json);
+                current_json->array_add_element(new_json);
             }
-            if ((current_json->get_array_size() >0) && (comma_count < 1)){
+            if ((current_json->array_get_size() >0) && (comma_count < 1)){
                 return false;
             }
             new_json = new json();
-            current_json->push_back_array(new_json);
+            current_json->array_add_element(new_json);
             json_vec.push_back(current_json);
             json_vec.push_back(new_json);
             continue;
@@ -267,11 +269,11 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
         if ((*ps == '"') || (*ps == '\'')) {
             tmpkey.clear();
             ___fetch_string(ps, str_end, tmpkey);
-            string *val = current_json->get_string_value();
-            if (val == 0) {
+            if((!current_json->is_string()) && (!current_json->is_null())) {
                 return false;
             }
-            *val = tmpkey;
+            std::string &val = current_json->get_string_value();
+            val = tmpkey;
             tmpkey.clear();
             continue;
         }
@@ -291,10 +293,10 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
             }
             if (is_double) {
                 current_json->used_for_double();
-                (*current_json->get_double_value()) = atof(tmpkey.c_str());
+                current_json->get_double_value() = atof(tmpkey.c_str());
             } else {
                 current_json->used_for_long();
-                (*current_json->get_long_value()) = atol(tmpkey.c_str());
+                current_json->get_long_value() = atol(tmpkey.c_str());
             }
             continue;
         }
@@ -316,11 +318,11 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
             continue;
         }
         if (!strcmp(tmpkey.c_str(), "true")) {
-            (*current_json->used_for_bool()->get_bool_value()) = true;
+            current_json->used_for_bool()->get_bool_value() = true;
             continue;
         }
         if (!strcmp(tmpkey.c_str(), "false")) {
-            (*current_json->used_for_bool()->get_bool_value()) = false;
+            current_json->used_for_bool()->get_bool_value() = false;
             continue;
         }
         return false;
@@ -328,6 +330,7 @@ static bool json_unserialize(json *j, const char *jstr, size_t jsize)
 
     return true;
 }
+
 bool json::unserialize(const char *jstr)
 {
     bool r = json_unserialize(this, jstr, strlen(jstr));
@@ -346,7 +349,7 @@ bool json::unserialize(const char *jstr, size_t jsize)
     return r;
 }
 
-static inline void ___serialize_string(string &result, const char *data, size_t size)
+static inline void ___serialize_string(std::string &result, const char *data, size_t size)
 {
     result.push_back('"');
     char *ps = (char *)data;
@@ -383,64 +386,71 @@ static inline void ___serialize_string(string &result, const char *data, size_t 
     result.push_back('"');
 }
 
-static inline void ___serialize_string(string &result, const string &str)
+static inline void ___serialize_string(std::string &result, const std::string &str)
 {
     ___serialize_string(result, str.c_str(), str.size());
 }
 
-void json::serialize(string &result, int flag)
+void json::serialize(std::string &result, int flag)
 {
     json *current_json;
     size_t idx = 0;
-    json_object_walker *rbnode = 0, *rbnext;
-    vector<json *> json_vec;
-    vector<size_t> idx_vec;
-    vector<json_object_walker *> rbnode_vec;
+    std::map<std::string, json *>::iterator map_it, map_it_next;
+    std::vector<json *> json_vec;
+    std::vector<size_t> array_vec;
+    std::vector<std::map<std::string, json *>::iterator> object_vec;
+    std::map<std::string, json*> virutal_object;
     json_vec.push_back(this);
-    idx_vec.push_back(0);
-    rbnode_vec.push_back(0);
+    array_vec.push_back(0);
+    object_vec.push_back(virutal_object.end());
 
     while(1) {
-        if (!json_vec.pop(&current_json)) {
+        if (json_vec.empty()) {
             break;
         }
-        idx_vec.pop(&idx);
-        rbnode_vec.pop(&rbnode);
+        current_json = json_vec.back();
+        json_vec.pop_back();
+        idx = array_vec.back();
+        array_vec.pop_back();
+        map_it = object_vec.back();
+        object_vec.pop_back();
+
         if (current_json->is_null()) {
             current_json = 0;
-            if (json_vec.size()>0) {
+            if (!json_vec.empty()) {
                 current_json = json_vec[json_vec.size()-1];
             }
             if ((current_json==0) || (!current_json->is_array())) {
                 result.append("null");
             } else {
+                result.append("null");
                 /* like [1,,3] == [1,null,3] */
             }
             continue;
         }
         if (current_json->is_string()) {
-            ___serialize_string(result, *(current_json->get_string_value()));
+            ___serialize_string(result, current_json->get_string_value());
             continue;
         }
         if (current_json->is_bool()) {
-            result.append((*(current_json->get_bool_value()))?"true":"false");
+            result.append((current_json->get_bool_value())?"true":"false");
             continue;
         }
         if (current_json->is_long()) {
-            result.printf_1024("%ld", *(current_json->get_long_value()));
+            sprintf_1024(result, "%ld", current_json->get_long_value());
             continue;
         }
         if (current_json->is_double()) {
-            long l = *(current_json->get_double_value());
+            long l = current_json->get_double_value();
             if ((l > 1000 * 1000 * 1000 * 1000L) || (l < -1000 * 1000 * 1000 * 1000L)){
-                result.printf_1024("%e", l);
+                sprintf_1024(result, "%e", l);
             } else {
-                result.printf_1024("%ld", l);
+                sprintf_1024(result, "%ld", l);
             }
             continue;
         }
         if (current_json->is_array()) {
-            size_t length = current_json->get_array_size();
+            size_t length = current_json->array_get_size();
             if (length == 0) {
                 result.append("[]");
                 continue;
@@ -448,55 +458,58 @@ void json::serialize(string &result, int flag)
             if (idx == 0) {
                 result.push_back('[');
                 json_vec.push_back(current_json);
-                idx_vec.push_back(idx+1);
-                rbnode_vec.push_back(0);
+                idx++;
+                array_vec.push_back(idx);
+                object_vec.push_back(virutal_object.end());
                 continue;
             }
             if (idx == length + 1) {
                 result.push_back(']');
                 continue;
             }
-            if ((idx >1) && (idx < length+1)) {
+            if ((idx >1) && (idx < length + 1)) {
                 result.push_back(',');
             }
             json_vec.push_back(current_json);
-            idx_vec.push_back(idx+1);
-            rbnode_vec.push_back(0);
+            array_vec.push_back(idx+1);
+            object_vec.push_back(virutal_object.end());
             
-            json_vec.push_back(current_json->get_array_element(idx-1));
-            idx_vec.push_back(0);
-            rbnode_vec.push_back(0);
+            json_vec.push_back(current_json->array_get_element(idx-1));
+            array_vec.push_back(0);
+            object_vec.push_back(virutal_object.end());
             continue;
         }
         if (current_json->is_object()) {
-            if (current_json->get_object_size() == 0) {
+            if (current_json->object_get_size() == 0) {
                 result.append("{}");
                 continue;
             }
-            if (rbnode == 0) {
+            if ((map_it == virutal_object.end())||(map_it == current_json->___val.m->end())) {
                 if (idx == 0) {
                     result.push_back('{');
-                    rbnext = current_json->get_object_first_walker();
+                    map_it_next = current_json->___val.m->begin();
                     json_vec.push_back(current_json);
-                    idx_vec.push_back(1);
-                    rbnode_vec.push_back(rbnext);
+                    array_vec.push_back(1);
+                    object_vec.push_back(map_it_next);
                     continue;
                 } else {
                     result.push_back('}');
                     continue;
                 }
             } else {
-                if (rbnode != current_json->get_object_first_walker()) {
+                if (map_it != current_json->___val.m->begin()) {
                     result.push_back(',');
                 }
                 json_vec.push_back(current_json);
-                idx_vec.push_back(1);
-                rbnode_vec.push_back(rbnode->next());
-                ___serialize_string(result, rbnode->key(), strlen(rbnode->key()));
+                array_vec.push_back(1);
+                map_it_next = map_it;
+                map_it_next++;
+                object_vec.push_back(map_it_next);
+                ___serialize_string(result, map_it->first.c_str(), map_it->first.size());
                 result.push_back(':');
-                json_vec.push_back(rbnode->value());
-                idx_vec.push_back(0);
-                rbnode_vec.push_back(0);
+                json_vec.push_back(map_it->second);
+                array_vec.push_back(0);
+                object_vec.push_back(virutal_object.end());
                 continue;
             }
             continue;

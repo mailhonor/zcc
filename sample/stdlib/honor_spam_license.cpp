@@ -17,30 +17,14 @@ static void ___usage(char *arg = 0)
 
 int main(int argc, char **argv)
 {
-    char *salt = const_cast<char *>("spam.mailhonor.com");
+    char *salt = 0;
     char *mac = 0;
     char *license = 0;
 
-    zcc_main_parameter_begin() {
-        if (!optval) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-salt")) {
-            salt = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-mac")) {
-            mac = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-license")) {
-            license = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    salt = zcc::default_config.get_str("salt", "spam.mailhonor.com");
+    mac = zcc::default_config.get_str("mac", 0);
+    license = zcc::default_config.get_str("license", 0);
 
     if (zcc::empty(salt)) {
         ___usage();
@@ -51,9 +35,9 @@ int main(int argc, char **argv)
     }
 
     if (mac) {
-        char nlicense[32];
+        std::string nlicense;
         zcc::license_mac_build(salt, mac, nlicense);
-        printf("%s\n", nlicense);
+        printf("%s\n", nlicense.c_str());
     } else {
         if (zcc::license_mac_check(salt, license)) {
             printf("OK\n");

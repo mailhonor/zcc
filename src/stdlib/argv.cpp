@@ -25,7 +25,7 @@ argv::~argv()
     free(___data);
 }
 
-void argv::push_back(const string &v)
+void argv::push_back(const std::string &v)
 {
     ___append(memdupnull(v.c_str(), v.size()));
 }
@@ -65,7 +65,7 @@ void argv::split(const char *str, const char *delim)
     strtok splitor;
     splitor.set_str(str);
     while (splitor.tok(delim)) {
-        push_back(memdupnull(splitor.ptr(), splitor.size()));
+        ___append(memdupnull(splitor.ptr(), splitor.size()));
     }
 }
 

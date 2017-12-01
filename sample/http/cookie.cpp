@@ -11,15 +11,10 @@
 int main(int argc, char **argv)
 {
     char *cookie = 0;
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-cookie")) {
-            cookie = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    cookie = zcc::default_config.get_str("cookie");
 
-    if (!cookie) {
+    if (zcc::empty(cookie)) {
         printf("USAGE: %s -cookie http_cookie_string\n", argv[0]);
         exit(1);
     }

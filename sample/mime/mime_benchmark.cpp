@@ -56,28 +56,16 @@ static char *hunman_size2(long a)
 
 int main(int argc, char **argv)
 {
+    zcc::main_parameter_run(argc, argv);
     char *eml_fn = 0, *eml_data;
     int times = 1000, i, eml_size;
-    zcc::string eml_data_buf;
+    std::string eml_data_buf;
     long t;
 
-    zcc_main_parameter_begin() {
-        if (!optval) {
-            ___usage(0);
-        }
-        if (!strcmp(optname, "-loop")) {
-            times = atoi(optval);
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-f")) {
-            eml_fn = optval;
-            opti+=2;
-            continue;
-        }
-    } zcc_main_parameter_end;;
+    times = zcc::default_config.get_int("loop", 1000, 1, 100000);
+    eml_fn = zcc::default_config.get_str("f");
 
-    if (!eml_fn) {
+    if (zcc::empty(eml_fn)) {
         ___usage(0);
     }
 

@@ -29,7 +29,7 @@ static void ___mime_section(mail_parser_inner * parser, mail_parser_mime_inner *
     mail_parser_mime_inner *cm, *fm;
     argv zav;
     mime_parser_cache_magic mcm(parser->mcm);
-    string &zb = mcm.require_string();
+    std::string &zb = mcm.require_string();
 
     mime->imap_section = gmp.strdup(section);
 

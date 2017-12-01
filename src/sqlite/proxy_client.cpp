@@ -11,11 +11,11 @@
 namespace zcc
 {
 
-#define proxy_set_errmsg(fmt, args...)      cache->printf_1024(fmt, ##args)
+#define proxy_set_errmsg(fmt, args...)      sprintf_1024(*cache, fmt, ##args)
 
 bool var_sqlite3_proxy_set_errmsg = false;
 
-sqlite3_proxy::sqlite3_proxy(const char *_destination, string *_cache)
+sqlite3_proxy::sqlite3_proxy(const char *_destination, std::string *_cache)
 {
     destination = strdup(_destination);
     fp = 0;
@@ -23,7 +23,7 @@ sqlite3_proxy::sqlite3_proxy(const char *_destination, string *_cache)
         cache = cache;
         cache_flag = false;
     } else {
-        cache = new string();
+        cache = new std::string();
         cache_flag = true;
     }
 }
@@ -53,7 +53,7 @@ bool sqlite3_proxy::connect()
             if(fd < 0) {
                 continue;
             }
-            fp = new iostream(fd);
+            fp = new stream(fd);
             break;
         }
     }
@@ -79,7 +79,7 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int slen;
-    string &cbuf = *cache;
+    std::string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -88,9 +88,6 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
         return false;
     }
 
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
     fp->set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
@@ -111,7 +108,7 @@ bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int len, slen;
-    string &cbuf = *cache;
+    std::string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -120,9 +117,6 @@ bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
         return false;
     }
 
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
     fp->set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
@@ -157,7 +151,7 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int len, slen;
-    string &cbuf = *cache;
+    std::string &cbuf = *cache;
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -165,9 +159,6 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
 
     if (!connect() < 0) {
         return false;
-    }
-    if (timeout < 1) {
-        timeout = var_long_max;
     }
     fp->set_timeout(timeout);
 
@@ -207,7 +198,7 @@ int sqlite3_proxy::get_row(size_data_t **row)
     size_data_t *sdvector;
     char buf[32];
     int len;
-    string &cbuf = *cache;
+    std::string &cbuf = *cache;
 
     if (!fp) {
         proxy_set_errmsg("read from %s", destination);

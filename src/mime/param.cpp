@@ -122,12 +122,10 @@ static int find_value(char *buf, int len, char **value, int *value_len, char **n
     return 0;
 }
 
-void mime_header_line_get_params(const char *data, size_t len, string &val, dict &params)
+void mime_header_line_get_params(const char *data, size_t len, std::string &val, dict &params)
 {
     char *value, *nbuf;
     int value_len, nlen;
-
-    val.clear();
 
     if (find_value((char *)data, (int)len, &value, &value_len, &nbuf, &nlen)) {
         return;
@@ -142,7 +140,7 @@ void mime_header_line_get_params(const char *data, size_t len, string &val, dict
 
     char *start, *key;
     int start_len, key_len;
-    string kbuf(128, 0);
+    std::string kbuf(128, 0), vbuf(128, 0);
 
     start = nbuf;
     start_len = nlen;
@@ -159,7 +157,9 @@ void mime_header_line_get_params(const char *data, size_t len, string &val, dict
         }
         kbuf.clear();
         kbuf.append(key, key_len);
-        params.update(key, value, value_len);
+        vbuf.clear();
+        vbuf.append(value, value_len);
+        params[kbuf] = vbuf;
 
         if (nbuf == 0) {
             break;
@@ -227,7 +227,7 @@ void mime_header_line_decode_content_type(const char *data, size_t len
 void mime_header_line_decode_content_disposition(const char *data, size_t len
         , char **val, size_t *v_len
         , char **filename, size_t *f_len
-        , string &filename_2231
+        , std::string &filename_2231
         , bool *filename_2231_with_charset
         )
 {
@@ -235,7 +235,6 @@ void mime_header_line_decode_content_disposition(const char *data, size_t len
     int value_len, nlen;
 
     *v_len = *f_len = 0;
-    filename_2231.clear();
 
     if (find_value((char *)data, (int)len, &value, &value_len, &nbuf, &nlen)) {
         return;

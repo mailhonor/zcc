@@ -22,9 +22,9 @@ static inline void ___clear_null(const char *data, size_t size)
     }
 }
 
-void mime_iconv(const char *from_charset, const char *data, size_t size, string &dest)
+void mime_iconv(const char *from_charset, const char *data, size_t size, std::string &dest)
 {
-    char f_charset_buf[64];
+    std::string f_charset_buf;
     const char *f_charset;
     bool detacted = false;
 
@@ -36,8 +36,9 @@ void mime_iconv(const char *from_charset, const char *data, size_t size, string 
     f_charset = from_charset;
     if (empty(f_charset)) {
         detacted = true;
+        f_charset_buf.clear();
         if (charset_detect_cjk(data, size, f_charset_buf)) {
-            f_charset = f_charset_buf;
+            f_charset = f_charset_buf.c_str();
         } else  {
             f_charset = "GB18030";
         }
@@ -58,8 +59,9 @@ void mime_iconv(const char *from_charset, const char *data, size_t size, string 
         ___clear_null(dest.c_str(), dest.size());
         return;
     } else {
+        f_charset_buf.clear();
         if (charset_detect_cjk(data, size, f_charset_buf)) {
-            f_charset = f_charset_buf;
+            f_charset = f_charset_buf.c_str();
         } else  {
             f_charset = "GB18030";
         }
@@ -80,7 +82,7 @@ void mime_iconv(const char *from_charset, const char *data, size_t size, string 
 
 size_t mime_iconv(const char *from_charset, const char *data, size_t size, char *dest, size_t dest_size)
 {
-    char f_charset_buf[64];
+    std::string f_charset_buf;
     const char *f_charset;
     bool detacted = false;
     size_t ret;
@@ -92,8 +94,9 @@ size_t mime_iconv(const char *from_charset, const char *data, size_t size, char 
     f_charset = from_charset;
     if (empty(f_charset)) {
         detacted = true;
+        f_charset_buf.clear();
         if (charset_detect_cjk(data, size, f_charset_buf)) {
-            f_charset = f_charset_buf;
+            f_charset = f_charset_buf.c_str();
         } else  {
             f_charset = "GB18030";
         }
@@ -115,8 +118,9 @@ size_t mime_iconv(const char *from_charset, const char *data, size_t size, char 
         ___clear_null(dest, ret);
         return ret;
     } else {
+        f_charset_buf.clear();
         if (charset_detect_cjk(data, size, f_charset_buf)) {
-            f_charset = f_charset_buf;
+            f_charset = f_charset_buf.c_str();
         } else  {
             f_charset = "GB18030";
         }

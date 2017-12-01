@@ -22,7 +22,7 @@ static void ___usage(const char *arg = 0)
 
 static void do_search(void)
 {
-    string result;
+    std::string result;
     int ret;
 
     if (___finder_url == NULL || ___finder_query == NULL) {
@@ -47,24 +47,10 @@ static void do_search(void)
 
 int finder_main(int argc, char **argv)
 {
-    zcc_main_parameter_begin() {
-        if (!optval) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-q")) {
-            ___finder_query = optval;
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-url")) {
-            ___finder_url = optval;
-            opti+=2;
-            continue;
-        }
-    } zcc_main_parameter_end;
-
+    main_parameter_run(argc, argv);
+    ___finder_query = default_config.get_str("q", 0);
+    ___finder_url = default_config.get_str("url", 0);
     do_search();
-
     return 0;
 }
 

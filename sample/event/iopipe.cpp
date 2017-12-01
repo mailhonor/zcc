@@ -60,48 +60,23 @@ void after_close(void *ctx)
 
 static void parameters_do(int argc, char **argv)
 {
-    zcc_main_parameter_begin() {
-        if (optval == 0) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-proxy")) {
-            proxy_address = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-ssl-proxy")) {
-            proxy_address = optval;
-            proxy_ssl = true;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-dest")) {
-            dest_address = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-ssl-dest")) {
-            dest_address = optval;
-            dest_ssl = true;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-ssl-key")) {
-            ssl_key = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-ssl-cert")) {
-            ssl_cert = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-times")) {
-            times = atoi(optval);
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+
+    proxy_address = zcc::default_config.get_str("proxy");
+    if (zcc::empty(proxy_address)) {
+        proxy_address = zcc::default_config.get_str("proxy");
+        proxy_ssl = true;
+    }
+
+    dest_address = zcc::default_config.get_str("dest");
+    if (zcc::empty(dest_address)) {
+        dest_address = zcc::default_config.get_str("dest");
+        dest_ssl = true;
+    }
+
+    ssl_key = zcc::default_config.get_str("ssl_key");
+    ssl_cert = zcc::default_config.get_str("ssl_cert");
+    times = zcc::default_config.get_int("times", 3, 1, 1000000);
 
     if (proxy_ssl && dest_ssl) {
         proxy_ssl = false;
@@ -161,6 +136,8 @@ static void after_connect(zcc::async_io &aio)
 
     if (___stop) {
         delete jctx;
+        zcc::openssl_SSL_free(proxy_SSL);
+        zcc::openssl_SSL_free(dest_SSL);
         close(proxy_fd);
         close(dest_fd);
         return;

@@ -23,12 +23,12 @@ void httpd_engine::loop_clear()
     request_post.clear();
     request_headers.clear();
     request_cookies.clear();
-    zcc_vector_walk_begin(request_upload_files, uf) {
+    std_list_walk_begin(request_upload_files, uf) {
         free(uf->name);
         free(uf->filename);
         unlink(uf->saved_filename);
         free(uf);
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
     request_upload_files.clear();
     request_keep_alive = false;
     response_initialization = false;
@@ -153,7 +153,7 @@ void httpd_engine::request_header_do(bool first)
         while (*ps == ' ') {
             ps ++;
         }
-        request_headers.update(linebuf, ps);
+        request_headers[linebuf] = ps;
         if (zcc_str_eq(linebuf, "content-length")) {
             request_content_length = atoi(ps);
         } else if (zcc_str_eq(linebuf, "cookie")) {
@@ -209,7 +209,7 @@ void httpd_engine::request_data_do_true()
 
     if (ctype == 'u') {
         /* application/x-www-form-urlencoded */
-        string mbuf;
+        std::string mbuf;
         mbuf.reserve(request_content_length);
         if (http_fp->readn(mbuf, request_content_length) < request_content_length) {
             exception = true;

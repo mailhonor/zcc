@@ -17,7 +17,7 @@ public:
     static_finder();
     ~static_finder();
     bool open(const char *url);
-    ssize_t find(const char *query, string &result, long timeout);
+    ssize_t find(const char *query, std::string &result, long timeout);
     void disconnect();
 private:
     char *___destination;
@@ -34,7 +34,7 @@ static_finder::~static_finder()
     free(___destination);
 }
 
-ssize_t static_finder::find(const char *query, string &result, long timeout)
+ssize_t static_finder::find(const char *query, std::string &result, long timeout)
 {
     result.clear();
     result.append(___destination, ___len);
@@ -43,15 +43,12 @@ ssize_t static_finder::find(const char *query, string &result, long timeout)
 
 bool static_finder::open(const char *url)
 {
-    string dest;
-    dict dt;
-    if (!parse_url(url, dest, dt)) {
+    http_url urlobj(url);
+    if (empty(urlobj.get_destination())) {
         return false;
     }
-    if (dest.empty()) {
-        return false;
-    }
-    ___destination = strdup(dest.c_str());
+
+    ___destination = strdup(urlobj.get_destination());
     ___len = strlen(___destination);
     return true;
 }

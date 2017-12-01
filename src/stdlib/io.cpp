@@ -19,65 +19,106 @@ static inline int ___zcc_flock(int fd, int operation)
 namespace zcc
 {
 
-bool is_rwable(int fd, bool *rable, bool *wable)
+int is_rwable(int fd)
 {
     struct pollfd pollfd;
-    int flags = 0, revs;
+    int flags = POLLIN|POLLOUT, revs;
 
     pollfd.fd = fd;
-    if (rable) {
-        flags |= POLLIN;
-    }
-    if (wable) {
-        flags |= POLLOUT;
-    }
     pollfd.events = flags;
     for (;;) {
         switch (poll(&pollfd, 1, 0)) {
         case -1:
             if (errno != EINTR) {
-                return false;
+                return -1;
             }
             continue;
         case 0:
-            return false;
+            return 0;
         default:
             revs = pollfd.revents;
-            if (rable) {
-                if (revs & POLLIN) {
-                    *rable = true;
-                } else {
-                    *rable = false;
-                }
+            if (revs & (POLLIN|POLLOUT)) {
+                return 1;
             }
-            if (wable) {
-                if (revs & POLLOUT) {
-                    *wable = true;
-                } else {
-                    *wable = false;
-                }
-            }
-            return true;
+            return -1;
             if (revs & POLLNVAL) {
-                return false;
+                return -1;
             }
             if (revs & (POLLERR | POLLHUP | POLLRDHUP)) {
-                /* return false; */
+                return -1;
             }
         }
     }
 
-    return true;
+    return 0;
 }
 
-bool is_readable(int fd, bool *rable)
+int is_readable(int fd)
 {
-    return is_rwable(fd, rable, 0);
+    struct pollfd pollfd;
+    int flags = POLLIN, revs;
+
+    pollfd.fd = fd;
+    pollfd.events = flags;
+    for (;;) {
+        switch (poll(&pollfd, 1, 0)) {
+        case -1:
+            if (errno != EINTR) {
+                return -1;
+            }
+            continue;
+        case 0:
+            return 0;
+        default:
+            revs = pollfd.revents;
+            if (revs & (POLLIN)) {
+                return 1;
+            }
+            return -1;
+            if (revs & POLLNVAL) {
+                return -1;
+            }
+            if (revs & (POLLERR | POLLHUP | POLLRDHUP)) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
-bool is_writeable(int fd, bool *wable)
+int is_writeable(int fd)
 {
-    return is_rwable(fd, 0, wable);
+    struct pollfd pollfd;
+    int flags = POLLOUT, revs;
+
+    pollfd.fd = fd;
+    pollfd.events = flags;
+    for (;;) {
+        switch (poll(&pollfd, 1, 0)) {
+        case -1:
+            if (errno != EINTR) {
+                return -1;
+            }
+            continue;
+        case 0:
+            return 0;
+        default:
+            revs = pollfd.revents;
+            if (revs & (POLLOUT)) {
+                return 1;
+            }
+            return -1;
+            if (revs & POLLNVAL) {
+                return -1;
+            }
+            if (revs & (POLLERR | POLLHUP | POLLRDHUP)) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 bool flock(int fd, int flags)

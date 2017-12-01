@@ -10,23 +10,15 @@
 
 void usage()
 {
-    printf("%s -server\n", zcc::var_progname);
+    printf("%s -server ip:port\n", zcc::var_progname);
     exit(1);
 }
 
 int main(int argc, char **argv)
 {
     char *server = 0;
-    zcc_main_parameter_begin() {
-        if (optval == 0) {
-            usage();
-        }
-        if (!strcmp(optname, "-server")) {
-            server = optval;
-            opti +=2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    server = zcc::default_config.get_str("server");
 
     if (zcc::empty(server)) {
         usage();
@@ -34,7 +26,7 @@ int main(int argc, char **argv)
     
     zcc::memkv mkv(server);
 
-    zcc::string string_result;
+    std::string string_result;
     long int_result;
 #define ftest(sentence) { \
     printf("%-50s", #sentence);\

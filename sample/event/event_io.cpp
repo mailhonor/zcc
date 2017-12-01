@@ -11,19 +11,14 @@
 #include <time.h>
 
 static bool ___EXIT = false;
-static void ___usage(char *arg = 0)
-{
-    printf("USAGE: %s [ -l ip:port]\n", zcc::var_progname);
-    exit(1);
-}
 
 static void server_error(zcc::event_io &ev)
 {
     int fd;
-    zcc::iostream *fp;
+    zcc::stream *fp;
 
     fd = ev.get_fd();
-    fp = (zcc::iostream *)ev.get_context();
+    fp = (zcc::stream *)ev.get_context();
 
     if (ev.get_result() < 0) {
         zcc_info("fd:%d, exception", fd);
@@ -42,8 +37,8 @@ static void server_read(zcc::event_io &ev)
 {
     int fd;
     const char *r;
-    zcc::iostream *fp;
-    zcc::string rbuf;
+    zcc::stream *fp;
+    std::string rbuf;
 
     fd = ev.get_fd();
 
@@ -52,7 +47,7 @@ static void server_read(zcc::event_io &ev)
         return;
     }
 
-    fp = (zcc::iostream *) ev.get_context();
+    fp = (zcc::stream *) ev.get_context();
     if (fp->gets(rbuf) < 1) {
         server_error(ev);
         return;
@@ -84,7 +79,7 @@ static void server_welcome(zcc::event_io &ev)
         server_error(ev);
         return;
     }
-    zcc::iostream *fp = new zcc::iostream(ev.get_fd());
+    zcc::stream *fp = new zcc::stream(ev.get_fd());
     time_t t = time(0);
     fp->printf_1024("welcome ev: %s\n", ctime(&t));
     if (!fp->flush()) {
@@ -111,22 +106,11 @@ static void before_accept(zcc::event_io & ev)
     nev->enable_write(server_welcome);
 }
 
-static const char * listen_on = "0:8899";
+static char * listen_on;
 int main(int argc, char **argv)
 {
-    zcc_main_parameter_begin() {
-        if (optval == 0) {
-            ___usage();
-        }
-
-        if (!strcmp(optname, "-l")) {
-            listen_on = optval;
-            opti += 2;
-            continue;
-        }
-
-    } zcc_main_parameter_end;
-
+    zcc::main_parameter_run(argc, argv);
+    listen_on = zcc::default_config.get_str("zlisten", "0:8899");
 
     int sock;
     zcc::event_io *ev;

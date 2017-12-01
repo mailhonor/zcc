@@ -11,21 +11,13 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-static void ___usage(const char *arg)
-{
-    (void)arg;
-    printf("do not run this command by hand\n");
-    exit(1);
-}
-
 namespace zcc
 {
 
 static bool flag_init = false;
-static bool flag_alone_mode = false;
 static bool flag_run = false;
 
-static void load_global_config_by_dir(const char *config_path)
+static void load_global_config_by_dir(config &cf, const char *config_path)
 {
     DIR *dir;
     struct dirent ent, *ent_list;
@@ -47,7 +39,7 @@ static void load_global_config_by_dir(const char *config_path)
             continue;
         }
         snprintf(pn, 4096, "%s/%s", config_path, fn);
-        default_config.load_by_filename(pn);
+        cf.load_by_filename(pn);
     }
     closedir(dir);
 }
@@ -79,7 +71,6 @@ master_coroutine_server::master_coroutine_server()
     if (!flag_init) {
         signal(SIGPIPE, SIG_IGN);
         flag_init = true;
-        flag_alone_mode = false;
         flag_run = false;
     }
 }
@@ -122,7 +113,44 @@ void master_coroutine_server::alone_register(char *alone_url)
         }
         close_on_exec(fd);
         nonblocking(fd);
+        coroutine_enable_fd(fd);
         service_register(service, fd, fd_type);
+    }
+}
+
+void master_coroutine_server::master_register(char *master_url)
+{
+    zcc::argv service_argv;
+    service_argv.split(master_url, ",");
+    for (size_t i = 0; i < service_argv.size(); i++) {
+        char *service_name, *typefd;
+        zcc::argv stfd;
+        stfd.split(service_argv[i], ":");
+        if (stfd.size() == 1) {
+            service_name = blank_buffer;
+            typefd = stfd[0];
+        } else {
+            service_name = stfd[0];
+            typefd = stfd[1];
+        }
+        int fdtype = typefd[0];
+        switch(fdtype) {
+            case var_tcp_listen_type_inet:
+            case var_tcp_listen_type_unix:
+            case var_tcp_listen_type_fifo:
+                break;
+            default:
+                zcc_fatal("master_coroutine_server: unknown service type %c", fdtype);
+                break;
+        }
+        int fd = atoi(typefd+1);
+        if (fd < var_master_server_listen_fd) {
+            zcc_fatal("master_coroutine_server: fd is invalid", typefd+1);
+        }
+        close_on_exec(fd);
+        nonblocking(fd);
+        coroutine_enable_fd(fd);
+        service_register(service_name, fd, fdtype);
     }
 }
 
@@ -138,110 +166,61 @@ void master_coroutine_server::before_exit()
 {
 }
 
-void master_coroutine_server::run_begin(int argc, char ** argv)
+void master_coroutine_server::run(int argc, char ** argv)
 {
     if (flag_run) {
         zcc_fatal("master_coroutine_server:: only run one time");
     }
     flag_run = true;
-    flag_alone_mode = true;
-    var_progname = argv[0];
+    char *attr;
 
-    zcc::argv service_argv;
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-M")) {
-            flag_alone_mode = false;
-            opti += 1;
-            continue;
-        }
-        if (optval == 0) {
-            ___usage(optname);
-        }
-        if (!strcmp(optname, "-global_config")) {
-            load_global_config_by_dir(optval);
-            opti += 2;
-            continue;
-        }
-        if (!strncmp(optname, "-s", 2)) {
-            service_argv.push_back(optname+2);
-            service_argv.push_back(optval);
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-log-listen")) {
-            var_masterlog_listen = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-stop-file")) {
-            stop_file = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    main_parameter_run(argc, argv);
 
-    if (!var_test_mode) {
-        log_use_by_config(argv[0]);
+    attr = default_config.get_str("server-config-path", "");
+    if (!empty(attr)) {
+        config cf;
+        load_global_config_by_dir(cf, attr);
+        cf.load_another(default_config);
+        default_config.load_another(cf);
     }
+
+    var_masterlog_listen = default_config.get_str("master-log-listen", "");
+    stop_file = default_config.get_str("stop-file", "");
+
+    log_use_by(argv[0], default_config.get_str("server-log"));
 
     coroutine_base_init();
 
-    before_service();
-    before_service_for_enduser();
-
-    if (!flag_alone_mode) {
-        close_on_exec(var_master_server_listen_fd);
+    if (default_config.get_bool("MASTER", false)) {
         close_on_exec(var_master_master_status_fd);
+        nonblocking(var_master_master_status_fd);
+        coroutine_enable_fd(var_master_master_status_fd);
         coroutine_go(monitor_reload_signal, 0);
-        if (stop_file) {
+        if (!empty(stop_file)) {
             coroutine_go(stop_file_check, 0);
         }
     }
 
-    if (!empty(var_listen_address)) {
-        alone_register(var_listen_address);
+    before_service();
+    before_service_for_enduser();
+
+    if (!default_config.get_bool("MASTER", false)) {
+        alone_register(default_config.get_str("server-service", ""));
+    } else {
+        master_register(default_config.get_str("server-service", ""));
     }
 
-    for (size_t i = 0; i < service_argv.size(); i += 2) {
-        char *s = service_argv[i];
-        char *optval = service_argv[i+1];
-        int t = optval[0];
-        switch(t) {
-            case var_tcp_listen_type_inet:
-            case var_tcp_listen_type_unix:
-            case var_tcp_listen_type_fifo:
-                break;
-            default:
-                zcc_fatal("master_coroutine_server: unknown service type %c", t);
-                break;
+    attr = default_config.get_str("sever_user", "");
+    if (!empty(attr)) {
+        if(!chroot_user(0, attr)) {
+            zcc_fatal("ERR chroot_user %s", attr);
         }
-        int fd = atoi(optval+1);
-        if (fd < var_master_server_listen_fd) {
-            zcc_fatal("master_coroutine_server: fd is invalid", optval+1);
-        }
-        close_on_exec(fd);
-        nonblocking(fd);
-        service_register(s, fd, t);
     }
-    service_argv.clear();
-}
 
-void master_coroutine_server::run_loop()
-{
     coroutine_base_loop();
     coroutine_base_fini();
-}
 
-void master_coroutine_server::run_over()
-{
     before_exit();
-}
-
-void master_coroutine_server::run(int argc, char ** argv)
-{
-    run_begin(argc, argv);
-    run_loop();
-    run_over();
 }
 
 }

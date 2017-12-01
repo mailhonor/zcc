@@ -20,7 +20,9 @@ static int times = 0;
 static int times_count = 0;
 static int sock;
 static int sock_type;
-const char *file_output = "./index.html";
+static char *file_output;
+static char *listenon;
+
 
 class myhttpd:public zcc::httpd
 {
@@ -35,7 +37,7 @@ void myhttpd::handler()
 
 static void ___usage()
 {
-    printf("USAGE: %s --l listen_address [ -f file_output(index.html)] [ -times stop_after_loop_times ]\n", zcc::var_progname);
+    printf("USAGE: %s --zlisten listen_address [ -f file_output(index.html)] [ -times stop_after_loop_times ]\n", zcc::var_progname);
     exit(1);
 }
 
@@ -73,30 +75,18 @@ static void *accept_incoming(void *arg)
 
 int main(int argc, char **argv)
 {
-    zcc_main_parameter_begin() {
-        if (!optval) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-f")) {
-            file_output = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-times")) {
-            times = atoi(optval);
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
-
-    if (zcc::empty(zcc::var_listen_address)) {
+    zcc::main_parameter_run(argc, argv);
+    file_output = zcc::default_config.get_str("f", "./index.html");
+    times = zcc::default_config.get_int("times", 0, 0, 100000);
+    listenon = zcc::default_config.get_str("zlisten", "");
+    if (zcc::empty(listenon)) {
         ___usage();
     }
 
     zcc::coroutine_base_init();
-    sock = zcc::listen(zcc::var_listen_address, &sock_type);
+    sock = zcc::listen(listenon, &sock_type);
     if (sock < 0) {
-        printf("open %s error (%m)\n", zcc::var_listen_address);
+        printf("open %s error (%m)\n", listenon);
         exit(1);
     }
     zcc::coroutine_go(accept_incoming, 0);

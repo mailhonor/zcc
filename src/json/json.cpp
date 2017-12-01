@@ -16,55 +16,69 @@ namespace zcc
 
 json::json()
 {
+    ___parent = 0;
     ___type = json_type_null;
     ___val.v = 0;
 }
 
 json::json(const char *val)
 {
+    ___parent = 0;
     ___type = json_type_string;
-    new (___val.str) string(val);
+    new (___val.str) std::string(val?val:"");
 }
 
 json::json(const char *val, size_t size)
 {
+    ___parent = 0;
     ___type = json_type_string;
-    new (___val.str) string(val, size);
+    if (!val || !size) {
+        new (___val.str) std::string("");
+    } else {
+        new (___val.str) std::string(val, size);
+    }
 }
 
-json::json(const string &val)
+json::json(const std::string &val)
 {
+    ___parent = 0;
     ___type = json_type_string;
-    new (___val.str) string(val);
+    if (val.empty()) {
+        new (___val.str) std::string("");
+    } else {
+        new (___val.str) std::string(val);
+    }
 }
 
 json::json(long val)
 {
+    ___parent = 0;
     ___type = json_type_long;
     ___val.number_long = val;
 }
 
 json::json(double val)
 {
+    ___parent = 0;
     ___type = json_type_double;
     ___val.number_double = val;
 }
 
 json::json(bool val)
 {
+    ___parent = 0;
     ___type = json_type_bool;
     ___val.b = val;
 }
 
 json::~json()
 {
-    clear_value();
+    reset();
 }
 
 json *json::used_for_bool()
 {
     if (___type != json_type_bool) {
-        reset();
         get_bool_value();
     }
     return this;
@@ -73,7 +87,6 @@ json *json::used_for_bool()
 json *json::used_for_long()
 {
     if (___type != json_type_long) {
-        reset();
         get_long_value();
     }
     return this;
@@ -82,7 +95,6 @@ json *json::used_for_long()
 json *json::used_for_double()
 {
     if (___type != json_type_double) {
-        reset();
         get_double_value();
     }
     return this;
@@ -91,7 +103,6 @@ json *json::used_for_double()
 json *json::used_for_string()
 {
     if (___type != json_type_string) {
-        reset();
         get_string_value();
     }
     return this;
@@ -100,9 +111,7 @@ json *json::used_for_string()
 json *json::used_for_array()
 {
     if (___type != json_type_array) {
-        reset();
-        ___type = json_type_array;
-        ___val.v = new vector<json *>();
+        get_array_value();
     }
     return this;
 }
@@ -110,59 +119,109 @@ json *json::used_for_array()
 json *json::used_for_object()
 {
     if (___type != json_type_object) {
-        reset();
-        ___type = json_type_object;
-        ___val.m = new map<json *>();
+        get_object_value();
     }
     return this;
 }
 
-string *json::get_string_value()
+std::string &json::get_string_value()
 {
+    if (___type != json_type_string) {
+        reset();
+    }
     if (___type == json_type_null) {
-        new (___val.str) string();
+        new (___val.str) std::string();
         ___type = json_type_string;
     }
-    if (___type != json_type_string) {
-        return 0;
-    }
-    return (string *)(___val.str);
+    return *((std::string *)(___val.str));
 }
 
-long *json::get_long_value()
+long &json::get_long_value()
 {
-    if (___type == json_type_null) {
+    if (___type != json_type_long) {
+        reset();
         ___type = json_type_long;
     }
-    if (___type != json_type_long) {
-        return 0;
-    }
-    return &(___val.number_long);
+    return ___val.number_long;
 }
 
-double *json::get_double_value()
+double &json::get_double_value()
 {
-    if (___type == json_type_null) {
+    if (___type != json_type_double) {
+        reset();
         ___type = json_type_double;
     }
-    if (___type != json_type_double) {
-        return 0;
-    }
-    return &(___val.number_double);
+    return ___val.number_double;
 }
 
-bool *json::get_bool_value()
+bool &json::get_bool_value()
 {
-    if (___type == json_type_null) {
+    if (___type != json_type_bool) {
+        reset();
         ___type = json_type_bool;
     }
-    if (___type != json_type_bool) {
-        return 0;
-    }
-    return &(___val.b);
+    return ___val.b;
 }
 
-json * json::get_array_element(size_t idx)
+const std::vector<json *> &json::get_array_value()
+{
+    if (___type != json_type_array) {
+        reset();
+        ___type = json_type_array;
+        ___val.v = new std::vector<json *>();
+    }
+    return *(___val.v);
+}
+
+const std::map<std::string, json *> &json::get_object_value()
+{
+    if (___type != json_type_object) {
+        reset();
+        ___type = json_type_object;
+        ___val.m = new std::map<std::string, json *>();
+    }
+    return *(___val.m);
+}
+
+json *json::set_string_value(const std::string &val)
+{
+    get_string_value() = val;
+    return this;
+}
+
+json *json::set_string_value(const char *val)
+{
+    get_string_value() = val;
+    return this;
+}
+
+json *json::set_string_value(const char *val, size_t size)
+{
+    std::string &s = get_string_value();
+    s.clear();
+    s.append(val, size);
+    return this;
+}
+
+json *json::set_long_value(long val)
+{
+    get_long_value() = val;
+    return this;
+}
+
+json *json::set_double_value(double val)
+{
+    get_double_value() = val;
+    return this;
+}
+
+json *json::set_bool_value(bool val)
+{
+    get_bool_value() = val;
+    return this;
+}
+
+json * json::array_get_element(size_t idx)
 {
     if (___type != json_type_array) {
         return 0;
@@ -173,35 +232,20 @@ json * json::get_array_element(size_t idx)
     return (*___val.v)[idx];
 }
 
-json * json::get_object_element(const char *key)
+json * json::object_get_element(const char *key)
 {
     if (___type != json_type_object) {
         return 0;
     }
-    json *r;
-    if (___val.m->find(key, &r)) {
-        return r;
-    }
-    return 0;
-}
-
-json_object_walker *json::get_object_first_walker()
-{
-    if (___type != json_type_object) {
+    std::map<std::string, json *>::iterator it;
+    it = ___val.m->find(key);
+    if (it == ___val.m->end()) {
         return 0;
     }
-    return ___val.m->first_node();
+    return it->second;
 }
 
-json_object_walker *json::get_object_last_walker()
-{
-    if (___type != json_type_object) {
-        return 0;
-    }
-    return ___val.m->last_node();
-}
-
-size_t json::get_array_size()
+size_t json::array_get_size()
 {
     if (___type != json_type_array) {
         return 0;
@@ -209,7 +253,7 @@ size_t json::get_array_size()
     return ___val.v->size();
 }
 
-size_t json::get_object_size()
+size_t json::object_get_size()
 {
     if (___type != json_type_object) {
         return 0;
@@ -217,30 +261,27 @@ size_t json::get_object_size()
     return ___val.m->size();
 }
 
-json *json::reset()
+json * json::array_add_element(json *j)
 {
-    clear_value();
-    ___type = json_type_null;
-    return this;
-}
-
-void json::push_back_array(json *j)
-{
+    j->___parent = this;
     if (___type == json_type_null) {
         ___type = json_type_array;
-        ___val.v = new vector<json *>();
+        ___val.v = new std::vector<json *>();
     }
     if (___type != json_type_array) {
         zcc_fatal("value's type of json is not array");
     }
     ___val.v->push_back(j);
+    return this;
 }
 
-void json::set_array_element(size_t idx, json *j, json **old)
+json * json::array_add_element(size_t idx, json *j, json **old)
 {
+    json *d;
+    j->___parent = this;
     if (___type == json_type_null) {
         ___type = json_type_array;
-        ___val.v = new vector<json *>();
+        ___val.v = new std::vector<json *>();
     }
     if (___type != json_type_array) {
         zcc_fatal("value's type of json is not array");
@@ -249,51 +290,94 @@ void json::set_array_element(size_t idx, json *j, json **old)
         *old = 0;
     }
     if (idx < ___val.v->size()) {
+        d = (*___val.v)[idx];
         (*___val.v)[idx] = j;
+        if (old) {
+            *old = d;
+            d->___parent = 0;
+        } else if (d) {
+            delete d;
+        }
     } else {
         ___val.v->resize(idx);
         ___val.v->push_back(j);
     }
+
+    return this;
 }
 
-void json::set_object_element(const char *key, json *j, json **old)
+json * json::object_add_element(const char *key, json *j, json **old)
 {
+    json *d;
+    j->___parent = this;
     if (___type == json_type_null) {
         ___type = json_type_object;
-        ___val.m = new map<json *>();
+        ___val.m = new std::map<std::string, json *>();
     }
     if (___type != json_type_object) {
         zcc_fatal("value's type of json is not object");
     }
+    std_map_update(*___val.m, key, j, d);
+    if (old) {
+        *old = d;
+        if (d) {
+            d->___parent = 0;
+        }
+    } else if (d) {
+        delete d;
+    }
+    return this;
+}
+
+json * json::array_erase_element(size_t idx, json **old)
+{
     if (old) {
         *old = 0;
     }
-    ___val.m->update(key, j, old);
-}
-
-json * json::erase_array_key(size_t idx)
-{
     if (___type != json_type_array) {
-        return 0;
+        return this;
     }
     json *r = 0;
     if (idx < ___val.v->size()) {
-        r = (*___val.v)[idx];
-        ___val.v->erase(idx);
+        std::vector<json *>::iterator it = ___val.v->begin() + idx;
+        ___val.v->erase(it);
     } else {
         r = 0;
     }
-    return r;
+    if (r) {
+        r->___parent = 0;
+    }
+    if (old) {
+        *old = r;
+    } else {
+        delete r;
+    }
+    return this;
 }
 
-json * json::erase_object_key(const char *key)
+json * json::object_erase_element(const char *key, json **old)
 {
-    if (___type != json_type_object) {
-        return 0;
+    if (old) {
+        *old = 0;
     }
-    json *r = 0;
-    ___val.m->erase(key, &r);
-    return r;
+    if (___type != json_type_object) {
+        return this;
+    }
+    std::map<std::string, json *>::iterator it = ___val.m->find(key);
+    if (it == ___val.m->end()) {
+        return this;
+    }
+    json *r = it->second;
+    ___val.m->erase(it);
+    if (r) {
+        r->___parent = 0;
+    }
+    if (old) {
+        *old = r;
+    } else {
+        delete r;
+    }
+    return this;
 }
 
 json * json::get_element_by_path(const char *path)
@@ -301,7 +385,7 @@ json * json::get_element_by_path(const char *path)
     if (empty(path)) {
         return this;
     }
-    string tmp(path);
+    std::string tmp(path);
     char *p, *key = (char *)(void *)tmp.c_str();
     json *jn = this;
     while (jn) {
@@ -323,10 +407,10 @@ json * json::get_element_by_path(const char *path)
             if (idx > 1024 * 1024) {
                 jn = 0;
             } else {
-                jn = jn->get_array_element(idx);
+                jn = jn->array_get_element(idx);
             }
         } else if (jn->get_type() == json_type_object) {
-            jn = jn->get_object_element(key);
+            jn = jn->object_get_element(key);
         } else {
             jn = 0;
         }
@@ -373,10 +457,10 @@ json * json::get_element_by_path_vec(const char *path0, ...)
             if (idx > 1024 * 1024) {
                 jn = 0;
             } else {
-                jn = jn->get_array_element(idx);
+                jn = jn->array_get_element(idx);
             }
         } else if (jn->get_type() == json_type_object) {
-            jn = jn->get_object_element(key);
+            jn = jn->object_get_element(key);
         } else {
             jn = 0;
         }
@@ -385,29 +469,41 @@ json * json::get_element_by_path_vec(const char *path0, ...)
     return jn;
 }
 
-void json::clear_value()
+json * json::get_top()
+{
+    json *r = this;
+    while (r->___parent) {
+        r = r->___parent;
+    }
+    return r;
+}
+
+json *json::reset()
 {
     if (___type == json_type_string) {
         if (___val.str) {
-            ((string *)(___val.str))->~string();
+            typedef std::string ___std_string;
+            ((___std_string *)(___val.str))->~___std_string();
         }
     } else if (___type == json_type_array) {
         if (___val.v) {
-            zcc_vector_walk_begin(*___val.v, jn) {
+            std_list_walk_begin(*___val.v, jn) {
                 delete (jn);
-            } zcc_vector_walk_end;
+            } std_list_walk_end;
             delete ___val.v;
         }
     } else if (___type == json_type_object) {
-        map<json *> *mp = ___val.m;
+        std::map<std::string, json *> *mp = ___val.m;
         if (mp) {
-            zcc_map_walk_begin(*mp, key, val) {
+            std_map_walk_begin(*mp, key, val) {
                 delete val;
-            } zcc_map_walk_end;
+            } std_map_walk_end;
             delete mp;
         }
     }
     memset(&___val, 0, sizeof(___val));
+    ___type = json_type_null;
+    return this;
 }
 
 }

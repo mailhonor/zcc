@@ -30,7 +30,7 @@ httpd::~httpd()
     if (httpddata->http_fp) {
         SSL *s = 0;
         if (httpddata->ssl_auto_release) {
-            s = ((sslstream *)(httpddata->http_fp))->get_SSL();
+            s = ((stream *)(httpddata->http_fp))->get_SSL();
         }
         delete httpddata->http_fp;
         if (s) {
@@ -43,19 +43,19 @@ httpd::~httpd()
 void httpd::bind(int fd)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->http_fp = new iostream(fd);
+    httpddata->http_fp = new stream(fd);
 }
 
 void httpd::bind(SSL *ssl)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->http_fp = new sslstream(ssl);
+    httpddata->http_fp = new stream(ssl);
 }
 
 bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     httpd_engine *httpddata = (httpd_engine *)___data;
     SSL *s = openssl_create_SSL(sslctx, sock);
@@ -63,13 +63,13 @@ bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
         return false;
     }
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     if (!openssl_timed_accept(s, timeout)) {
         openssl_SSL_free(s);
         return false;
     }
-    httpddata->http_fp = new sslstream(s);
+    httpddata->http_fp = new stream(s);
     httpddata->ssl_auto_release = true;
     return true;
 }
@@ -251,7 +251,7 @@ dict &httpd::request_cookie()
     return httpddata->request_cookies;
 }
 
-vector<httpd_upload_file *> &httpd::upload_files()
+std::list<httpd_upload_file *> &httpd::upload_files()
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     return httpddata->request_upload_files;
@@ -291,7 +291,7 @@ void httpd::response_file(const char *filename, const char *content_type)
             if (!strcasestr(request_header("accept-encoding", ""), "gzip")) {
                 continue;
             }
-            string fn(filename);
+            std::string fn(filename);
             fn.push_back('.');
             fn.append(gzip_file_suffix());
             while ((fd = open(fn.c_str(), O_RDONLY)) == -1 && errno == EINTR) {
@@ -405,7 +405,7 @@ void httpd::response_304(const char *etag)
 {
     httpd_engine *httpddata = (httpd_engine *)___data;
     stream *http_fp = httpddata->http_fp;
-    string output = "HTTP/1.1 304 Not Modified\r\n";
+    std::string output = "HTTP/1.1 304 Not Modified\r\n";
     output += "Etag: ";
     output += etag;
     output += "\r\n";
@@ -444,14 +444,14 @@ void httpd::response_header(const char *name, const char *value)
 
 void httpd::response_header(const char *name, long d)
 {
-    char buf[32];
+    std::string buf;
     build_rfc1123_date_string(d, buf);
-    response_header(name, buf);
+    response_header(name, buf.c_str());
 }
 
 void httpd::response_header_content_type(const char *value, const char *charset)
 {
-    string val;
+    std::string val;
     val.append(value);
     if (!empty(charset)) {
         val.append("; chrset=");
@@ -471,7 +471,7 @@ void httpd::response_header_content_length(long length)
 
 void httpd::response_header_set_cookie(const char *name, const char *value, long expires, const char *path, const char *domain, bool secure, bool httponly)
 {
-    string result;
+    std::string result;
     http_cookie_build(result, name, value, expires, path, domain, secure, httponly);
     response_header("Set-Cookie", result.c_str());
 }

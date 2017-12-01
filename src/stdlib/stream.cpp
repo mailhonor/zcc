@@ -13,21 +13,68 @@ namespace zcc
 
 stream::stream()
 {
-    read_buf_p1 = 0;
-    read_buf_p2 = 0;
-    write_buf_len = 0;
-    ___error = false;
-    ___eof = false;
-    ___flushed = false;
-    set_timeout(-1);
+    init_all();
+}
+
+stream::stream(SSL *ssl)
+{
+    init_all();
+    open(ssl);
+}
+
+stream::stream(int fd)
+{
+    init_all();
+    open(fd);
 }
 
 stream::~stream()
 {
-    /* flush must be do in parent-class */
-    if (!___flushed) {
-        zcc_fatal("Derived classe of the zcc::stream should do flush when unconstruct.");
+    close();
+}
+
+stream &stream::open(SSL *ssl)
+{
+    close();
+    init_all();
+    ___opened = true;
+    ___ssl_opened_mode = true;
+    ___ssl_mode = true;
+    ___fd.ssl = ssl;
+    return *this;
+}
+
+stream &stream::open(int fd)
+{
+    close();
+    init_all();
+    ___opened = true;
+    ___fd.fd = fd;
+    return *this;
+}
+
+stream &stream::close()
+{
+    if (!___opened) {
+        return *this;
     }
+    flush();
+    if (___auto_release) {
+        if (___ssl_mode) {
+            int fd = openssl_SSL_get_fd(___fd.ssl);
+            openssl_SSL_free(___fd.ssl);
+            ::close(fd);
+        } else {
+            ::close(___fd.fd);
+        }
+    } else {
+        if (___ssl_mode && (!___ssl_opened_mode)) {
+            openssl_SSL_free(___fd.ssl);
+        }
+    }
+    ___opened = false;
+
+    return *this;
 }
 
 stream &stream::set_timeout(long timeout)
@@ -39,14 +86,12 @@ stream &stream::set_timeout(long timeout)
     return *this;
 }
 
-long stream::get_timeout()
-{
-    return ___timeout;
-}
-
 /* read */
 int stream::get_char_do()
 {
+    if (!___opened) {
+        return -1;
+    }
     int ret;
     long time_left;
 
@@ -73,7 +118,11 @@ int stream::get_char_do()
     }
 
     read_buf_p1 = read_buf_p2 = 0;
-    ret = read_fn(read_buf, stream_read_buf_size, time_left);
+    if(___ssl_mode) {
+        ret = openssl_timed_read(___fd.ssl, read_buf, stream_read_buf_size, time_left);
+    } else {
+        ret = timed_read(___fd.fd, read_buf, stream_read_buf_size, time_left);
+    }
     if (ret == 0) {
         ___eof = true;
         return -1;
@@ -89,6 +138,9 @@ int stream::get_char_do()
 
 ssize_t stream::readn(void *buf, size_t size)
 {
+    if (!___opened) {
+        return -1;
+    }
     char *ptr = (char *)buf;
     size_t left_size = size;
     int ch;
@@ -111,13 +163,15 @@ ssize_t stream::readn(void *buf, size_t size)
     return -1;
 }
 
-ssize_t stream::readn(string &str, size_t size)
+ssize_t stream::readn(std::string &str, size_t size)
 {
+    if (!___opened) {
+        return -1;
+    }
     size_t left_size = size;
     int ch;
 
     str.clear();
-
     if (size < 1) {
         return 0;
     }
@@ -138,6 +192,9 @@ ssize_t stream::readn(string &str, size_t size)
 
 ssize_t stream::gets(void *buf, size_t size, int delimiter)
 {
+    if (!___opened) {
+        return -1;
+    }
     char *ptr = (char *)buf;
     size_t left_size = size;
     int ch;
@@ -164,11 +221,13 @@ ssize_t stream::gets(void *buf, size_t size, int delimiter)
     return -1;
 }
 
-ssize_t stream::gets(string &str, int delimiter)
+ssize_t stream::gets(std::string &str, int delimiter)
 {
+    if (!___opened) {
+        return -1;
+    }
     int ch;
     ssize_t rlen = 0;
-
     str.clear();
 
     while(1) {
@@ -190,6 +249,9 @@ ssize_t stream::gets(string &str, int delimiter)
 
 ssize_t stream::size_data_get_size()
 {
+    if (!___opened) {
+        return -1;
+    }
     int ch, size = 0, shift = 0;
     while (1) {
         ch = get();
@@ -207,6 +269,9 @@ ssize_t stream::size_data_get_size()
 
 bool stream::flush()
 {
+    if (!___opened) {
+        return false;
+    }
     ssize_t ret;
     long time_left;
     char *data = write_buf;
@@ -228,7 +293,11 @@ bool stream::flush()
             ___error = true;
             return false;
         }
-        ret = write_fn(data + wlen, data_len - wlen, time_left);
+        if (___ssl_mode) {
+            ret = openssl_timed_write(___fd.ssl, data + wlen, data_len - wlen, time_left);
+        } else {
+            ret = timed_write(___fd.fd, data + wlen, data_len - wlen, time_left);
+        }
         if (ret < 0) {
             ___error = true;
             return false;
@@ -246,6 +315,9 @@ bool stream::flush()
 
 stream &stream::puts(const char *str)
 {
+    if (!___opened) {
+        return *this;
+    }
     if (str == 0) {
         str = "";
     }
@@ -261,6 +333,9 @@ stream &stream::puts(const char *str)
 
 stream &stream::write(const void *_data, size_t size)
 {
+    if (!___opened) {
+        return *this;
+    }
     const char *str = (const char *)_data;
     if (size < 1) {
         return *this;
@@ -280,6 +355,9 @@ stream &stream::write(const void *_data, size_t size)
 
 stream &stream::printf_1024(const char *format, ...)
 {
+    if (!___opened) {
+        return *this;
+    }
     va_list ap;
     char buf[1024+1];
     int len;
@@ -294,134 +372,65 @@ stream &stream::printf_1024(const char *format, ...)
     return write(buf, len);
 }
 
-/* io ################################################################# */
-iostream::iostream(int fd)
+void stream::init_all()
 {
-    _fd = fd;
+    read_buf_p1 = 0;
+    read_buf_p2 = 0;
+    write_buf_len = 0;
+    ___opened = false;
+    ___auto_release = false;
+    ___ssl_mode = false;
+    ___ssl_opened_mode = false;
+    ___error = false;
+    ___eof = false;
+    ___flushed = false;
+    set_timeout(-1);
 }
 
-iostream::~iostream()
+bool stream::tls_connect(SSL_CTX *ctx)
 {
-    flush();
-}
-
-ssize_t iostream::read_fn(void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
+    if (!___opened) {
+        return false;
     }
-    return timed_read(_fd, buf, size, timeout);
-}
-
-ssize_t iostream::write_fn(const void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
+    if (___ssl_mode) {
+        return true;
     }
-    return timed_write(_fd, buf, size, timeout);
-}
 
-int iostream::get_fd()
-{
-    return _fd;
-}
-
-/* ssl ################################################################ */
-sslstream::sslstream(SSL *ssl)
-{
-    _ssl = ssl;
-}
-
-sslstream::~sslstream()
-{
-    flush();
-}
-
-SSL *sslstream::get_SSL()
-{
-    return _ssl;
-}
-
-ssize_t sslstream::read_fn(void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
-    return openssl_timed_read(_ssl, buf, size, timeout);
-};
-ssize_t sslstream::write_fn(const void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
-    return openssl_timed_write(_ssl, buf, size, timeout);
-};
-
-/* tls ################################################################ */
-tlsstream::tlsstream(int fd)
-{
-    _fd = fd;
-    _ssl = 0;
-}
-
-tlsstream::~tlsstream()
-{
-    flush();
-}
-
-int tlsstream::get_fd()
-{
-    return _fd;
-}
-
-SSL *tlsstream::get_SSL()
-{
-    return _ssl;
-}
-
-bool tlsstream::tls_connect(SSL_CTX *ctx)
-{
-    long time_left = timeout_left(get_timeout());
-    _ssl = openssl_create_SSL(ctx, _fd);
+    SSL *_ssl = openssl_create_SSL(ctx, ___fd.fd);
     if (!_ssl) {
         return false;
     }
-    if (!openssl_timed_connect(_ssl, time_left)) {
+    if (!openssl_timed_connect(_ssl, timeout_left(get_timeout()))) {
         openssl_SSL_free(_ssl);
         _ssl = 0;
         return false;
     }
+    ___ssl_mode = true;
+    ___fd.ssl = _ssl;
     return true;
 }
 
-bool tlsstream::tls_accept(SSL_CTX *ctx)
+bool stream::tls_accept(SSL_CTX *ctx)
 {
-    long time_left = timeout_left(get_timeout());
-    _ssl = openssl_create_SSL(ctx, _fd);
+    if (!___opened) {
+        return false;
+    }
+    if (___ssl_mode) {
+        return true;
+    }
+
+    SSL *_ssl = openssl_create_SSL(ctx, ___fd.fd);
     if (!_ssl) {
         return false;
     }
-    if (!openssl_timed_accept(_ssl, time_left)) {
+    if (!openssl_timed_accept(_ssl, timeout_left(get_timeout()))) {
         openssl_SSL_free(_ssl);
         _ssl = 0;
         return false;
     }
+    ___ssl_mode = true;
+    ___fd.ssl = _ssl;
     return true;
 }
-
-ssize_t tlsstream::read_fn(void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
-    return ((_ssl)?(openssl_timed_read(_ssl, buf, size, timeout)):(timed_read(_fd, buf, size, timeout)));
-};
-ssize_t tlsstream::write_fn(const void *buf, size_t size, long timeout)
-{
-    if (timeout < 1) {
-        timeout = var_long_max;
-    }
-    return ((_ssl)?(openssl_timed_write(_ssl, buf, size, timeout)):(timed_write(_fd, buf, size, timeout)));
-};
 
 }

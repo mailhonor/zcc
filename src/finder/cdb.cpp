@@ -17,7 +17,7 @@ public:
     cdb_finder();
     ~cdb_finder();
     bool open(const char *_url);
-    ssize_t find(const char *query, string &result, long timeout);
+    ssize_t find(const char *query, std::string &result, long timeout);
     void disconnect();
 private:
     const char *___url;
@@ -39,37 +39,32 @@ cdb_finder::~cdb_finder()
 
 bool cdb_finder::open(const char *url)
 {
-    string dest;
-    dict dt;
-    if (!parse_url(url, dest, dt)) {
+    http_url urlobj(url);
+    if (zcc::empty(urlobj.get_destination())) {
         return false;
     }
-    if (dest.empty()) {
-        return false;
-    }
-
-    if (!db.open(dest.c_str())) {
+    if (!db.open(urlobj.get_destination())) {
         return false;
     }
 
     stringsdup sdup;
     sdup.push_back(url);
-    sdup.push_back(dest.c_str());
-    sdup.push_back(dt.get_str("prefix", ""));
-    sdup.push_back(dt.get_str("suffix", ""));
+    sdup.push_back(urlobj.get_destination());
+    sdup.push_back(urlobj.get_query_variate("prefix", ""));
+    sdup.push_back(urlobj.get_query_variate("suffix", ""));
 
     ___url = sdup.dup();
-    vector<size_t> &offsets = sdup.offsets();
+    std::vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];
     return true;
 }
 
-ssize_t cdb_finder::find(const char *query, string &result, long timeout)
+ssize_t cdb_finder::find(const char *query, std::string &result, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     char buf[1024 + 1];
     snprintf(buf, 1024, "%s%s%s", ___prefix, query, ___suffix);

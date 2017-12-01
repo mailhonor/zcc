@@ -21,166 +21,75 @@ bool var_openssl_debug = false;
 
 /* charset */
 bool var_charset_debug = false;
-}
 
-static void ___usage__h(void)
-{
-    printf("\t--h   #extra help\n");
-    printf("\t--d   # show debug info\n");
-    printf("\t--c config_filename         # load config from filename\n");
-    printf("\t--o key=value               # update default config with key=value\n");
-    printf("\t--chdir dir_name            # cd dir\n");
-    printf("\t--chroot new_root_dir       # change system root\n");
-    printf("\t--chuser new_user_name      # change to new user\n");
-    printf("\t--T n                       # exit after n sec\n");
 }
 
 static void ___timeout_do(int pid)
 { 
-    zcc::var_proc_stop = true;
     exit(1);
 }
 
 namespace zcc
 {
 
-int var_main_argc_start = 1;
 char *var_progname = 0;
-char *var_listen_address = 0;
-char *var_module_name = 0;
-bool var_test_mode = false;
-long var_proc_timeout = 0;
 bool var_proc_stop = false;
 
-static char *___chroot = 0;
-static char *___chuser = 0;
+std::vector<char *> main_parameter_values;
 
-void (*show_usage) (const char *ctx) = 0;
-
-int main_parameter_run(int argc, char **argv)
+void main_parameter_run(int argc, char **argv)
 {
+    int i;
     char *optname, *optval;
-    char buf[10240 + 1], *p;
+    config cmd_cf;
+    zcc::var_progname = argv[0];
+    for (i = 1; i < argc; i++) {
+        optname = argv[i];
 
-    optname = argv[0];
-    if (optname[0] != '-') {
-        main_parameter_fatal(optname);
-    }
-
-    if (optname[1] != '-') {
-        return 0;
-    }
-    optname += 2;
-
-    if (!strcmp(optname, "h")) {
-        if (show_usage) {
-            show_usage(0);
+        /* abc */
+        if (optname[0] != '-') {
+            main_parameter_values.push_back(optname);
+            continue;
         }
-        ___usage__h();
-    }
 
-    if (!strcmp(optname, "t")) {
-        var_test_mode = true;
-        return 1;
-    }
+        /* --abc */
+        if (optname[1] == '-') {
+            if (!strncmp(optname, "--debug-", 8)) {
+            } else if (!strcmp(optname, "--fatal-catch")) {
+                var_log_fatal_catch = true;
+            } else {
+                cmd_cf[optname+2] = "yes";
+            }
+            continue;
+        }
 
-    if (!strncmp(optname, "d-", 2)) {
-        /* inner debug */
-        return 1;
-    }
-
-    if (!strcmp(optname, "d")) {
-        var_log_debug_enable = true;
-        return 1;
-    }
-
-    if (!strcmp(optname, "fatal-catch")) {
-        var_log_fatal_catch = true;
-        return 1;
-    }
-
-    optval = argv[1];
-    if (!strcmp(optname, "c")) {
-        if (default_config.load_by_filename(optval) == false) {
-            zcc_info("ERR load config error from %s", optval);
+        /* -abc */
+        if (i+1 >= argc) {
+            printf("ERR parameter %s need value\n", optname);
             exit(1);
         }
-        return 2;
-    }
-
-    if (!strcmp(optname, "o")) {
-        snprintf(buf, 10240, "%s", optval);
-        p = strchr(buf, '=');
-        if (p) {
-            *p++ = 0;
-            default_config.update(buf, p);
-        } else {
-            default_config.update(buf, "");
-        }
-        return 2;
-    }
-
-    if (!strcmp(optname, "chdir")) {
-        if (chdir(optval) == -1) {
-            zcc_info("ERR chdir %s (%m)", optval);
-            exit(1);
-        }
-        return 2;
-    }
-
-    if (!strcmp(optname, "chroot")) {
-        ___chroot = optval;
-        return 2;
-    }
-
-    if (!strcmp(optname, "chuser")) {
-        ___chuser = optval;
-        return 2;
-    }
-
-    if (!strcmp(optname, "l")) {
-        var_listen_address = optval;
-        return 2;
-    }
-
-    if (!strcmp(optname, "module")) {
-        var_module_name = optval;
-        return 2;
-    }
-
-    if (!strcmp(optname, "T")) {
-        var_proc_timeout = timeout_set(atoi(optval) * 1000);
-        alarm(0);
-        signal(SIGALRM, ___timeout_do);
-        alarm(atoi(optval) + 3);
-        return 2;
-    }
-    return 0;
-}
-
-void main_parameter_run_over()
-{
-    if (___chuser == 0) {
-        ___chuser = default_config.get_str("zrun_user", 0);
-    }
-    if (___chroot || ___chuser) {
-        if (!chroot_user(___chroot, ___chuser)) {
-            zcc_info("ERR\n");
-            exit(1);
+        i++;
+        optval = argv[i];
+        if (!strcmp(optname, "-config")) {
+            if (default_config.load_by_filename(optval) == false) {
+                zcc_info("ERR load config error from %s", optval);
+                exit(1);
+            }
+        } else if (!strcmp(optname, "-exit-after")) {
+            alarm(0);
+            signal(SIGALRM, ___timeout_do);
+            alarm(to_second(optval, 0) + 3);
+        }else {
+            cmd_cf[optname+1] = optval;
         }
     }
 
+    default_config.load_another(cmd_cf);
     if(!var_log_debug_enable) {
-        if (default_config.get_bool("zdebug", false)) {
+        if (default_config.get_bool("debug", false)) {
             var_log_debug_enable = true;
         }
     }
-}
-
-void main_parameter_fatal(char *arg)
-{
-    zcc_info("ERR unknown parameter %s\n", arg);
-    exit(1);
 }
 
 }

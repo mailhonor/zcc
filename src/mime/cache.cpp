@@ -67,10 +67,10 @@ mime_parser_cache_magic::~mime_parser_cache_magic()
     }
 }
 
-string &mime_parser_cache_magic::require_string()
+std::string &mime_parser_cache_magic::require_string()
 {
     if (!cache->tmp_string[tmp_string_idx_start+tmp_string_used_count]) {
-        cache->tmp_string[tmp_string_idx_start+tmp_string_used_count] = new string();
+        cache->tmp_string[tmp_string_idx_start+tmp_string_used_count] = new std::string();
     }
     return *(cache->tmp_string[tmp_string_idx_start+tmp_string_used_count++]);
 }

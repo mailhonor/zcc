@@ -23,16 +23,16 @@ touch $pid_file
 
 case $subcmd in
 	start)
-		$master_cmd -p $pid_file -t 2>/dev/null || {
+		$master_cmd -pid-file $pid_file --try-lock 2>/dev/null || {
 			$INFO the system is already running
 			exit 1
 		}
 		$INFO starting the system
-		$master_cmd -c $config_dir -p $pid_file &
+		$master_cmd -C $config_dir -pid-file $pid_file -log-service log.socket,./log_dir/,hour -server-log masterlog,master,master &
 		;;
 
 	stop)
-		$master_cmd -p $pid_file -t 2>/dev/null && {
+		$master_cmd -pid-file $pid_file --try-lock 2>/dev/null && {
 			$INFO  the system is not running
 			exit 1
 		}
@@ -40,14 +40,14 @@ case $subcmd in
 		kill `head -n 1 $pid_file`
 		for i in 5 4 3 2 1
 		do
-			$master_cmd -p $pid_file -t && exit 0
+			$master_cmd -pid-file $pid_file --try-lock && exit 0
 			$INFO waiting "for" the system to terminate
 			sleep 1
 		done
 		;;
 
 	reload)
-		$master_cmd -p $pid_file -t 2>/dev/null && {
+		$master_cmd -pid-file $pid_file --try-lock 2>/dev/null && {
 			$INFO  the system is not running
 			exit 1
 		}

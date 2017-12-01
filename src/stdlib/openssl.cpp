@@ -181,8 +181,10 @@ SSL *openssl_create_SSL(SSL_CTX * ctx, int fd)
 
 void openssl_SSL_free(SSL * ssl)
 {
-    SSL_shutdown(ssl);
-    SSL_free(ssl);
+    if (ssl) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+    }
 }
 
 int openssl_SSL_get_fd(SSL *ssl)
@@ -214,7 +216,7 @@ int openssl_SSL_get_fd(SSL *ssl)
 bool openssl_timed_connect(SSL * ssl, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     ___Z_SSL_TIMED_DO(SSL_connect(ssl));
     return (ret==1);
@@ -223,7 +225,7 @@ bool openssl_timed_connect(SSL * ssl, long timeout)
 bool openssl_timed_accept(SSL * ssl, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     ___Z_SSL_TIMED_DO(SSL_accept(ssl));
     return (ret==1);
@@ -232,7 +234,7 @@ bool openssl_timed_accept(SSL * ssl, long timeout)
 bool openssl_timed_shutdown(SSL * ssl, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     ___Z_SSL_TIMED_DO(SSL_shutdown(ssl));
     return (ret==1);
@@ -241,7 +243,7 @@ bool openssl_timed_shutdown(SSL * ssl, long timeout)
 ssize_t openssl_timed_read(SSL * ssl, void *buf, size_t len, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     ___Z_SSL_TIMED_DO(SSL_read(ssl, buf, len));
     return ret;
@@ -250,7 +252,7 @@ ssize_t openssl_timed_read(SSL * ssl, void *buf, size_t len, long timeout)
 ssize_t openssl_timed_write(SSL * ssl, const void *buf, size_t len, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     ___Z_SSL_TIMED_DO(SSL_write(ssl, buf, len));
     return ret;

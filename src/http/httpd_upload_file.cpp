@@ -11,7 +11,7 @@
 namespace zcc
 {
 
-static void ___dump_file(httpd_engine *httpddata, const char *data_filename, string &saved_path, string &content, int file_id_plus, const char *name, const char *filename)
+static void ___dump_file(httpd_engine *httpddata, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, const char *name, const char *filename)
 {
     saved_path = data_filename;
     saved_path.append("_");
@@ -29,7 +29,7 @@ static void ___dump_file(httpd_engine *httpddata, const char *data_filename, str
     httpddata->request_upload_files.push_back(huf);
 }
 
-static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const char *data_filename, string &saved_path, string &content, int file_id_plus, string &disposition_raw, dict &params)
+static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, std::string &disposition_raw, dict &params)
 {
     const char *disposition = mime->disposition();
     if (strncasecmp(disposition, "form-data", 9)) {
@@ -49,7 +49,7 @@ static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const
     if (strncasecmp(ctype, "multipart/", 10)) {
         mime->decoded_content(content);
         if (empty(filename)) {
-            httpddata->request_post.update(name, content.c_str());
+            httpddata->request_post[name]= content;
             return;
         } else {
             ___dump_file(httpddata, data_filename, saved_path, content, file_id_plus, name, filename);
@@ -78,7 +78,7 @@ static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const
 
 static void httpd_upload_file_parse_do(httpd_engine *httpddata, const char *data_filename)
 {
-    string saved_path;
+    std::string saved_path;
     file_mmap mreader;
 
     if (!mreader.mmap(data_filename)) {
@@ -88,16 +88,16 @@ static void httpd_upload_file_parse_do(httpd_engine *httpddata, const char *data
     mail_parser mparser;
     mparser.parse(mreader.data(), mreader.size());
 
-    const vector<mail_parser_mime *> &all_mimes = mparser.all_mimes();
-    string disposition_raw, content;
+    const std::list<mail_parser_mime *> &all_mimes = mparser.all_mimes();
+    std::string disposition_raw, content;
     dict params;
     int file_id_plus = 0;
-    zcc_vector_walk_begin(all_mimes, mime) {
+    std_list_walk_begin(all_mimes, mime) {
         ___walk_mime(mime, httpddata, data_filename, saved_path, content, file_id_plus++, disposition_raw, params);
         if (httpddata->exception) {
             return;
         }
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 }
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;

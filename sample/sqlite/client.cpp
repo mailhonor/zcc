@@ -10,7 +10,7 @@
 
 static void usage()
 {
-    printf("%s -server -query/exec/log sql_sentense\n", zcc::var_progname);
+    printf("ERR USAGE %s -server server -query/exec/log sql_sentense\n", zcc::var_progname);
     exit(1);
 }
 
@@ -19,23 +19,18 @@ int main(int argc, char **argv)
     char *server = 0;
     char *sentense = 0;
     int op = 0;
-    zcc_main_parameter_begin() {
-        if (optval == 0) {
-            usage();
-        }
-        if (!strcmp(optname, "-server")) {
-            server = optval;
-            opti += 2;
-            continue;
-        }
-        if ((!strcmp(optname, "-query")) || (!strcmp(optname, "-exec")) || (!strcmp(optname, "-log"))) {
-            sentense = optval;
-            opti += 2;
-            op = optname[1];
-            continue;
-        }
-    } zcc_main_parameter_end;
-
+    zcc::main_parameter_run(argc, argv);
+    server = zcc::default_config.get_str("server", 0);
+    sentense = zcc::default_config.get_str("query", 0);
+    op = 'q';
+    if (!sentense) {
+        sentense = zcc::default_config.get_str("exec", 0);
+        op = 'e';
+    }
+    if (!sentense) {
+        sentense = zcc::default_config.get_str("log", 0);
+        op = 'l';
+    }
     if (zcc::empty(server) || zcc::empty(sentense)) {
         usage();
     }

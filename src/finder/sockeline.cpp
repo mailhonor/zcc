@@ -17,7 +17,7 @@ public:
     socketline_finder();
     ~socketline_finder();
     bool open(const char *_url);
-    ssize_t find(const char *query, string &result, long timeout);
+    ssize_t find(const char *query, std::string &result, long timeout);
     void disconnect();
     bool connect(long timeout);
 private:
@@ -25,7 +25,7 @@ private:
     const char *___destination;
     const char *___prefix;
     const char *___suffix;
-    iostream *___fp;
+    stream *___fp;
     int ___fd;
 };
 
@@ -44,33 +44,29 @@ socketline_finder::~socketline_finder()
 
 bool socketline_finder::open(const char *url)
 {
-    string dest;
-    dict dt;
-    if (!parse_url(url, dest, dt)) {
-        return false;
-    }
-    if (dest.empty()) {
+    http_url urlobj(url);
+    if (empty(urlobj.get_destination())) {
         return false;
     }
 
     stringsdup sdup;
     sdup.push_back(url);
-    sdup.push_back(dest.c_str());
-    sdup.push_back(dt.get_str("prefix", ""));
-    sdup.push_back(dt.get_str("suffix", ""));
+    sdup.push_back(urlobj.get_destination());
+    sdup.push_back(urlobj.get_query_variate("prefix", ""));
+    sdup.push_back(urlobj.get_query_variate("suffix", ""));
 
     ___url = sdup.dup();
-    vector<size_t> &offsets = sdup.offsets();
+    std::vector<size_t> &offsets = sdup.offsets();
     ___destination = ___url + offsets[1];
     ___prefix = ___url + offsets[2];
     ___suffix = ___url + offsets[3];
     return true;
 }
 
-ssize_t socketline_finder::find(const char *query, string &result, long timeout)
+ssize_t socketline_finder::find(const char *query, std::string &result, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     int i;
     long dtime = timeout_set(timeout);
@@ -82,7 +78,7 @@ ssize_t socketline_finder::find(const char *query, string &result, long timeout)
         }
         if (connect(timeout_left(dtime)) == false) {
             result.clear();
-            result.printf_1024("finder: %s : connection error((%m)", ___url);
+            sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
             continue;
         }
         ___fp->set_timeout(timeout_left(dtime));
@@ -90,14 +86,14 @@ ssize_t socketline_finder::find(const char *query, string &result, long timeout)
         ___fp->flush();
         if (___fp->is_exception()) {
             result.clear();
-            result.printf_1024("finder: %s : write error((%m)", ___url);
+            sprintf_1024(result, "finder: %s : write error((%m)", ___url);
             continue;
         }
 
         ___fp->gets(result);
         if (___fp->is_exception()) {
             result.clear();
-            result.printf_1024("finder: %s : read error", ___url);
+            sprintf_1024(result, "finder: %s : read error", ___url);
             disconnect();
             return -1;
         }
@@ -131,7 +127,7 @@ bool socketline_finder::connect(long timeout)
 
         return false;
     }
-    ___fp = new iostream(___fd);
+    ___fp = new stream(___fd);
     return true;
 }
 

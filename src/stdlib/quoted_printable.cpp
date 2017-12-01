@@ -20,13 +20,12 @@ namespace zcc
     break; \
 }
 
-ssize_t qp_decode_2045(const void *src, size_t src_size, string &str)
+ssize_t qp_decode_2045(const void *src, size_t src_size, std::string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
     char c0, c1, c2;
     char addch;
-    str.clear();
 
     while (1) {
         ___get_next_ch(c0);
@@ -54,13 +53,12 @@ over:
     return str.size();
 }
 
-ssize_t qp_decode_2047(const void *src, size_t src_size, string &str)
+ssize_t qp_decode_2047(const void *src, size_t src_size, std::string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos = 0;
     char c0, c1, c2;
     char addch;
-    str.clear();
 
     while (1) {
         ___get_next_ch(c0);

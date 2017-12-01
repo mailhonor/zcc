@@ -215,7 +215,7 @@ void mime_address_parser::parse(const char *line, size_t size)
     ___over = false;
 }
 
-bool mime_address_parser::shift(string &name, string &address)
+bool mime_address_parser::shift(std::string &name, std::string &address)
 {
     int ret;
     char *n, *a;
@@ -224,9 +224,6 @@ bool mime_address_parser::shift(string &name, string &address)
         return false;
     }
     ___over = true;
-
-    name.clear();
-    address.clear();
 
     if (!___cache) {
         ___cache = (char *)malloc(var_mime_address_name_max_length + 10);
@@ -274,7 +271,7 @@ bool mime_address_parser::shift(char **name, char **address)
     }
     return false;
 }
-void mime_header_line_get_address(const char *in_str, size_t in_len, vector<mime_address *> &rvec)
+void mime_header_line_get_address(const char *in_str, size_t in_len, std::list<mime_address *> &rvec)
 {
     mime_address *addr;
     char *n, *a, *str, *cache;
@@ -305,14 +302,14 @@ void mime_header_line_get_address(const char *in_str, size_t in_len, vector<mime
 }
 
 void mime_header_line_get_address_utf8(const char *src_charset_def , const char *in_str, size_t in_len
-        , vector<mime_address *> &rvec)
+        , std::list<mime_address *> &rvec)
 {
     const char *name;
     mime_parser_cache_magic mcm(in_str);
-    string &dest = mcm.require_string();
+    std::string &dest = mcm.require_string();
 
     mime_header_line_get_address((char *)&mcm, in_len, rvec);
-    zcc_vector_walk_begin(rvec, addr) {
+    std_list_walk_begin(rvec, addr) {
         name = addr->name();
         if (*name) {
             dest.clear();
@@ -324,7 +321,7 @@ void mime_header_line_get_address_utf8(const char *src_charset_def , const char 
                 addr->update_name_utf8(dest.c_str());
             }
         }
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 }
 
 }

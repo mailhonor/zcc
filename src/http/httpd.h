@@ -41,7 +41,7 @@ public:
     dict request_post;
     dict request_headers;
     dict request_cookies;
-    vector<httpd_upload_file *> request_upload_files;
+    std::list<httpd_upload_file *> request_upload_files;
     /* */
     bool request_keep_alive;
     bool response_initialization;

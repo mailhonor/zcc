@@ -12,7 +12,7 @@
 namespace zcc
 {
 
-void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_str, size_t in_len, string &dest, bool with_charset)
+void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_str, size_t in_len, std::string &dest, bool with_charset)
 {
     int i, len, start_len, ch;
     char *in_src, *pend, *ps, *p, *start, *charset;
@@ -21,7 +21,7 @@ void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_
    
     in_src = mcm.true_data;
     pend = in_src + in_len;
-    string &tmps = mcm.require_string();
+    std::string &tmps = mcm.require_string();
 
     tmps.clear();
     dest.clear();

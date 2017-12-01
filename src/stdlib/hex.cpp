@@ -11,13 +11,12 @@
 namespace zcc
 {
 
-ssize_t hex_encode(const void *src, size_t src_size, string &str)
+ssize_t hex_encode(const void *src, size_t src_size, std::string &str)
 {
     unsigned char dec2hex[18] = "0123456789ABCDEF";
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos;
     int addch1, addch2;
-    str.clear();
 
     for (src_pos = 0; src_pos < src_size; src_pos++) {
         addch1 = dec2hex[src_c[src_pos] >> 4];
@@ -51,13 +50,12 @@ char hex_to_dec_table[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1
 };
 
-ssize_t hex_decode(const void *src, size_t src_size, string &str)
+ssize_t hex_decode(const void *src, size_t src_size, std::string &str)
 {
     unsigned char *src_c = (unsigned char *)src;
     size_t src_pos;
     unsigned char h_l, h_r;
     int addch;
-    str.clear();
 
     for (src_pos = 0; src_pos + 1 < src_size; src_pos += 2) {
         h_l = hex_to_dec_table[src_c[src_pos]] << 4;
@@ -69,9 +67,8 @@ ssize_t hex_decode(const void *src, size_t src_size, string &str)
     return str.size();
 }
 
-ssize_t url_hex_decode(const void *src, size_t src_size, string &str)
+ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str)
 {
-    str.clear();
     int l, r;
     char *p = (char *)src;
     for (size_t i = 0; i < src_size; i++) {

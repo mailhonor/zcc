@@ -17,10 +17,11 @@ extern int h_errno;
 namespace zcc
 {
 
-ssize_t get_localaddr(char * addr_list, size_t max_count)
+ssize_t get_localaddr(std::list<std::string> &addr_list, size_t max_count)
 {
     struct ifaddrs *ifaddr, *ifa;
     struct sockaddr_in *scin;
+    char ipbuf[32];
     size_t ret_count = 0;
 
     if (getifaddrs(&ifaddr) == -1) {
@@ -35,7 +36,8 @@ ssize_t get_localaddr(char * addr_list, size_t max_count)
             continue;
         }
         scin = (struct sockaddr_in *)(ifa->ifa_addr);
-        inet_ntop(AF_INET, &(scin->sin_addr), addr_list + 16*ret_count, 16);
+        inet_ntop(AF_INET, &(scin->sin_addr), ipbuf, 16);
+        addr_list.push_back(ipbuf);
         ret_count++;
         if (ret_count == max_count) {
             break;
@@ -47,17 +49,20 @@ ssize_t get_localaddr(char * addr_list, size_t max_count)
     return ret_count;
 }
 
-ssize_t get_hostaddr(const char *host, char * addr_list, size_t max_count)
+ssize_t get_hostaddr(const char *host, std::list<std::string> &hosts, size_t max_count)
 {
     struct in_addr **addr_list_tmp;
     struct hostent htt, *htr = 0;
-    char hbuf[4096], *tmpbuf;
+    char hbuf[4096], *tmpbuf, ipbuf[32];
     int tmpbuflen = 4096, hterror;
     int alloc_flag = 0;
     size_t ret_count = 0;
 
+    if (max_count == 0) {
+        max_count = 1024;
+    }
     if (empty(host)) {
-        return get_localaddr(addr_list, max_count);
+        return get_localaddr(hosts, max_count);
     }
 
     tmpbuf = hbuf;
@@ -77,7 +82,8 @@ ssize_t get_hostaddr(const char *host, char * addr_list, size_t max_count)
     if (htr) {
         addr_list_tmp = (struct in_addr **)htr->h_addr_list;
         for (size_t i = 0; addr_list_tmp[i] != 0 && i < max_count; i++) {
-            inet_ntop(AF_INET, addr_list_tmp[i], addr_list + 16*i, 16);
+            inet_ntop(AF_INET, addr_list_tmp[i], ipbuf, 16);
+            hosts.push_back(ipbuf);
             ret_count++;
             if (ret_count == max_count) {
                 break;
@@ -111,21 +117,26 @@ bool get_peername(int sockfd, int *host, int *port)
     return true;
 }
 
-bool get_peername(int sockfd, char *host, int *port)
+bool get_peername(int sockfd, std::string &host, int *port)
 {
     int ihost;
+    host.clear();
     if (!get_peername(sockfd, &ihost, port)) {
         return false;
     }
-    if (host) {
-        get_ipstring(ihost, host);
-    }
+    get_ipstring(ihost, host);
     return true;
 }
 
-bool get_ipstring(int ip, char *str)
+bool get_ipstring(int ip, std::string &host)
 {
-    return (inet_ntop(AF_INET, &ip, str, 16) != 0);
+    char str[32];
+    host.clear();
+    bool ret = (inet_ntop(AF_INET, &ip, str, 16) != 0);
+    if (ret) {
+        host.append(str);
+    }
+    return ret;
 }
 
 }

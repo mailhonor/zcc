@@ -140,7 +140,7 @@ void mime_classify(mail_parser_inner * parser)
     do {
         /* classify */
         int type;
-        zcc_vector_walk_begin(parser->all_mimes, mw) {
+        std_list_walk_begin(parser->all_mimes, mw) {
             mw->disposition();
             mail_parser_mime_inner *m = mw->get_inner_data();
             type = ___mime_identify_type(m);
@@ -150,7 +150,7 @@ void mime_classify(mail_parser_inner * parser)
             } else if (type == _ZPMT_ATTACHMENT) {
                 parser->attachment_mimes.push_back(mw);
             }
-        } zcc_vector_walk_end;
+        } std_list_walk_end;
     } while(0);
 
     do {
@@ -159,12 +159,12 @@ void mime_classify(mail_parser_inner * parser)
         mime_parser_cache_magic mcm(parser->mcm);
         ___view_mime_t *view_mime = (___view_mime_t *)(mcm.cache->line_cache);
         int view_len = 0;
-        zcc_vector_walk_begin(parser->all_mimes, mw) {
+        std_list_walk_begin(parser->all_mimes, mw) {
             mail_parser_mime_inner *m = mw->get_inner_data();
             if (view_len < 10000) {
                 ___mime_identify_view_part(m,  view_mime, &view_len);
             }
-        } zcc_vector_walk_end;
+        } std_list_walk_end;
 
         for (int i = 0; i < view_len; i++) {
             parser->show_mimes.push_back(view_mime[i].self->wrap);

@@ -15,7 +15,7 @@ const size_t var_mime_header_line_max_element   = 10240;
 
 struct mime_parser_cache_magic_t {
     int used;
-    string *tmp_string[10];
+    std::string *tmp_string[10];
     char line_cache[var_mime_header_line_max_length + 10];         /* var_mime_header_line_max_length */
 }; 
 typedef struct mime_parser_cache_magic_t mime_parser_cache_magic_t;
@@ -33,7 +33,7 @@ public:
     mime_parser_cache_magic(const mime_parser_cache_magic &_x);
     mime_parser_cache_magic(const void *data);
     ~mime_parser_cache_magic();
-    string &require_string();
+    std::string &require_string();
 };
 
 class mail_parser_mime_inner
@@ -65,7 +65,7 @@ public:
     bool filename2231_with_charset;
 
     /* mime original header-logic-line */
-    vector<size_data_t *> header_lines;
+    std::list<size_data_t *> header_lines;
 
     /* relationship */
     mail_parser_mime *wrap;
@@ -98,29 +98,29 @@ public:
     mime_address from;
     mime_address sender;
     mime_address reply_to;
-    vector<mime_address *> to;
-    vector<mime_address *> cc;
-    vector<mime_address *> bcc;
+    std::list<mime_address *> to;
+    std::list<mime_address *> cc;
+    std::list<mime_address *> bcc;
     mime_address receipt;
     char *in_reply_to;
     char *message_id;
-    vector<char *> references;
+    std::list<char *> references;
 
     /* mime-tree */
     mail_parser_mime *top_mime;
 
-    /* all-mime-vector */
-    vector<mail_parser_mime *> all_mimes;
+    /* all-mime-std::list */
+    std::list<mail_parser_mime *> all_mimes;
 
     /* text(plain,html) type mime-list except for attachment */
-    vector<mail_parser_mime *> text_mimes;
+    std::list<mail_parser_mime *> text_mimes;
 
     /* similar to the above, 
      * in addition to the case of alternative, html is preferred */
-    vector<mail_parser_mime *> show_mimes;
+    std::list<mail_parser_mime *> show_mimes;
 
     /* attachment(and background-image) type mime-list */
-    vector<mail_parser_mime *> attachment_mimes;
+    std::list<mail_parser_mime *> attachment_mimes;
 
     /* option */
     short int mime_max_depth;

@@ -16,23 +16,9 @@ void usage()
 
 int main(int argc, char **argv)
 {
-    char *fn = 0;
-    char *default_charset = const_cast<char *>("gb18030");
-    zcc_main_parameter_begin() {
-        if (optval == 0) {
-            usage();
-        }
-        if (!strcmp(optname, "-f")) {
-            fn = optval;
-            opti+=2;
-            continue;
-        }
-        if (!strcmp(optname, "-default-charset")) {
-            default_charset = optval;
-            opti+=2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    char *fn = zcc::default_config.get_str("f");
+    char *default_charset = zcc::default_config.get_str("default-charset", "gb18030");
     if (zcc::empty(fn)) {
         usage();
     }
@@ -43,7 +29,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     char buf[102400+10];
-    zcc::string line, result;
+    std::string line, result;
 
     while(1) {
         if (ferror(fp) || feof(fp)) {

@@ -12,7 +12,7 @@ static int enable_att = 0;
 
 static void ___usage(char *parameter)
 {
-    printf("USAGE: %s -f eml_filename [ eml_fn2 ... ] [-att ] \n", zcc::var_progname);
+    printf("USAGE: %s eml_filename [ eml_fn2 ... ] [--att ] \n", zcc::var_progname);
     exit(1);
 }
 
@@ -62,7 +62,7 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
         snprintf(tmpname, 255, "atts/%s", sname);
         name_char_validate(tmpname+5);
     }
-    zcc::string dcon;
+    std::string dcon;
     mime->decoded_content(dcon);
 
     printf("save attachment %s\n", tmpname);
@@ -74,11 +74,11 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
         int j = 0;
         zcc::tnef_parser tp;
         tp.parse(dcon.c_str(), dcon.size());
-        const zcc::vector<zcc::tnef_parser_mime *> &ams = tp.all_mimes();
-        zcc_vector_walk_begin(ams, m) {
+        const std::list<zcc::tnef_parser_mime *> &ams = tp.all_mimes();
+        std_list_walk_begin(ams, m) {
             save_att_tnef(&tp, m, j + 1);
             j++;
-        } zcc_vector_walk_end;
+        } std_list_walk_end;
     }
     return 0;
 }
@@ -86,11 +86,11 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
 static int save_all_attachments(zcc::mail_parser &parser)
 {
     int i = 0;
-    const zcc::vector<zcc::mail_parser_mime *> &allm = parser.attachment_mimes();
-    zcc_vector_walk_begin(allm, m) {
+    const std::list<zcc::mail_parser_mime *> &allm = parser.attachment_mimes();
+    std_list_walk_begin(allm, m) {
         i++;
         save_att(&parser, m, i);
-    } zcc_vector_walk_end;
+    } std_list_walk_end;
 
     return 0;
 }
@@ -114,36 +114,15 @@ static void do_parse(char *eml_fn)
 
 int main(int argc, char **argv)
 {
-    zcc::vector<char *> fn_vec;
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-att")) {
-            enable_att = 1;
-            opti+=1;
-            continue;
-        }
-        if (!optval) {
-            ___usage(0);
-        }
-        if (!strcmp(optname, "-f")) {
-            if (optval_count < 1) {
-                ___usage(optname);
-            }
-            int i;
-            for (i=0;i<optval_count;i++) {
-                fn_vec.push_back(argv[opti + 1 + i]);
-            }
-            opti += 1 + optval_count;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    enable_att = zcc::default_config.get_bool("att", false);
 
-    if (fn_vec.size() < 1) {
+    if (zcc::main_parameter_values.empty()) {
         ___usage(0);
     }
-
-    zcc_vector_walk_begin(fn_vec, fn) {
+    std_vector_walk_begin(zcc::main_parameter_values, fn) {
         do_parse(fn);
-    } zcc_vector_walk_end;
+    } std_vector_walk_end;
 
     return 0;
 }

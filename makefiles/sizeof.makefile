@@ -4,9 +4,9 @@ CC=g++
 CFLAGS= -I./ -D__ZCC_SIZEOF_PROBE__ -ggdb
 LIBS= ./libzcc.a -lm -lrt -lssl -lcrypto -lpthread
 
-CPPS=src/stdlib/event_base.cpp \
-     src/http/url.cpp \
-     src/http/httpd.cpp
+CPPS=   src/aio/event_base.cpp \
+	src/http/url.cpp \
+     	src/http/httpd.cpp
 
 target: ./libzcc.a ./zcc.h
 	@set -e; \

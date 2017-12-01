@@ -11,7 +11,7 @@
 
 static void ___usage(char *arg)
 {
-    printf("USAGE: %s -f from_charset -t to_charset [ -c [ignore_bytes_count] ] < input \n", zcc::var_progname);
+    printf("USAGE: %s -f from_charset -t to_charset [ --c ] < input \n", zcc::var_progname);
     exit(1);
 }
 
@@ -22,39 +22,17 @@ int main(int argc, char **argv)
     ssize_t ignore_bytes = 0;
     size_t converted_len = 0;
     zcc::var_progname = argv[0];
-
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-c")) {
-            ignore_bytes = -1;
-            if (optval && isdigit(optval[0])) {
-                ignore_bytes = atoi(optval);
-                opti +=2;
-            } else {
-                opti +=1;
-            }
-            continue;
-        }
-        if (optval==0) {
-            ___usage(0);
-        }
-        if (!strcmp(optname, "-f")) {
-            from_charset = optval;
-            opti+= 2;
-            continue;
-        }
-        if (!strcmp(optname, "-t")) {
-            to_charset = optval;
-            opti+= 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    ignore_bytes = (zcc::default_config.get_bool("c", false)?-1:0);
+    from_charset = zcc::default_config.get_str("f");
+    to_charset = zcc::default_config.get_str("t");
 
     if (zcc::empty(from_charset) || zcc::empty(to_charset)) {
         ___usage(0);
     }
 
-    zcc::string content;
-    zcc::string result;
+    std::string content;
+    std::string result;
     zcc::stdin_get_contents(content);
 
     if ((zcc::charset_iconv(from_charset, content.c_str(), (size_t)(content.size())

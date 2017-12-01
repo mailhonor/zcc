@@ -18,54 +18,6 @@ basic_finder::basic_finder()
 {
 }
 
-bool basic_finder::parse_url(const char *url, string &destination, zcc::dict &parameters)
-{
-    char buf[10240 + 1];
-    char *ps, *p;
-    strtok splitor;
-    int len;
-
-    len = strlen(url);
-    if (len > 10240) {
-        return false;
-    }
-    memcpy(buf, url, len);
-    buf[len] = 0;
-
-    ps = buf;
-    p = strstr(ps, "://");
-    if (!p) {
-        return false;
-    }
-    ps = p+3;
-
-    p = strchr(ps, '?');
-    if (p) {
-        *p++ = 0;
-    }
-    destination = ps;
-    if (!p) {
-        return true;
-    }
-    ps = p;
-
-    splitor.set_str(ps);
-    while (1) {
-        if(!splitor.tok("&")) {
-            break;
-        }
-
-        ps = splitor.ptr();
-        ps[splitor.size()] = 0;
-        p = strchr(ps, '=');
-        if(p) {
-            *p++ = 0;
-        }
-        parameters.update(ps, p);
-    }
-    return true;
-}
-
 /* @##################################################################@ */
 finder::finder()
 {
@@ -128,12 +80,11 @@ bool finder::open(const char *url_raw)
     return true;
 }
 
-ssize_t finder::find(const char *query, string &result, long timeout)
+ssize_t finder::find(const char *query, std::string &result, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
-    result.clear();
     if (!___fder) {
         return -1;
     }
@@ -155,6 +106,7 @@ ssize_t finder::find(const char *query, string &result, long timeout)
         nq = buf;
     }
 
+    result.clear();
     return ___fder->find(nq, result, timeout);
 }
 
@@ -167,10 +119,10 @@ void finder::close()
 }
 
 /* ################################################## */
-ssize_t finder_once(const char *url, const char *query, string &result, long timeout)
+ssize_t finder_once(const char *url, const char *query, std::string &result, long timeout)
 {
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     finder fder;
     if (!fder.open(url)) {

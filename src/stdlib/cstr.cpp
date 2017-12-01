@@ -13,7 +13,7 @@ static int (*___vsnprintf)(char *str, size_t size, const char *fmt, va_list ap) 
 namespace zcc
 {
 /* ################################################################## */
-/* string case convert.
+/* std::string case convert.
  * only support Enlish locale.
  */
 
@@ -227,7 +227,7 @@ size_t skip(const char *line, size_t size, const char *ignores_left, const char 
 
 }
 
-char *skip(const char *str, size_t size, const char *ignores)
+char *skip_left(const char *str, size_t size, const char *ignores)
 {
     size_t i = 0;
     if (size < 1)
@@ -423,7 +423,7 @@ size_t vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 /* ################################################################## */
 char *multi_strdup(size_t *offsets, size_t count, const char *first, ...)
 {
-    string tmp;
+    std::string tmp;
     va_list ap;
     char *v;
 
@@ -445,26 +445,24 @@ char *multi_strdup(size_t *offsets, size_t count, const char *first, ...)
 
 stringsdup::stringsdup()
 {
-    ___data = new string();
 }
 
 stringsdup::~stringsdup()
 {
-    delete ___data;
 }
 
 void stringsdup::push_back(const char *v)
 {
-    ___offsets.push_back(___data->size());
-    ___data->append(v);
-    ___data->append(1, 0);
+    ___offsets.push_back(___data.size());
+    ___data.append(v);
+    ___data.append(1, 0);
 }
 
 void stringsdup::push_back(const char *v, size_t size)
 {
-    ___offsets.push_back(___data->size());
-    ___data->append(v, size);
-    ___data->append(1, 0);
+    ___offsets.push_back(___data.size());
+    ___data.append(v, size);
+    ___data.append(1, 0);
 }
 
 size_t stringsdup::count()
@@ -474,16 +472,16 @@ size_t stringsdup::count()
 
 void stringsdup::clear()
 {
-    ___data->clear();
+    ___data.clear();
     ___offsets.clear();
 }
 
 char *stringsdup::dup()
 {
-    return memdup(___data->c_str(), ___data->size());
+    return memdup(___data.c_str(), ___data.size());
 }
 
-vector<size_t> &stringsdup::offsets()
+std::vector<size_t> &stringsdup::offsets()
 {
     return ___offsets;
 }

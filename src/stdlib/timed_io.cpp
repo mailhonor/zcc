@@ -29,19 +29,18 @@ int timed_wait_readable(int fd, long timeout)
     pollfd.events = POLLIN;
 
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
     for (;;) {
-        if (timeout == -1) {
-            left_time = 1000 * 3600;
-        } else if (timeout == 0) {
-            left_time = 0;
-        } else {
-            left_time = timeout_left(critical_time);
-        }
+        left_time = timeout_left(critical_time);
         if (left_time < 0) {
             return 0;
+        }
+        bool ccc = false;
+        if (left_time > 1000 * 3600) {
+            left_time = 1000 * 3600;
+            ccc = true;
         }
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
@@ -50,6 +49,9 @@ int timed_wait_readable(int fd, long timeout)
             }
             continue;
         case 0:
+            if (ccc) {
+                continue;
+            }
             return 0;
         default:
             if (pollfd.revents & POLLIN) {
@@ -74,7 +76,7 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
     long critical_time, left_time;
 
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
 
@@ -114,7 +116,7 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
     ptr = (char *)buf;
 
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
 
@@ -164,19 +166,18 @@ int timed_wait_writeable(int fd, long timeout)
     pollfd.events = POLLOUT;
     
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
     for (;;) {
-        if (timeout == -1) {
-            left_time = 1000 * 3600;
-        } else if (timeout == 0) {
-            left_time = 0;
-        } else {
-            left_time = timeout_left(critical_time);
-        }
+        left_time = timeout_left(critical_time);
         if (left_time < 0) {
             return 0;
+        }
+        bool ccc = false;
+        if (left_time > 1000 * 3600) {
+            left_time = 1000 * 3600;
+            ccc = true;
         }
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
@@ -185,6 +186,9 @@ int timed_wait_writeable(int fd, long timeout)
             }
             continue;
         case 0:
+            if (ccc) {
+                continue;
+            }
             return 0;
         default:
             if (pollfd.revents & POLLOUT) {
@@ -194,7 +198,7 @@ int timed_wait_writeable(int fd, long timeout)
         }
     }
 
-    return true;
+    return 0;
 }
 
 ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
@@ -203,7 +207,7 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
     long critical_time, left_time;
 
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
 
@@ -246,7 +250,7 @@ ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
     long left_time;
 
     if (timeout < 1) {
-        timeout = var_long_max;
+        timeout = var_max_timeout;
     }
     critical_time = timeout_set(timeout);
 

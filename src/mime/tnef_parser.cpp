@@ -34,7 +34,7 @@ struct tnef_parser_mime_t {
 
 struct tnef_parser_t {
     char src_charset_def[32];
-    vector<tnef_parser_mime *> *___all_mimes;
+    std::list<tnef_parser_mime *> *___all_mimes;
     mime_parser_cache_magic *mcm;
     /* */
     gm_pool *gmp;
@@ -461,7 +461,7 @@ const char *tnef_parser_mime::filename_utf8()
 {
     if (!___data->filename_utf8) {
         mime_parser_cache_magic mcm(*(___data->parser->mcm));
-        string &uname = mcm.require_string();
+        std::string &uname = mcm.require_string();
         mcm.true_data = ___data->filename;
         mime_header_line_get_utf8(___data->parser->src_charset_def,(char *)(&mcm), strlen(___data->filename), uname);
         ___data->filename_utf8 = ___data->parser->gmp->memdupnull(uname.c_str(), uname.size());
@@ -490,7 +490,7 @@ tnef_parser::tnef_parser()
     gm_pool *gmp = new gm_pool();
     ___data = (tnef_parser_t *)gmp->calloc(1, sizeof(tnef_parser_t));
     ___data->gmp = gmp;
-    ___data->___all_mimes=new(gmp->calloc(1,sizeof(vector<tnef_parser_mime*>)))vector<tnef_parser_mime*>();
+    ___data->___all_mimes=new(gmp->calloc(1,sizeof(std::list<tnef_parser_mime*>)))std::list<tnef_parser_mime*>();
     ___data->mcm = new(gmp->calloc(1, sizeof(mime_parser_cache_magic)))mime_parser_cache_magic();
     ___data->mcm->gmp = gmp;
 }
@@ -498,18 +498,18 @@ tnef_parser::tnef_parser()
 tnef_parser::~tnef_parser()
 {
     gm_pool *gmp = ___data->gmp;
-    zcc_vector_walk_begin(*(___data->___all_mimes), m) {
+    std_list_walk_begin(*(___data->___all_mimes), m) {
         m->~tnef_parser_mime();
         /* gmp->free(m); */
-    } zcc_vector_walk_end;
-    ___data->___all_mimes->~vector<tnef_parser_mime *>(); /* free */
+    } std_list_walk_end;
+    ___data->___all_mimes->~list<tnef_parser_mime *>(); /* free */
     /* gmp->free(___data); */
 
     ___data->mcm->~mime_parser_cache_magic(); /* free */
     delete gmp;
 }
 
-void tnef_parser::option_src_charset_def(const char *src_charset_def)
+void tnef_parser::set_src_charset_def(const char *src_charset_def)
 {
     if (src_charset_def) {
         snprintf(___data->src_charset_def, 31, "%s", src_charset_def);
@@ -551,7 +551,7 @@ size_t tnef_parser::size()
     return ___data->tnef_size;
 }
 
-const vector<tnef_parser_mime *> &tnef_parser::all_mimes()
+const std::list<tnef_parser_mime *> &tnef_parser::all_mimes()
 {
     return (*(___data->___all_mimes));
 }

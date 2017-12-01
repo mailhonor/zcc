@@ -13,14 +13,6 @@ namespace zcc
 
 config default_config;
 
-config::config()
-{
-}
-
-config::~config()
-{
-}
-
 bool config::load_by_filename(const char *filename)
 {
     FILE *fp;
@@ -45,12 +37,19 @@ bool config::load_by_filename(const char *filename)
         if (val) {
             val = trim(val);
         }
-        update(key, val);
+        (*this)[key] = val?val:"";
     }
 
     fclose(fp);
 
     return true;
+}
+
+void config::load_another(config &cf)
+{
+    for (config::iterator it = cf.begin(); it != cf.end(); it++) {
+        (*this)[it->first] = it->second;
+    }
 }
 
 void config::get_str_table(config_str_table_t * table)

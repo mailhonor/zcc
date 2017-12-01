@@ -24,7 +24,7 @@ static sqlite3 *sqlite3_handler = 0;
 static pthread_mutex_t sqlite3_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* {{{ proxy */
-static list<async_io *> proxy_list;
+static std::list<async_io *> proxy_list;
 static pthread_mutex_t proxy_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t proxy_cond = PTHREAD_COND_INITIALIZER;
 
@@ -55,7 +55,7 @@ static void proxy_exec(async_io &aio)
         }
     }
 
-    string obuf;
+    std::string obuf;
     obuf.clear();
     if (err) {
         obuf.push_back('E');
@@ -75,7 +75,7 @@ static void proxy_query(async_io &aio)
     char *sql = (char *)aio.get_context();
     int len = *((int *)sql);
     sql += sizeof(int) + 1;
-    string obuf;
+    std::string obuf;
     do {
         if (sqlite3_prepare_v2(sqlite3_handler, sql, len, &sql_stmt, 0) != SQLITE_OK) {
             err = 1;
@@ -83,7 +83,7 @@ static void proxy_query(async_io &aio)
         }
         obuf.clear();
         ncolumn = sqlite3_column_count(sql_stmt);
-        obuf.printf_1024("O%d", ncolumn);
+        sprintf_1024(obuf, "O%d", ncolumn);
         aio.cache_write_size_data(obuf.c_str(), obuf.size());
 
         obuf.clear();
@@ -98,7 +98,7 @@ static void proxy_query(async_io &aio)
             for (coi=0;coi<ncolumn;coi++) {
                 char *d = (char *)sqlite3_column_blob(sql_stmt, coi);
                 int l = sqlite3_column_bytes(sql_stmt, coi);
-                obuf.size_data_escape(d, l);
+                size_data_escape(obuf, d, l);
             }
             aio.cache_write_size_data(obuf.c_str(), obuf.size());
         }
@@ -129,7 +129,7 @@ static void *pthread_proxy(void *arg)
             return 0;
         }
         zcc_pthread_lock(&proxy_mutex);
-        while(proxy_list.size() == 0) {
+        while(proxy_list.empty()) {
             timeout.tv_sec = time(0) + 10;
             timeout.tv_nsec = 0;
             pthread_cond_timedwait(&proxy_cond, &proxy_mutex, &timeout);
@@ -137,7 +137,8 @@ static void *pthread_proxy(void *arg)
                 return 0;
             }
         }
-        proxy_list.shift(&aio);
+        aio = proxy_list.front();
+        proxy_list.pop_front();
         zcc_pthread_unlock(&proxy_mutex);
         
         char *p = (char *)aio->get_context();
@@ -156,8 +157,8 @@ static void *pthread_proxy(void *arg)
 /* }}} */
 
 /* {{{ log */
-static list<char *> log_list;
-static list<char *> log_list_tmp;
+static std::list<char *> log_list;
+static std::list<char *> log_list_tmp;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t log_cond = PTHREAD_COND_INITIALIZER;
 
@@ -177,12 +178,12 @@ static void proxy_log()
     if (sok && (sqlite3_exec(sqlite3_handler, "BEGIN;", NULL, NULL, &err_sql) != SQLITE_OK)) {
         sok = 0;
     }
-    zcc_list_walk_begin(log_list_tmp, log) {
+    std_list_walk_begin(log_list_tmp, log) {
         if (sok && (sqlite3_exec(sqlite3_handler, log + sizeof(int) + 1, NULL, NULL, &err_sql) != SQLITE_OK)) {
             sok = 0;
         }
         free(log);
-    } zcc_list_walk_end;
+    } std_list_walk_end;
     if (sok) {
         if (sok && (sqlite3_exec(sqlite3_handler, "COMMIT;", NULL, NULL, &err_sql) != SQLITE_OK)) {
             sok = 0;
@@ -212,7 +213,7 @@ static void *pthread_log(void *arg)
         }
         zcc_pthread_lock(&log_mutex);
         long last_log = timeout_set(0);
-        while(log_list.size() == 0) {
+        while(log_list.empty()) {
             timeout.tv_sec = time(0) + 1;
             timeout.tv_nsec = 0;
             pthread_cond_timedwait(&log_cond, &log_mutex, &timeout);
@@ -226,7 +227,8 @@ static void *pthread_log(void *arg)
             }
         }
         char *data;
-        log_list.shift(&data);
+        data = log_list.front();
+        log_list.pop_front();
         zcc_pthread_unlock(&log_mutex);
 
         log_list_tmp.push_back(data);
@@ -304,7 +306,7 @@ sqlite3_proxyd::~sqlite3_proxyd()
 void sqlite3_proxyd::before_service()
 {
     do {
-        sqlite3_proxy_filename = zcc::default_config.get_str("zsqlite3_proxy_filename", "");
+        sqlite3_proxy_filename = zcc::default_config.get_str("sqlite3_proxy_filename", "");
         if(empty(sqlite3_proxy_filename)) {
             zcc_fatal("FATAL must set sqlite3_proxy_filename'value");
         }

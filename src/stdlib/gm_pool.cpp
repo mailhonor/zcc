@@ -33,7 +33,7 @@ gm_pool::~gm_pool()
     clear();
 }
 
-void gm_pool::option_buffer_size(size_t single_buffer_size)
+void gm_pool::set_buffer_size(size_t single_buffer_size)
 {
     if (___single_buffer_size) {
         return;
@@ -85,7 +85,7 @@ void *gm_pool::malloc(size_t size)
     }
 
     if (___single_buffer_size == 0) {
-        option_buffer_size(defaul_single_buffer_size);
+        set_buffer_size(defaul_single_buffer_size);
     }
 
     if (size > ___single_buffer_size_10percent) {

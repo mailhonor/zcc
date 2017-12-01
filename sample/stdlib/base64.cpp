@@ -10,7 +10,7 @@
 
 static void ___usage()
 {
-    printf("USAGE: %s -encode/decode [ -mime ] -f filename\n", zcc::var_progname);
+    printf("USAGE: %s --encode/decode [ --mime ] -f filename\n", zcc::var_progname);
     exit(1);
 }
 
@@ -19,37 +19,15 @@ int main(int argc, char **argv)
     char *fn = 0;
     bool encode_flag = true;
     bool mime_flag = false;
-
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-encode")) {
-            encode_flag = true;
-            opti += 1;
-            continue;
-        }
-        if (!strcmp(optname, "-decode")) {
-            encode_flag = false;
-            opti += 1;
-            continue;
-        }
-        if (!strcmp(optname, "-mime")) {
-            mime_flag = true;
-            opti += 1;
-            continue;
-        }
-        if (!optval) {
-            ___usage();
-        }
-        if (!strcmp(optname, "-f")) {
-            fn = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    zcc::main_parameter_run(argc, argv);
+    encode_flag = zcc::default_config.get_bool("encode", false);
+    mime_flag = zcc::default_config.get_bool("mime", false);
+    fn = zcc::default_config.get_str("f");
 
     if (zcc::empty(fn)) {
         ___usage();
     }
-    zcc::string fcon, result;
+    std::string fcon, result;
     zcc::file_get_contents_sample(fn, fcon);
     if (encode_flag) {
         zcc::base64_encode(fcon.c_str(), fcon.length(), result, mime_flag);
@@ -58,7 +36,7 @@ int main(int argc, char **argv)
         zcc::base64_decode(fcon.c_str(), fcon.length(), result);
 #else
         zcc::base64_decoder decoder;
-        zcc::string tmp;
+        std::string tmp;
         for (size_t i = 0; i < fcon.length() + 1; i++) {
             /* i == fcon.length , *(fcon.c_str()) == 0, means over */
             if (decoder.decode(fcon.c_str() + i, 1, tmp) < 0) {

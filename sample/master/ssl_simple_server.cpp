@@ -28,7 +28,7 @@ int main(int argc, char **argv)
         if (sock < 0) {
             continue;
         }
-        zcc::tlsstream *fp = new zcc::tlsstream(sock);
+        zcc::stream *fp = new zcc::stream(sock);
         fp->tls_accept(var_openssl_server_ctx);
         fp->puts("220 00\n");
         fp->flush();

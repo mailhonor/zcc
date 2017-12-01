@@ -11,27 +11,21 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-static void ___usage(const char *arg)
-{
-    (void)arg;
-    printf("do not run this command by hand\n");
-    exit(1);
-}
+bool var_test_mode = false;
 
 namespace zcc
 {
 
 static master_event_server *___instance;
 static bool flag_init = false;
-static bool flag_alone_mode = false;
 static bool flag_run = false;
 static bool flag_inner_event_loop = false;
 static bool flag_clear = false;
 static pid_t parent_pid = 0;
 static event_io *ev_status = 0;
-static list<event_io *> event_ios;
+static std::list<event_io *> event_ios;
 
-static void load_global_config_by_dir(const char *config_path)
+static void load_global_config_by_dir(config &cf, const char *config_path)
 {
     DIR *dir;
     struct dirent ent, *ent_list;
@@ -53,7 +47,7 @@ static void load_global_config_by_dir(const char *config_path)
             continue;
         }
         snprintf(pn, 4096, "%s/%s", config_path, fn);
-        default_config.load_by_filename(pn);
+        cf.load_by_filename(pn);
     }
     closedir(dir);
 }
@@ -121,7 +115,6 @@ master_event_server::master_event_server()
     if (!flag_init) {
         signal(SIGPIPE, SIG_IGN);
         flag_init = true;
-        flag_alone_mode = false;
         flag_run = false;
         parent_pid = getppid();
         ev_status = 0;
@@ -148,11 +141,11 @@ void master_event_server::clear()
         close(var_master_server_status_fd);
         close(var_master_master_status_fd);
     }
-    zcc_list_walk_begin(event_ios, eio) {
+    std_list_walk_begin(event_ios, eio) {
         int fd = eio->get_fd();
         delete eio;
         close(fd);
-    } zcc_list_walk_end;
+    } std_list_walk_end;
     event_ios.clear();
 }
 
@@ -195,25 +188,39 @@ void master_event_server::alone_register(char *alone_url)
     }
 }
 
-void master_event_server::inner_service_register(char *s, char *optval)
+void master_event_server::master_register(char *master_url)
 {
-    int t = optval[0];
-    switch(t) {
-        case var_tcp_listen_type_inet:
-        case var_tcp_listen_type_unix:
-        case var_tcp_listen_type_fifo:
-            break;
-        default:
-            zcc_fatal("master_event_server: unknown service type %c", t);
-            break;
+    zcc::argv service_argv;
+    service_argv.split(master_url, ",");
+    for (size_t i = 0; i < service_argv.size(); i++) {
+        char *service_name, *typefd;
+        zcc::argv stfd;
+        stfd.split(service_argv[i], ":");
+        if (stfd.size() == 1) {
+            service_name = blank_buffer;
+            typefd = stfd[0];
+        } else {
+            service_name = stfd[0];
+            typefd = stfd[1];
+        }
+        int fdtype = typefd[0];
+        switch(fdtype) {
+            case var_tcp_listen_type_inet:
+            case var_tcp_listen_type_unix:
+            case var_tcp_listen_type_fifo:
+                break;
+            default:
+                zcc_fatal("master_coroutine_server: unknown service type %c", fdtype);
+                break;
+        }
+        int fd = atoi(typefd+1);
+        if (fd < var_master_server_listen_fd) {
+            zcc_fatal("master_coroutine_server: fd is invalid", typefd+1);
+        }
+        close_on_exec(fd);
+        nonblocking(fd);
+        service_register(service_name, fd, fdtype);
     }
-    int fd = atoi(optval+1);
-    if (fd < 1) {
-        zcc_fatal("master_event_server: fd is invalid", optval+1);
-    }
-    close_on_exec(fd);
-    nonblocking(fd);
-    service_register(s, fd, t);
 }
 
 void master_event_server::before_service()
@@ -259,75 +266,60 @@ void master_event_server::service_register(const char *service_name, int fd, int
     general_service_register(fd, fd_type, 0);
 }
 
-void master_event_server::run_begin(int argc, char ** argv)
+void master_event_server::run(int argc, char ** argv)
 {
     if (flag_run) {
-        zcc_fatal("master_event_server:: only run one time");
+        zcc_fatal("master_coroutine_server:: only run one time");
     }
     flag_run = true;
     ___instance = this;
-    flag_alone_mode = true;
-    var_progname = argv[0];
+    char *attr;
 
-    zcc_main_parameter_begin() {
-        if (!strcmp(optname, "-M")) {
-            flag_alone_mode = false;
-            opti += 1;
-            continue;
-        }
-        if (optval == 0) {
-            ___usage(optname);
-        }
-        if (!strcmp(optname, "-global_config")) {
-            load_global_config_by_dir(optval);
-            opti += 2;
-            continue;
-        }
-        if (!strncmp(optname, "-s", 2)) {
-            inner_service_register(optname+2, optval);
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-log-listen")) {
-            var_masterlog_listen = optval;
-            opti += 2;
-            continue;
-        }
-        if (!strcmp(optname, "-stop-file")) {
-            stop_file = optval;
-            opti += 2;
-            continue;
-        }
-    } zcc_main_parameter_end;
+    main_parameter_run(argc, argv);
 
-    if (!empty(var_listen_address)) {
-        alone_register(var_listen_address);
+    attr = default_config.get_str("server-config-path", "");
+    if (!empty(attr)) {
+        config cf;
+        load_global_config_by_dir(cf, attr);
+        cf.load_another(default_config);
+        default_config.load_another(cf);
     }
 
-    if (!flag_alone_mode) {
+    var_masterlog_listen = default_config.get_str("master-log-listen", "");
+    stop_file = default_config.get_str("stop-file", "");
+
+    log_use_by(argv[0], default_config.get_str("server-log"));
+
+    if (default_config.get_bool("MASTER", false)) {
         ev_status = new event_io();
         close_on_exec(var_master_master_status_fd);
         nonblocking(var_master_master_status_fd);
         ev_status->bind(var_master_master_status_fd);
         ev_status->enable_read(on_master_reload);
         ev_status->set_context(this);
-        if (stop_file) {
+        if (!empty(stop_file)) {
             event_timer *stop_file_timer = new event_timer();
             stop_file_timer->bind();
             stop_file_timer->start(stop_file_check, 1000 * 1);
         }
     }
 
-    if (!var_test_mode) {
-        log_use_by_config(argv[0]);
-    }
-
     before_service();
     before_service_for_enduser();
-}
 
-void master_event_server::run_loop()
-{
+    if (!default_config.get_bool("MASTER", false)) {
+        alone_register(default_config.get_str("server-service", ""));
+    } else {
+        master_register(default_config.get_str("server-service", ""));
+    }
+
+    attr = default_config.get_str("sever_user", "");
+    if (!empty(attr)) {
+        if(!chroot_user(0, attr)) {
+            zcc_fatal("ERR chroot_user %s", attr);
+        }
+    }
+
     while (1) {
         if (var_proc_stop) {
             break;
@@ -341,18 +333,8 @@ void master_event_server::run_loop()
         }
     }
     clear();
-}
 
-void master_event_server::run_over()
-{
     before_exit();
-}
-
-void master_event_server::run(int argc, char ** argv)
-{
-    run_begin(argc, argv);
-    run_loop();
-    run_over();
 }
 
 }

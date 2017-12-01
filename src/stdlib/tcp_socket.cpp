@@ -363,20 +363,17 @@ int inet_connect(const char *dip, int port)
 
 int host_connect(const char *host, int port)
 {
-    char ip_list[16 * 128];
-    int sock, count, i;
+    std::list<std::string> ip_vec;
+    int sock;
 
-    count = get_hostaddr(host, ip_list, 128);
-    if (count < 1) {
-        return -1;
-    }
-    for (i = 0; i < count; i++) {
-        sock = inet_connect(ip_list + i*16, port);
+    get_hostaddr(host, ip_vec);
+    std_list_walk_begin(ip_vec, ip) {
+        sock = inet_connect(ip.c_str(), port);
         if (sock < 1) {
             return -1;
         }
         return sock;
-    }
+    } std_list_walk_end;
 
     return -1;
 }
