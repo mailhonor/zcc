@@ -12,86 +12,14 @@
 namespace zcc
 {
 
-mime_address::mime_address()
-{
-    ___name = blank_buffer;
-    ___address = blank_buffer;
-    ___name_utf8 = blank_buffer;
-}
-
-mime_address::mime_address(const mime_address &_x)
-{
-    ___name = strdup(_x.___name);
-    ___address = strdup(_x.___address);
-    ___name_utf8 = strdup(_x.___name_utf8);
-}
-
-mime_address::~mime_address()
-{
-    if (!___do_not_free) {
-        free(___name);
-        free(___address);
-        free(___name_utf8);
-    }
-}
-
-mime_address &mime_address::update_name(const char *name)
-{
-    free(___name);
-    ___name = strdup(name);
-    return *this;
-}
-
-mime_address &mime_address::update_address(const char *address)
-{
-    free(___address);
-    ___address = strdup(___address);
-    return *this;
-}
-
-mime_address &mime_address::update_name_utf8(const char *name_utf8)
-{
-    free(___name_utf8);
-    ___name_utf8 = strdup(name_utf8);
-    return *this;
-}
-
-mime_address & mime_address::operator=(const mime_address &_x)
-{
-    if (!___do_not_free) {
-        free(___name);
-        free(___address);
-        free(___name_utf8);
-        ___do_not_free = false;
-    }
-    ___name = strdup(_x.name());
-    ___address = strdup(_x.address());
-    ___name_utf8 = strdup(_x.name_utf8());
-    return *this;
-}
-
-void mime_address::set_values(const char *name, const char *address, const char *name_utf8)
-{
-    if (name) {
-        ___name = const_cast<char *>(name);
-    }
-    if (address) {
-        ___address = const_cast<char *>(address);
-    }
-    if (name_utf8) {
-        ___name_utf8 = const_cast<char *>(name_utf8);
-    }
-    ___do_not_free = true;
-}
-
-static int parser_one(char **str, int *len, char **rname, char **raddress, char *tmp_cache)
+static int parser_one(char **str, int *len, char **rname, char **raddress, char *tmp_cache, int tmp_cache_size)
 {
     char *pstr = *str;
     int c;
     int plen = *len, i, inquote = 0;
     char *name = 0, *mail = 0, last = 0;
-    size_t tmp_cache_idx = 0;
-#define  ___put(ch)  { if(tmp_cache_idx>var_mime_address_name_max_length) return -1;tmp_cache[tmp_cache_idx++] = (ch);}
+    int tmp_cache_idx = 0;
+#define  ___put(ch)  { if(tmp_cache_idx>tmp_cache_size) return -1;tmp_cache[tmp_cache_idx++] = (ch);}
 
     if (plen <= 0) {
         return -1;
@@ -230,7 +158,7 @@ bool mime_address_parser::shift(std::string &name, std::string &address)
     }
 
     while (1) {
-        ret = parser_one(&___str, &___len, &n, &a, ___cache);
+        ret = parser_one(&___str, &___len, &n, &a, ___cache, var_mime_address_name_max_length);
         if (ret == -1) {
             return false;
         }
@@ -259,7 +187,7 @@ bool mime_address_parser::shift(char **name, char **address)
     }
 
     while (1) {
-        ret = parser_one(&___str, &___len, name, address, ___cache);
+        ret = parser_one(&___str, &___len, name, address, ___cache, var_mime_address_name_max_length);
         if (ret == -1) {
             return false;
         }
@@ -271,57 +199,74 @@ bool mime_address_parser::shift(char **name, char **address)
     }
     return false;
 }
-void mime_header_line_get_address(const char *in_str, size_t in_len, std::list<mime_address *> &rvec)
+
+std::list<mime_address> mime_header_line_get_address(const char *in_str, size_t in_len)
 {
-    mime_address *addr;
+    std::list<mime_address> r;
+    mime_header_line_get_address(in_str, in_len, r);
+    return r;
+}
+
+void mime_header_line_get_address(const char *in_str, size_t in_len, std::list<mime_address> &rvec)
+{
     char *n, *a, *str, *cache;
     int len = (int)in_len, ret;
-    mime_parser_cache_magic mcm(in_str);
 
-    str = mcm.true_data;
-    cache = mcm.cache->line_cache;
+    str = (char *)in_str;
+    cache = (char *)malloc(in_len + 1024);
 
     while (1) {
-        ret = parser_one(&str, &len, &n, &a, cache);
+        ret = parser_one(&str, &len, &n, &a, cache, in_len + 1000);
         if (ret == -1) {
             break;
         }
         if (ret == -2) {
             continue;
         }
-        if (mcm.gmp) {
-            addr = new(mcm.gmp->calloc(1, sizeof(mime_address)))mime_address();
-            addr->set_values((char*)mcm.gmp->strdup(n), (char*)mcm.gmp->strdup(a), 0);
-        } else {
-            addr = new mime_address();
-            addr->update_name(n);
-            addr->update_address(a);
+        mime_address addr;
+        addr.name = n;
+        addr.address = a;
+        rvec.push_back(addr);
+    }
+
+    free(cache);
+}
+
+std::list<mime_address> mime_header_line_get_address_utf8(const char *src_charset_def,
+        const char *in_str, size_t in_len)
+{
+    std::list<mime_address> r;
+    mime_header_line_get_address_utf8(src_charset_def, in_str, in_len, r);
+    return r;
+}
+
+void mime_header_line_get_address_utf8(const char *src_charset_def, const char *in_str, size_t in_len
+        , std::list<mime_address> &rvec)
+{
+    char *n, *a, *str, *cache;
+    int len = (int)in_len, ret;
+
+    str = (char *)in_str;
+    cache = (char *)malloc(in_len + 1024);
+
+    while (1) {
+        ret = parser_one(&str, &len, &n, &a, cache, in_len + 1000);
+        if (ret == -1) {
+            break;
+        }
+        if (ret == -2) {
+            continue;
+        }
+        mime_address addr;
+        addr.name = n;
+        addr.address = a;
+        if (!addr.name.empty()) {
+            mime_header_line_get_utf8(src_charset_def, addr.name.c_str(), addr.name.size(), addr.name_utf8);
         }
         rvec.push_back(addr);
     }
-}
 
-void mime_header_line_get_address_utf8(const char *src_charset_def , const char *in_str, size_t in_len
-        , std::list<mime_address *> &rvec)
-{
-    const char *name;
-    mime_parser_cache_magic mcm(in_str);
-    std::string &dest = mcm.require_string();
-
-    mime_header_line_get_address((char *)&mcm, in_len, rvec);
-    std_list_walk_begin(rvec, addr) {
-        name = addr->name();
-        if (*name) {
-            dest.clear();
-            mcm.true_data = const_cast<char *>(name);
-            mime_header_line_get_utf8(src_charset_def, (char *)&mcm, strlen(name), dest);
-            if (mcm.gmp) {
-                addr->set_values(0, 0, mcm.gmp->memdupnull(dest.c_str(), dest.size()));
-            } else {
-                addr->update_name_utf8(dest.c_str());
-            }
-        }
-    } std_list_walk_end;
+    free(cache);
 }
 
 }

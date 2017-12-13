@@ -12,11 +12,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-static typeof(malloc) *___malloc = malloc;
-static typeof(free) *___free = free;
-static typeof(realloc) *___realloc = realloc;
-static typeof(calloc) *___calloc = calloc;
-
 namespace zcc
 {
 static char blank_buffer_buffer[2] = {0};
@@ -29,7 +24,7 @@ void *malloc(size_t size)
     if (size < 1) {
         size = 1;
     }
-    if ((r = ___malloc(size)) == 0) {
+    if ((r = ::malloc(size)) == 0) {
         zcc_fatal("malloc: insufficient memory for %zu bytes: %m", size);
     }
     ((char *)r)[0] = 0;
@@ -41,7 +36,7 @@ void *calloc(size_t nmemb, size_t size)
 {
     void *r;
 
-    if ((r = ___calloc(nmemb, size)) == 0) {
+    if ((r = ::calloc(nmemb, size)) == 0) {
         zcc_fatal("calloc: insufficient memory for %zux%zu bytes: %m", nmemb, size);
     }
 
@@ -59,7 +54,7 @@ void *realloc(const void *ptr, size_t size)
     if (ptr == (const void *)blank_buffer) {
         ptr = 0;
     }
-    if ((r = ___realloc(const_cast<void *>(ptr), size)) == 0) {
+    if ((r = ::realloc(const_cast<void *>(ptr), size)) == 0) {
         zcc_fatal("realloc: insufficient memory for %zu bytes: %m", size);
     }
 
@@ -69,7 +64,7 @@ void *realloc(const void *ptr, size_t size)
 void free(const void *ptr)
 {
     if (ptr && (ptr!=blank_buffer)) {
-        ___free((void *)ptr);
+        ::free((void *)ptr);
     }
 }
 

@@ -7,68 +7,47 @@
  */
 
 #include "zcc.h"
-#include "mime.h"
 
 namespace zcc
 {
 
 /* tnef */
-struct tnef_parser_mime_t {
-    char *type;
-    char *filename;
-    char *filename_utf8;
-    char *show_name;
-    char *content_id;
+class tnef_parser_mime_engine
+{
+public:
+    tnef_parser_mime_engine(tnef_parser_engine *_parser);
+    ~tnef_parser_mime_engine();
+    unsigned char filename_utf8_flag:1;
+    unsigned char show_name_flag:1;
+    std::string type;
+    std::string filename;
+    std::string filename_utf8;
+    std::string *show_name;
+    std::string content_id;
     int body_offset;
     int body_len;
 
     /* relationship */
-    tnef_parser_mime_t *all_last;
-    tnef_parser_mime_t *all_next;
     tnef_parser_mime *wrap;
 
     /* */
-    short int mime_type;
-    tnef_parser_t *parser;
+    tnef_parser_engine *parser;
 };
 
-struct tnef_parser_t {
-    char src_charset_def[32];
-    std::list<tnef_parser_mime *> *___all_mimes;
-    mime_parser_cache_magic *mcm;
+class tnef_parser_engine
+{
+public:
+    tnef_parser_engine();
+    ~tnef_parser_engine();
+    std::string src_charset_def;
+    std::list<tnef_parser_mime_engine *> all_mimes_engine;
+    std::list<tnef_parser_mime *> all_mimes;
     /* */
-    gm_pool *gmp;
     char *data_orignal;
     char *tnef_data;
     char *tnef_pos;
     int tnef_size;
 };
-
-
-typedef struct ___mime_list_t ___mime_list_t;
-struct ___mime_list_t {
-    tnef_parser_mime_t *head;
-    tnef_parser_mime_t *tail;
-};
-
-static int mime_list_add(tnef_parser_t * parser, ___mime_list_t * mime_list)
-{
-    tnef_parser_mime *mimew = new(parser->gmp->calloc(1, sizeof(tnef_parser_mime)))tnef_parser_mime(parser);
-    tnef_parser_mime_t *mime = ((tnef_parser_mime_t **)mimew)[0];
-    zcc_mlink_append(mime_list->head, mime_list->tail, mime, all_last, all_next);
-    mime->parser = parser;
-    return 0;
-}
-
-static int mime_list_pop(___mime_list_t * mime_list, tnef_parser_mime_t ** mime)
-{
-    *mime = mime_list->tail;
-    zcc_mlink_detach(mime_list->head, mime_list->tail, mime_list->tail, all_last, all_next);
-    if (*mime) {
-        return 1;
-    }
-    return 0;
-}
 
 /* ################################################################## */
 
@@ -113,11 +92,11 @@ static int mime_list_pop(___mime_list_t * mime_list, tnef_parser_mime_t ** mime)
 #define TNEF_GRIDI_ATTACH_DATA 		 0x3701
 #define TNEF_GRIDI_ATTACH_CID 		 0x3712
 
-static int ___mime_decode_tnef(tnef_parser_t * parser, ___mime_list_t * mime_list);
+static int ___mime_decode_tnef(tnef_parser_engine * parser, std::list<tnef_parser_mime_engine *> &mime_engine_list);
 
 #define ___LEFT(parser) 	((parser)->tnef_size - ((parser)->tnef_pos - (parser)->tnef_data))
 
-static inline int tnef_geti8(tnef_parser_t * parser)
+static inline int tnef_geti8(tnef_parser_engine * parser)
 {
     int v;
     unsigned char *p;
@@ -134,7 +113,7 @@ static inline int tnef_geti8(tnef_parser_t * parser)
     return v;
 }
 
-static inline int tnef_geti16(tnef_parser_t * parser)
+static inline int tnef_geti16(tnef_parser_engine * parser)
 {
     int v;
     unsigned char *p;
@@ -151,7 +130,7 @@ static inline int tnef_geti16(tnef_parser_t * parser)
     return v;
 }
 
-static inline int tnef_geti32(tnef_parser_t * parser)
+static inline int tnef_geti32(tnef_parser_engine * parser)
 {
     int v;
     unsigned char *p;
@@ -168,7 +147,7 @@ static inline int tnef_geti32(tnef_parser_t * parser)
     return v;
 }
 
-static inline int tnef_getx(tnef_parser_t * parser, int value_len, char **value)
+static inline int tnef_getx(tnef_parser_engine * parser, int value_len, char **value)
 {
     if (___LEFT(parser) < value_len) {
         return -1;
@@ -181,7 +160,7 @@ static inline int tnef_getx(tnef_parser_t * parser, int value_len, char **value)
     return 0;
 }
 
-static int tnef_decode_fragment(tnef_parser_t * parser, int *attribute, char **value, int *value_len)
+static int tnef_decode_fragment(tnef_parser_engine * parser, int *attribute, char **value, int *value_len)
 {
     if ((*attribute = tnef_geti32(parser)) == -1) {
         return -1;
@@ -202,7 +181,7 @@ static int tnef_decode_fragment(tnef_parser_t * parser, int *attribute, char **v
     return 0;
 }
 
-static int tnef_decode_message(tnef_parser_t * parser, ___mime_list_t * mime_list)
+static int tnef_decode_message(tnef_parser_engine * parser, std::list<tnef_parser_mime_engine *> &mime_engine_list)
 {
     int ret;
     int attribute;
@@ -214,15 +193,19 @@ static int tnef_decode_message(tnef_parser_t * parser, ___mime_list_t * mime_lis
     return ret;
 }
 
-static int extract_mapi_attrs(tnef_parser_t * parser, ___mime_list_t * mime_list)
+static int extract_mapi_attrs(tnef_parser_engine * parser, std::list<tnef_parser_mime_engine *> &mime_engine_list)
 {
     int att_type, att_name;
     char *val;
     int val_len;
-    tnef_parser_mime_t *cmime;
-    tnef_parser_t parser2;
+    tnef_parser_mime_engine *cmime;
+    tnef_parser_engine parser2;
 
-    cmime = mime_list->tail;
+    if (mime_engine_list.empty()) {
+        cmime = 0;
+    } else {
+        cmime = mime_engine_list.back();
+    }
 
     /* number of attributes */
     if (tnef_geti32(parser) == -1) {
@@ -284,48 +267,45 @@ static int extract_mapi_attrs(tnef_parser_t * parser, ___mime_list_t * mime_list
         switch (att_name) {
         case TNEF_GRIDI_ATTACH_LONG_FILENAME:  // used in preference to AFILENAME value
             if (val && cmime) {
-                if (cmime->filename) {
-#if 0
-                    parser->gmp->free(cmime->filename);
-#endif
-                }
-                cmime->filename = parser->gmp->memdupnull(val, val_len);
+                cmime->filename.clear();
+                cmime->filename.append(val, val_len);
             }
             break;
 
         case TNEF_GRIDI_ATTACH_MIME_TAG:   // Is this ever set, and what is format?
-            if (val && cmime && (!cmime->type)) {
-                cmime->type = parser->gmp->memdupnull(val, val_len);
+            if (val && cmime && (!cmime->type.empty())) {
+                cmime->type.append(val, val_len);
             }
             break;
 
         case TNEF_GRIDI_ATTACH_DATA:
-            memcpy(&parser2, parser, sizeof(tnef_parser_t));
+            parser2.data_orignal = parser->data_orignal;
             parser2.tnef_data = val;
             parser2.tnef_pos = val;
             parser2.tnef_size = val_len;
             if (tnef_getx(&parser2, 16, &val) == -1) {
                 return -1;
             }
-            cmime = 0;
-            if (mime_list_pop(mime_list, &cmime)) {
-                if (cmime) {
-                    cmime->wrap->~tnef_parser_mime(); /* free */
-                }
+            if (!mime_engine_list.empty()) {
+                cmime = mime_engine_list.back();
+                mime_engine_list.pop_back();
+                delete cmime;
             }
             cmime = 0;
 
+#if  0
             parser2.data_orignal = parser->data_orignal;
             parser2.tnef_data = val;
             parser2.tnef_pos = val;
             parser2.tnef_size = val_len;
-            if (___mime_decode_tnef(&parser2, mime_list) == -1) {
+#endif
+            if (___mime_decode_tnef(&parser2, mime_engine_list) == -1) {
                 return -1;
             }
             break;
         case TNEF_GRIDI_ATTACH_CID:
-            if (val && cmime && (!cmime->content_id)) {
-                cmime->content_id = parser->gmp->memdupnull(val, val_len);
+            if (val && cmime && (cmime->content_id.empty())) {
+                cmime->content_id.append(val, val_len);
             }
             break;
 
@@ -338,28 +318,33 @@ static int extract_mapi_attrs(tnef_parser_t * parser, ___mime_list_t * mime_list
     return 0;
 }
 
-static int tnef_decode_attachment(tnef_parser_t * parser, ___mime_list_t * mime_list)
+static int tnef_decode_attachment(tnef_parser_engine * parser, std::list<tnef_parser_mime_engine *> &mime_engine_list)
 {
     int ret;
     int attribute;
     char *val;
     int val_len;
-    tnef_parser_mime_t *cmime;
-    tnef_parser_t parser2;
+    tnef_parser_mime_engine *cmime;
+    tnef_parser_engine parser2;
 
     ret = tnef_decode_fragment(parser, &attribute, &val, &val_len);
     if (ret < 0) {
         return -1;
     }
 
-    cmime = mime_list->tail;
+    if (mime_engine_list.empty()) {
+        cmime = 0;
+    } else {
+        cmime = mime_engine_list.back();
+    }
+
     switch (attribute) {
     case TNEF_ARENDDATA:
-        mime_list_add(parser, mime_list);
+        mime_engine_list.push_back(new tnef_parser_mime_engine(parser));
         break;
     case TNEF_AFILENAME:
-        if (cmime && (!cmime->filename)) {
-            cmime->filename = parser->gmp->memdupnull(val, val_len);
+        if (cmime && (cmime->filename.empty())) {
+            cmime->filename.append(val, val_len);
         }
         break;
     case TNEF_ATTACHDATA:
@@ -369,11 +354,11 @@ static int tnef_decode_attachment(tnef_parser_t * parser, ___mime_list_t * mime_
         }
         break;
     case TNEF_AGRIDIATTRS:
-        memcpy(&parser2, parser, sizeof(tnef_parser_t));
+        parser2.data_orignal = parser->data_orignal;
         parser2.tnef_data = val;
         parser2.tnef_pos = val;
         parser2.tnef_size = val_len;
-        if (extract_mapi_attrs(&parser2, mime_list) == -1) {
+        if (extract_mapi_attrs(&parser2, mime_engine_list) == -1) {
             return -1;
         }
         break;
@@ -384,7 +369,7 @@ static int tnef_decode_attachment(tnef_parser_t * parser, ___mime_list_t * mime_
     return 0;
 }
 
-static int ___mime_decode_tnef(tnef_parser_t * parser, ___mime_list_t * mime_list)
+static int ___mime_decode_tnef(tnef_parser_engine * parser, std::list<tnef_parser_mime_engine *> &mime_engine_list)
 {
     int ret;
     int signature, type;
@@ -392,6 +377,9 @@ static int ___mime_decode_tnef(tnef_parser_t * parser, ___mime_list_t * mime_lis
     signature = tnef_geti32(parser);
     if (signature != TNEF_SIGNATURE) {
         return -1;
+        if (parser->data_orignal == parser->tnef_data) {
+            return -1;
+        }
     }
     tnef_geti16(parser);
 
@@ -399,9 +387,9 @@ static int ___mime_decode_tnef(tnef_parser_t * parser, ___mime_list_t * mime_lis
         type = tnef_geti8(parser);
         ret = 0;
         if (type == TNEF_LVL_MESSAGE) {
-            ret = tnef_decode_message(parser, mime_list);
+            ret = tnef_decode_message(parser, mime_engine_list);
         } else if (type == TNEF_LVL_ATTACHMENT) {
-            ret = tnef_decode_attachment(parser, mime_list);
+            ret = tnef_decode_attachment(parser, mime_engine_list);
         } else {
             return -1;
         }
@@ -414,62 +402,62 @@ static int ___mime_decode_tnef(tnef_parser_t * parser, ___mime_list_t * mime_lis
 }
 
 /* ################################################################## */
-tnef_parser_mime::tnef_parser_mime(tnef_parser_t *parser)
+tnef_parser_mime_engine::tnef_parser_mime_engine(tnef_parser_engine *_parser)
 {
-    ___data = (tnef_parser_mime_t *)parser->gmp->calloc(1, sizeof(tnef_parser_mime_t));
-    ___data->parser = parser;
-    ___data->wrap = this;
-    ___data->type = blank_buffer;
-    ___data->filename = blank_buffer;
-    ___data->content_id = blank_buffer;
+    filename_utf8_flag = 0;
+    show_name_flag = 0;
+    parser = _parser;
+}
+
+tnef_parser_mime_engine::~tnef_parser_mime_engine()
+{
+}
+
+
+tnef_parser_mime::tnef_parser_mime(tnef_parser_mime_engine *engine)
+{
+    ___data = engine;
 }
 
 tnef_parser_mime::~tnef_parser_mime()
 {
-#if 0
-    gm_pool &gmp = *(___data->parser->mpool);
-    gmp->free(___data.type);
-    gmp->free(___data.filename);
-    gmp->free(___data.filename_utf8);
-    gmp->free(___data.content_id);
-#endif
 }
 
-const char *tnef_parser_mime::type()
+const std::string &tnef_parser_mime::type()
 {
     return ___data->type;
 }
 
-const char *tnef_parser_mime::show_name()
+const std::string& tnef_parser_mime::show_name()
 {
-    if (!___data->show_name) {
-        char *n = const_cast<char *>(filename_utf8());
-        if(n == blank_buffer) {
-            n = const_cast<char *>(filename());
+    if (!___data->show_name_flag) {
+        std::string *n = &(___data->filename_utf8);
+        if (!___data->filename_utf8_flag) {
+            filename_utf8();
+        }
+        if (n->empty()) {
+            n = &(___data->filename);
         }
         ___data->show_name = n;
     }
-    return ___data->show_name;
+    return *(___data->show_name);
 }
 
-const char *tnef_parser_mime::filename()
+const std::string &tnef_parser_mime::filename()
 {
     return ___data->filename;
 }
 
-const char *tnef_parser_mime::filename_utf8()
+const std::string &tnef_parser_mime::filename_utf8()
 {
-    if (!___data->filename_utf8) {
-        mime_parser_cache_magic mcm(*(___data->parser->mcm));
-        std::string &uname = mcm.require_string();
-        mcm.true_data = ___data->filename;
-        mime_header_line_get_utf8(___data->parser->src_charset_def,(char *)(&mcm), strlen(___data->filename), uname);
-        ___data->filename_utf8 = ___data->parser->gmp->memdupnull(uname.c_str(), uname.size());
+    if (!___data->filename_utf8_flag) {
+        mime_header_line_get_utf8(___data->parser->src_charset_def.c_str() ,___data->filename.c_str(), ___data->filename.size(), ___data->filename_utf8);
+        ___data->filename_utf8_flag = 1;
     }
     return ___data->filename_utf8;
 }
 
-const char *tnef_parser_mime::content_id()
+const std::string &tnef_parser_mime::content_id()
 {
     return ___data->content_id;
 }
@@ -485,60 +473,59 @@ size_t tnef_parser_mime::body_size()
 }
 
 /* ################################################################## */
+tnef_parser_engine::tnef_parser_engine()
+{
+    data_orignal = 0;
+    tnef_data = 0;
+    tnef_pos = 0;
+    tnef_size = 0;
+}
+
+tnef_parser_engine::~tnef_parser_engine()
+{
+}
+
 tnef_parser::tnef_parser()
 {
-    gm_pool *gmp = new gm_pool();
-    ___data = (tnef_parser_t *)gmp->calloc(1, sizeof(tnef_parser_t));
-    ___data->gmp = gmp;
-    ___data->___all_mimes=new(gmp->calloc(1,sizeof(std::list<tnef_parser_mime*>)))std::list<tnef_parser_mime*>();
-    ___data->mcm = new(gmp->calloc(1, sizeof(mime_parser_cache_magic)))mime_parser_cache_magic();
-    ___data->mcm->gmp = gmp;
+    ___data = new tnef_parser_engine();
 }
 
 tnef_parser::~tnef_parser()
 {
-    gm_pool *gmp = ___data->gmp;
-    std_list_walk_begin(*(___data->___all_mimes), m) {
-        m->~tnef_parser_mime();
-        /* gmp->free(m); */
+    std_list_walk_begin(___data->all_mimes_engine, m) {
+        delete m;
     } std_list_walk_end;
-    ___data->___all_mimes->~list<tnef_parser_mime *>(); /* free */
-    /* gmp->free(___data); */
 
-    ___data->mcm->~mime_parser_cache_magic(); /* free */
-    delete gmp;
+    std_list_walk_begin((___data->all_mimes), m) {
+        delete m;
+    } std_list_walk_end;
+    delete ___data;
 }
 
 void tnef_parser::set_src_charset_def(const char *src_charset_def)
 {
-    if (src_charset_def) {
-        snprintf(___data->src_charset_def, 31, "%s", src_charset_def);
-    }
+    ___data->src_charset_def = src_charset_def;
 }
 
 void tnef_parser::parse(const char *mail_data, size_t mail_data_len)
 {
-    tnef_parser_t *parser = ___data;
-    ___mime_list_t mime_list;
-    tnef_parser_mime_t *m;
+    tnef_parser_engine *parser = ___data;
 
     parser->data_orignal = const_cast<char *>(mail_data);
     parser->tnef_data = const_cast<char *>(mail_data);
     parser->tnef_pos = const_cast<char *>(mail_data);
     parser->tnef_size = mail_data_len;
 
-    /* mime chain */
-    memset(&mime_list, 0, sizeof(___mime_list_t));
-    mime_list.head = 0;
-    mime_list.tail = 0;
-
-    if (___mime_decode_tnef(parser, &mime_list) < 0) {
+    std::list<tnef_parser_mime_engine *> mime_engine_list;
+    if (___mime_decode_tnef(parser, mime_engine_list) < 0) {
         return;
     }
 
-    for (m = mime_list.head; m; m = m->all_next) {
-        ___data->___all_mimes->push_back(m->wrap);
-    }
+    std_list_walk_begin(mime_engine_list, me) {
+        ___data->all_mimes_engine.push_back(me);
+        tnef_parser_mime *m = new tnef_parser_mime(me);
+        ___data->all_mimes.push_back(m);
+    } std_list_walk_end;
 }
 
 const char *tnef_parser::data()
@@ -553,7 +540,7 @@ size_t tnef_parser::size()
 
 const std::list<tnef_parser_mime *> &tnef_parser::all_mimes()
 {
-    return (*(___data->___all_mimes));
+    return (___data->all_mimes);
 }
 
 }

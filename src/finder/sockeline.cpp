@@ -25,13 +25,12 @@ private:
     const char *___destination;
     const char *___prefix;
     const char *___suffix;
-    stream *___fp;
+    stream ___fp;
     int ___fd;
 };
 
 socketline_finder::socketline_finder()
 {
-    ___fp = 0;
     ___fd = -1;
     ___url = 0;
 }
@@ -81,17 +80,17 @@ ssize_t socketline_finder::find(const char *query, std::string &result, long tim
             sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
             continue;
         }
-        ___fp->set_timeout(timeout_left(dtime));
-        ___fp->printf_1024("%s%s%s\r\n", ___prefix, query, ___suffix);
-        ___fp->flush();
-        if (___fp->is_exception()) {
+        ___fp.set_timeout(timeout_left(dtime));
+        ___fp.printf_1024("%s%s%s\r\n", ___prefix, query, ___suffix);
+        ___fp.flush();
+        if (___fp.is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : write error((%m)", ___url);
             continue;
         }
 
-        ___fp->gets(result);
-        if (___fp->is_exception()) {
+        ___fp.gets(result);
+        if (___fp.is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error", ___url);
             disconnect();
@@ -105,10 +104,7 @@ ssize_t socketline_finder::find(const char *query, std::string &result, long tim
 
 void socketline_finder::disconnect()
 {
-    if (___fp) {
-        delete ___fp;
-        ___fp = 0;
-    }
+    ___fp.close();
     if (___fd != -1) {
         close(___fd);
         ___fd = -1;
@@ -117,17 +113,16 @@ void socketline_finder::disconnect()
 
 bool socketline_finder::connect(long timeout)
 {
-    if (___fp) {
+    if (___fd != -1) {
         return true;
     }
-    if (___fd <0) {
+    if (___fd ==-1) {
         ___fd = zcc::connect(___destination);
     }
     if (___fd < 0) {
-
         return false;
     }
-    ___fp = new stream(___fd);
+    ___fp.open(___fd);
     return true;
 }
 

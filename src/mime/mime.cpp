@@ -12,12 +12,12 @@
 namespace zcc
 {
 
-int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmime, mail_parser_mime_inner * cmime, char *buf);
+int ___mail_decode_mime(mail_parser_engine * parser, mail_parser_mime_engine * pmime, mail_parser_mime_engine * cmime, char *buf);
 
 #define ___mftell(parser) ((parser)->mail_pos - (parser)->mail_data)
 
 /* ################################################################## */
-static int ___get_header_line(mail_parser_inner * parser, char **ptr)
+static int ___get_header_line(mail_parser_engine * parser, char **ptr)
 {
     char *pbegin = parser->mail_pos;
     char *pend = parser->mail_data + parser->mail_size;
@@ -59,7 +59,7 @@ static int ___get_header_line(mail_parser_inner * parser, char **ptr)
     return len;
 }
 
-static inline int ___get_body_line(mail_parser_inner * parser, char **ptr)
+static inline int ___get_body_line(mail_parser_engine * parser, char **ptr)
 {
     char *pbegin = parser->mail_pos;
     char *pend = parser->mail_data + parser->mail_size;
@@ -84,34 +84,20 @@ static inline int ___get_body_line(mail_parser_inner * parser, char **ptr)
 }
 
 /* ################################################################## */
-static int deal_content_type(mail_parser_inner * parser, mail_parser_mime_inner * cmime, char *buf, int len)
+static int deal_content_type(mail_parser_engine * parser, mail_parser_mime_engine * cmime, char *buf, int len)
 {
-    if (!empty(cmime->type)) {
+    if (!cmime->type.empty()) {
         return 0;
     }
-    char *val, *boundary, *charset, *name;
-    size_t v_len, b_len, c_len, n_len;
 
-    mime_header_line_decode_content_type(buf, len, &val, &v_len, &boundary, &b_len, &charset, &c_len, &name, &n_len);
-    if (v_len) {
-        cmime->type = parser->gmp->memdupnull(val, v_len);
-        tolower(cmime->type);
-    }
-    if (b_len) {
-        cmime->boundary = parser->gmp->memdupnull(boundary, b_len);
-    }
-    if (c_len) {
-        cmime->charset = parser->gmp->memdupnull(charset, c_len);
-    }
-    if (n_len) {
-        cmime->name = parser->gmp->memdupnull(name, n_len);
-    }
+    mime_header_line_decode_content_type(buf, len, cmime->type, cmime->boundary, cmime->charset, cmime->name);
+    tolower(cmime->type);
 
     return 0;
 }
 
 /* ################################################################## */
-static int deal_single(mail_parser_inner * parser, mail_parser_mime_inner * pmime, mail_parser_mime_inner * cmime, char *buf)
+static int deal_single(mail_parser_engine * parser, mail_parser_mime_engine * pmime, mail_parser_mime_engine * cmime, char *buf)
 {
     int ret = 2, len, blen, tell;
     char *line;
@@ -121,7 +107,7 @@ static int deal_single(mail_parser_inner * parser, mail_parser_mime_inner * pmim
         cmime->body_len = ___mftell(parser) - cmime->body_offset;
         return 0;
     }
-    blen = (pmime->boundary?strlen(pmime->boundary):0);
+    blen = pmime->boundary.size();
     while (1) {
         tell = ___mftell(parser);
         if ((len = ___get_body_line(parser, &line)) < 1) {
@@ -132,7 +118,7 @@ static int deal_single(mail_parser_inner * parser, mail_parser_mime_inner * pmim
         }
 
         line += 2;
-        if (!zcc_str_n_case_eq(line, pmime->boundary, blen)) {
+        if (!zcc_str_n_case_eq(line, pmime->boundary.c_str(), blen)) {
             continue;
         }
 
@@ -146,16 +132,15 @@ static int deal_single(mail_parser_inner * parser, mail_parser_mime_inner * pmim
 }
 
 /* ################################################################## */
-static int deal_multpart(mail_parser_inner * parser, mail_parser_mime_inner * pmime, mail_parser_mime_inner * cmime, char *buf)
+static int deal_multpart(mail_parser_engine * parser, mail_parser_mime_engine * pmime, mail_parser_mime_engine * cmime, char *buf)
 {
     int ret = 2;
     int len, blen;
     int have = 0;
-    mail_parser_mime_inner *nmime = 0, *prev = 0;
-    mail_parser_mime *nmime_w = 0;
+    mail_parser_mime_engine *nmime = 0, *prev = 0;
     char *line;
 
-    blen = (cmime->boundary?strlen(cmime->boundary):0);
+    blen = cmime->boundary.size();
     while (1) {
         //int offset_bak = ___mftell(parser);
         len = ___get_body_line(parser, &line);
@@ -164,22 +149,21 @@ static int deal_multpart(mail_parser_inner * parser, mail_parser_mime_inner * pm
         }
         have = 1;
 
-        if (!cmime->boundary) {
+        if (cmime->boundary.empty()) {
             continue;
         }
         if ((len < blen + 2) || (line[0] != '-') || (line[1] != '-')) {
             continue;
         }
         line += 2;
-        if (!zcc_str_n_case_eq(line, cmime->boundary, blen)) {
+        if (!zcc_str_n_case_eq(line, cmime->boundary.c_str(), blen)) {
             continue;
         }
         //cmime->body_offset = offset_bak;
         while (1) {
             int used = 0;
-            nmime_w = new(parser->gmp->calloc(1, sizeof(mail_parser_mime))) mail_parser_mime(parser);
-            nmime = (mail_parser_mime_inner *)(((char **)nmime_w)[0]);
-            parser->all_mimes.push_back(nmime_w);
+            nmime = new mail_parser_mime_engine(parser);
+            parser->all_mimes_engine.push_back(nmime);
             ret = ___mail_decode_mime(parser, cmime, nmime, buf);
             if (ret == 2 || ret == 3) {
                 used = 1;
@@ -192,9 +176,8 @@ static int deal_multpart(mail_parser_inner * parser, mail_parser_mime_inner * pm
                 prev = nmime;
             }
             if (!used) {
-                parser->all_mimes.resize(parser->all_mimes.size() - 1);
-                nmime_w->~mail_parser_mime();
-                /* parser->mpool->free(nmime_w); */
+                parser->all_mimes_engine.resize(parser->all_mimes_engine.size() - 1);
+                delete nmime;
             }
             if (ret != 2) {
                 break;
@@ -213,17 +196,17 @@ static int deal_multpart(mail_parser_inner * parser, mail_parser_mime_inner * pm
         return (ret);
     }
 
-    blen = (pmime->boundary?strlen(pmime->boundary):0);
+    blen = pmime->boundary.size();
     len = 0;
     while ((len = ___get_body_line(parser, &line)) > 0) {
-        if (!pmime->boundary) {
+        if (pmime->boundary.empty()) {
             continue;
         }
         if ((len < blen + 2) || (line[0] != '-') || (line[1] != '-')) {
             continue;
         }
         line += 2;
-        if (!zcc_str_n_case_eq(line, pmime->boundary, blen)) {
+        if (!zcc_str_n_case_eq(line, pmime->boundary.c_str(), blen)) {
             continue;
         }
 
@@ -241,32 +224,34 @@ static int deal_multpart(mail_parser_inner * parser, mail_parser_mime_inner * pm
 }
 
 /* ################################################################## */
-static int deal_message(mail_parser_inner * parser, mail_parser_mime_inner * pmime, mail_parser_mime_inner * cmime, char *buf)
+static int deal_message(mail_parser_engine * parser, mail_parser_mime_engine * pmime, mail_parser_mime_engine * cmime, char *buf)
 {
     return deal_single(parser, pmime, cmime, buf);
 
     int ret = 2,  decode = 1, len, blen, tell;
-    char *line;
+    char *line, *bdata;
 
     if (!pmime) {
         parser->mail_pos = parser->mail_data + parser->mail_size;
         cmime->body_len = ___mftell(parser) - cmime->body_offset;
         return 0;
     }
-    if (!cmime->encoding) {
+    const char *encoding = cmime->encoding.c_str();
+    if (cmime->encoding.empty()) {
         decode = 0;
-    } else if (zcc_str_case_eq(cmime->encoding, "7bit")) {
+    } else if (zcc_str_case_eq(encoding, "7bit")) {
         decode = 0;
-    } else if (zcc_str_case_eq(cmime->encoding, "8bit")) {
+    } else if (zcc_str_case_eq(encoding, "8bit")) {
         decode = 0;
-    } else if (zcc_str_case_eq(cmime->encoding, "binary")) {
+    } else if (zcc_str_case_eq(encoding, "binary")) {
         decode = 0;
     }
     if (decode) {
         return deal_single(parser, pmime, cmime, buf);
     }
 
-    blen = (pmime->boundary?strlen(pmime->boundary):0);
+    blen = pmime->boundary.size();
+    bdata = (char *)(pmime->boundary.c_str());
     while (1) {
         tell = ___mftell(parser);
         if ((len = ___get_body_line(parser, &line)) <= 0) {
@@ -278,7 +263,7 @@ static int deal_message(mail_parser_inner * parser, mail_parser_mime_inner * pmi
             continue;
         }
         line += 2;
-        if (!zcc_str_n_case_eq(line, pmime->boundary, blen)) {
+        if (!zcc_str_n_case_eq(line, bdata, blen)) {
             continue;
         }
 
@@ -298,19 +283,12 @@ static int deal_message(mail_parser_inner * parser, mail_parser_mime_inner * pmi
     if ((cmime->lll > 0) && (parser->mail_data[idx - 1] == '\r')) { cmime->lll--; } \
 }
 
-int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmime, mail_parser_mime_inner * cmime, char *buf)
+int ___mail_decode_mime(mail_parser_engine * parser, mail_parser_mime_engine * pmime, mail_parser_mime_engine * cmime, char *buf)
 {
     char *line;
     int have_header = 0, ret = 0, llen, safe_llen;
-    gm_pool &gmp = *(parser->gmp);
 
     cmime->parser = parser;
-
-    cmime->type = blank_buffer;
-    cmime->boundary = blank_buffer;
-    cmime->charset = blank_buffer;
-    cmime->name = blank_buffer;
-    cmime->imap_section = blank_buffer;
 
     cmime->header_offset = ___mftell(parser);
     while (1) {
@@ -325,15 +303,15 @@ int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmi
             break;
         }
         if (1) {
-            size_data_t *sd = (size_data_t *)gmp.malloc(sizeof(size_data_t));
-            sd->size = llen;
-            sd->data = line;
-            cmime->header_lines.push_back(sd);
+            size_data_t sd;
+            sd.size = llen;
+            sd.data = line;
+            cmime->raw_header_lines.push_back(sd);
         }
 
         have_header = 1;
         if ((llen > 12) && (line[7]=='-') && (!strncasecmp(line, "Content-Type:", 13))) {
-            int rlen = mime_header_line_unescape(line, safe_llen, buf, var_mime_header_line_max_length);
+            int rlen = mime_raw_header_line_unescape(line, safe_llen, buf, var_mime_header_line_max_length);
             buf[rlen] = 0;
             if (!strncasecmp(line, "Content-Type:", 13)){
                 ret = deal_content_type(parser, cmime, buf + 13, rlen - 13);
@@ -345,7 +323,7 @@ int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmi
     }
 
     /* deal mail body */
-    if (cmime->type == 0 || *(cmime->type) == 0) {
+    if (cmime->type.empty()) {
         /* gmp.free(cmime->type); */
         cmime->type = blank_buffer;
         /* cmime->type = gmp.strdup("text/plain"); */
@@ -354,9 +332,10 @@ int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmi
         return 4;
     }
 
-    if (zcc_str_n_case_eq(cmime->type, "multipart/", 10)) {
+    const char *ctype = cmime->type.c_str();
+    if (zcc_str_n_case_eq(ctype, "multipart/", 10)) {
         int ppp = 1;
-        mail_parser_mime_inner *parent = cmime->parent;
+        mail_parser_mime_engine *parent = cmime->parent;
         for (; parent; parent = parent->parent) {
             ppp++;
         }
@@ -365,7 +344,7 @@ int ___mail_decode_mime(mail_parser_inner * parser, mail_parser_mime_inner * pmi
         } else {
             ret = deal_multpart(parser, pmime, cmime, buf);
         }
-    } else if (zcc_str_n_case_eq(cmime->type, "message/", 8)) {
+    } else if (zcc_str_n_case_eq(ctype, "message/", 8)) {
         ret = deal_message(parser, pmime, cmime, buf);
     } else {
         ret = deal_single(parser, pmime, cmime, buf);

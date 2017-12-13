@@ -17,11 +17,10 @@ void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_
     int i, len, start_len, ch;
     char *in_src, *pend, *ps, *p, *start, *charset;
     char charset_buf[32];
-    mime_parser_cache_magic mcm(in_str);
    
-    in_src = mcm.true_data;
+    in_src = (char *)in_str;
     pend = in_src + in_len;
-    std::string &tmps = mcm.require_string();
+    std::string tmps;
 
     tmps.clear();
     dest.clear();

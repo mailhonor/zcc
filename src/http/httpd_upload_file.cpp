@@ -31,12 +31,12 @@ static void ___dump_file(httpd_engine *httpddata, const char *data_filename, std
 
 static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, std::string &disposition_raw, dict &params)
 {
-    const char *disposition = mime->disposition();
+    const char *disposition = mime->disposition().c_str();
     if (strncasecmp(disposition, "form-data", 9)) {
         return;
     }
     disposition_raw.clear();
-    if(!mime->header_line("content-disposition", disposition_raw)){
+    if(!mime->raw_header_line("content-disposition", disposition_raw)){
         return;
     }
     params.clear();
@@ -45,7 +45,7 @@ static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const
     char *name = params.get_str("name");
     tolower(name);
     char *filename = params.get_str("filename");
-    const char *ctype = mime->type();
+    const char *ctype = mime->type().c_str();
     if (strncasecmp(ctype, "multipart/", 10)) {
         mime->decoded_content(content);
         if (empty(filename)) {
@@ -56,13 +56,13 @@ static void ___walk_mime(mail_parser_mime * mime, httpd_engine *httpddata, const
         }
     } else {
         for (mail_parser_mime *mm = mime->child(); mm; mm = mm->next()) {
-            ctype = mm->type();
+            ctype = mm->type().c_str();
             if (!strncasecmp(ctype, "multipart/", 10)) {
                 return;
             }
             disposition_raw.clear();
             filename = blank_buffer;
-            if(mime->header_line("content-disposition", disposition_raw)){
+            if(mime->raw_header_line("content-disposition", disposition_raw)){
                 params.clear();
                 content.clear();
                 mime_header_line_get_params(disposition_raw.c_str(), disposition_raw.size(), content, params);

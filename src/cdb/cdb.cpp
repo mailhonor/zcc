@@ -12,10 +12,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-
-typeof(open) *___SYS_open = open;
-typeof(close) *___SYS_close = close;
-
 namespace zcc
 {
 namespace ___cdb
@@ -900,7 +896,7 @@ bool cdb::open(const char *db_fn)
     if (___db){
         close();
     }
-    while ((fd = ___SYS_open(db_fn, O_RDONLY)) == -1 && errno == EINTR) {
+    while ((fd = ::open(db_fn, O_RDONLY)) == -1 && errno == EINTR) {
         continue;
     }
     if (fd == -1) {
@@ -909,7 +905,7 @@ bool cdb::open(const char *db_fn)
 
     db = (___cdb::cdb *)calloc(1, sizeof(___cdb::cdb));
     if (___cdb::cdb_init(db, fd) != 0) {
-        ___SYS_close(fd);
+        ::close(fd);
         free(db);
         return false;
     }
@@ -943,7 +939,7 @@ void cdb::close()
     ___cdb::cdb_free((___cdb::cdb *)___db);
     ___db = 0;
     if (___need_close_fd) {
-        ___SYS_close(___fd);
+        ::close(___fd);
     }
     ___fd = -1;
 }
@@ -1064,7 +1060,7 @@ cdb_make::~cdb_make()
         ___db = 0;
     }
     if (___need_close_fd && (___fd!=-1)) {
-        ___SYS_close(___fd);
+        ::close(___fd);
     }
     ___fd = -1;
 }
@@ -1077,7 +1073,7 @@ bool cdb_make::start(const char *db_fn)
     if (___db){
         return false;
     }
-    while ((fd = ___SYS_open(db_fn, O_RDWR|O_CREAT|O_TRUNC, 0666)) == -1 && errno == EINTR) {
+    while ((fd = ::open(db_fn, O_RDWR|O_CREAT|O_TRUNC, 0666)) == -1 && errno == EINTR) {
         continue;
     }
     if (fd == -1) {
@@ -1086,7 +1082,7 @@ bool cdb_make::start(const char *db_fn)
 
     db = (___cdb::cdb_make *)calloc(1, sizeof(___cdb::cdb_make));
     if (___cdb::cdb_make_start(db, fd) < 0) {
-        ___SYS_close(fd);
+        ::close(fd);
         free(db);
         return false;
     }
@@ -1137,7 +1133,7 @@ bool cdb_make::finish()
     free(db);
     ___db = 0;
     if (___need_close_fd && (___fd!=-1)) {
-        ___SYS_close(___fd);
+        ::close(___fd);
     }
     ___fd = -1;
     return ret;

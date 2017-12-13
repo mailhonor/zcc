@@ -12,7 +12,7 @@
 namespace zcc
 {
 
-void mime_header_line_unescape(const char *data, size_t size, std::string &dest)
+void mime_raw_header_line_unescape(const char *data, size_t size, std::string &dest)
 {
     int ch;
     char *src = (char *)(data);
@@ -45,7 +45,7 @@ void mime_header_line_unescape(const char *data, size_t size, std::string &dest)
     }
 }
 
-size_t mime_header_line_unescape(const char *data, size_t size, char *dest, size_t dest_size)
+size_t mime_raw_header_line_unescape(const char *data, size_t size, char *dest, size_t dest_size)
 {
     int ch;
     char *src = const_cast<char *>(data);
@@ -92,9 +92,9 @@ void mime_header_line_get_first_token(const char *line, size_t len, std::string 
     }
 }
 
-size_t mime_header_line_get_first_token(const char *line_raw, size_t len, char **val)
+size_t mime_header_line_get_first_token(const char *line_, size_t len, char **val)
 {
-    char *line = const_cast<char *>(line_raw), *ps, *pend = (char *)line + len;
+    char *line = const_cast<char *>(line_), *ps, *pend = (char *)line + len;
     size_t i, vlen;
     int ch;
 
@@ -224,22 +224,27 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, 
     int ret, i, plen, mt_count;
     char *p;
     mime_header_line_element_t *mt_list, *mt, *mtn;
-    mime_parser_cache_magic mcm(in_src);
    
-    in_src = mcm.true_data;
-    std::string &bq_join = mcm.require_string();
-    std::string &out_string = mcm.require_string();
+    dest.clear();
+
+    in_src = (char *)in_src;
+    std::string bq_join;
+    std::string out_string;
 
     if (in_len > var_mime_header_line_max_length) {
         in_len = var_mime_header_line_max_length;
     }
 
-    mt_list = (mime_header_line_element_t *)(mcm.cache->line_cache);
-
     bq_join.clear();
     out_string.clear();
 
-    mt_count = mime_header_line_get_elements(in_src, in_len, mt_list, var_mime_header_line_max_element);
+    int mt_count_max = in_len/10 + 10;
+    if ( mt_count_max > (int)var_mime_header_line_max_element) {
+        mt_count_max = var_mime_header_line_max_element;
+    }
+    mt_list = (mime_header_line_element_t *)malloc(sizeof(mime_header_line_element_t) * (mt_count_max + 1));
+
+    mt_count = mime_header_line_get_elements(in_src, in_len, mt_list, mt_count_max);
     for (i = 0; i < mt_count; i++) {
         mt = mt_list + i;
         if (mt->size == 0) {
@@ -301,6 +306,7 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, 
         mime_iconv(mt->charset, bq_join.c_str(), bq_join.size(), out_string);
         dest += out_string;
     }
+    free(mt_list);
 }
 
 }

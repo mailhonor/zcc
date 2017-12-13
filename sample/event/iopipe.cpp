@@ -64,13 +64,13 @@ static void parameters_do(int argc, char **argv)
 
     proxy_address = zcc::default_config.get_str("proxy");
     if (zcc::empty(proxy_address)) {
-        proxy_address = zcc::default_config.get_str("proxy");
+        proxy_address = zcc::default_config.get_str("ssl-proxy");
         proxy_ssl = true;
     }
 
     dest_address = zcc::default_config.get_str("dest");
     if (zcc::empty(dest_address)) {
-        dest_address = zcc::default_config.get_str("dest");
+        dest_address = zcc::default_config.get_str("ssl-dest");
         dest_ssl = true;
     }
 

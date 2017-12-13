@@ -12,7 +12,7 @@
 namespace zcc
 {
 
-static inline int ___child_count(mail_parser_mime_inner * m)
+static inline int ___child_count(mail_parser_mime_engine * m)
 {
     int count = 0;
     for (m = m->child; m; m = m->next) {
@@ -21,17 +21,15 @@ static inline int ___child_count(mail_parser_mime_inner * m)
     return count;
 }
 
-static void ___mime_section(mail_parser_inner * parser, mail_parser_mime_inner * mime, char *section)
+static void ___mime_section(mail_parser_engine * parser, mail_parser_mime_engine * mime, char *section)
 {
-    gm_pool &gmp = *(parser->gmp);
     int i, count;
     char nsection[10240], intbuf[16];
-    mail_parser_mime_inner *cm, *fm;
+    mail_parser_mime_engine *cm, *fm;
     argv zav;
-    mime_parser_cache_magic mcm(parser->mcm);
-    std::string &zb = mcm.require_string();
+    std::string zb;
 
-    mime->imap_section = gmp.strdup(section);
+    mime->imap_section = section;
 
     zav.split(section, ".");
     count = ___child_count(mime);
@@ -40,7 +38,7 @@ static void ___mime_section(mail_parser_inner * parser, mail_parser_mime_inner *
     for (i = 0; i < count; i++, cm = cm->next) {
         if (!strcmp(section, "")) {
             sprintf(nsection, "%d", i + 1);
-        } else if ((zav.size()> 1) && (strncasecmp(fm->type, "multipart/", 11))) {
+        } else if ((zav.size()> 1) && (strncasecmp(fm->type.c_str(), "multipart/", 11))) {
             zb.clear();
             for (size_t k = 0; k < zav.size() - 1; k++) {
                 zb.append(zav[k]);
@@ -64,8 +62,8 @@ static void ___mime_section(mail_parser_inner * parser, mail_parser_mime_inner *
             }
         }
         if (___child_count(cm)) {
-            if (!((!strncasecmp(cm->type, "message/", 8))
-                        && (!strncasecmp(((mail_parser_mime_inner *)(cm->child))->type, "multipart/", 11)))) {
+            if (!((!strncasecmp(cm->type.c_str(), "message/", 8))
+                    && (!strncasecmp(((mail_parser_mime_engine *)(cm->child))->type.c_str(), "multipart/", 11)))) {
                 strcat(nsection, ".0");
             }
         }
@@ -73,13 +71,13 @@ static void ___mime_section(mail_parser_inner * parser, mail_parser_mime_inner *
     }
 }
 
-void mime_set_imap_section(mail_parser_inner * parser)
+void mime_set_imap_section(mail_parser_engine * parser)
 {
     if (parser->section_flag) {
         return;
     }
     parser->section_flag = 1;
-    ___mime_section(parser, parser->top_mime->get_inner_data(), const_cast<char *>("0"));
+    ___mime_section(parser, parser->top_mime_engine, const_cast<char *>("0"));
 }
 
 }

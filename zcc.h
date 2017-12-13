@@ -1050,13 +1050,15 @@ private:
 class mail_parser_mime;
 class mail_parser;
 
-void mime_iconv(const char *from_charset, const char *data, size_t size, std::string &dest);
 size_t mime_iconv(const char *from_charset, const char *data, size_t size, char *dest, size_t dest_size);
+void mime_iconv(const char *from_charset, const char *data, size_t size, std::string &dest);
 
-void mime_header_line_unescape(const char *in_str, size_t in_len, std::string &dest);
-size_t mime_header_line_unescape(const char *in_str, size_t in_len, char *dest, size_t dest_size);
-void mime_header_line_get_first_token(const char *in_str, size_t in_len, std::string &value);
-size_t mime_header_line_get_first_token(const char *in_str, size_t in_len, char **value);
+size_t mime_raw_header_line_unescape(const char *in_line, size_t in_len, char *dest, size_t dest_size);
+void mime_raw_header_line_unescape(const char *in_line, size_t in_len, std::string &dest);
+
+void mime_header_line_get_first_token(const char *in_line, size_t in_len, std::string &value);
+size_t mime_header_line_get_first_token(const char *in_line, size_t in_len, char **value);
+
 struct mime_header_line_element_t {
     char charset[32];
     char *data;
@@ -1064,47 +1066,29 @@ struct mime_header_line_element_t {
     encode_type encode;
 };
 typedef struct mime_header_line_element_t mime_header_line_element_t;
-size_t mime_header_line_get_elements(const char *in_str, size_t in_len
+size_t mime_header_line_get_elements(const char *in_line, size_t in_len
         , mime_header_line_element_t * vec, size_t ele_max_count);
 
-void mime_header_line_get_utf8(const char *src_charset_def, const char *in_str, size_t in_len, std::string &dest);
-void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_str, size_t in_len
+void mime_header_line_get_utf8(const char *src_charset_def, const char *in_line, size_t in_len, std::string &dest);
+void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_line, size_t in_len
         , std::string &dest , bool with_charset = true);
 
-void mime_header_line_get_params(const char *in_str, size_t in_len, std::string &value, dict &params);
+void mime_header_line_get_params(const char *in_line, size_t in_len, std::string &value, dict &params);
 void mime_header_line_decode_content_type(const char *data, size_t len
-        , char **val, size_t *v_len
-        , char **boundary, size_t *b_len
-        , char **charset, size_t *c_len
-        , char **name, size_t *n_len);
+        , std::string &value, std::string &boundary, std::string &charset, std::string &name);
 void mime_header_line_decode_content_disposition(const char *data, size_t len
-        , char **val, size_t *v_len
-        , char **filename, size_t *f_len
-        , std::string &filename_2231
-        , bool *filename_2231_with_charset);
-void mime_header_line_decode_content_transfer_encoding(const char *data, size_t len, char **val, size_t *v_len);
-
+        , std::string &value, std::string &filename, std::string &filename_2231, bool *filename_2231_with_charset);
+void mime_header_line_decode_content_transfer_encoding(const char *data, size_t len, std::string &value);
 long mime_header_line_decode_date(const char *str);
 
 class mime_address
 {
 public:
-    mime_address();
-    mime_address(const mime_address &_x);
-    ~mime_address();
-    inline const char *name() const { return ___name; }
-    inline const char *address() const { return ___address; }
-    inline const char *name_utf8() const { return ___name_utf8; }
-    mime_address &update_name(const char *name);
-    mime_address &update_address(const char *address);
-    mime_address &update_name_utf8(const char *name_utf8);
-    mime_address & operator=(const mime_address &_x);
-    void set_values(const char *name, const char *address, const char *name_utf8);
-private:
-    char *___name;
-    char *___address;
-    char *___name_utf8;
-    bool ___do_not_free;
+    inline mime_address() {}
+    inline ~mime_address() {}
+    std::string name;
+    std::string address;
+    std::string name_utf8;
 };
 
 class mime_address_parser
@@ -1121,53 +1105,60 @@ private:
     int ___len;
     bool ___over;
 };
-void mime_header_line_get_address(const char *in_str, size_t in_len, std::list<mime_address *> &rvec);
+std::list<mime_address> mime_header_line_get_address(const char *in_str, size_t in_len);
+void mime_header_line_get_address(const char *in_str, size_t in_len, std::list<mime_address> &rvec);
+
+std::list<mime_address> mime_header_line_get_address_utf8(const char *src_charset_def,
+        const char *in_str, size_t in_len);
 void mime_header_line_get_address_utf8(const char *src_charset_def , const char *in_str, size_t in_len
-        , std::list<mime_address *> &rvec);
+        , std::list<mime_address> &rvec);
 
 
 /* mime parser ##################################################### */
-class mail_parser_inner;
-class mail_parser_mime_inner;
+class mail_parser_engine;
+class mail_parser_mime_engine;
 
 class mail_parser_mime
 {
 public:
-     mail_parser_mime(mail_parser_inner *parser);
+     mail_parser_mime(mail_parser_mime_engine *engine);
     ~mail_parser_mime();
-    const char *type();
-    const char *encoding();
-    const char *charset();
-    const char *disposition();
-    const char *show_name();
-    const char *name();
-    const char *name_utf8();
-    const char *filename();
-    const char *filename2231();
+    const std::string &type();
+    const std::string &encoding();
+    const std::string &charset();
+    const std::string &disposition();
+    const std::string &show_name();
+    const std::string &name();
+    const std::string &name_utf8();
+    const std::string &filename();
+    const std::string &filename2231();
     bool filename2231_with_charset();
-    const char *filename_utf8();
-    const char *content_id();
-    const char *boundary();
-    const char *imap_section();
+    const std::string &filename_utf8();
+    const std::string &content_id();
+    const std::string &boundary();
+    const std::string &imap_section();
+    const char *header_data();
     size_t header_offset();
     size_t header_size();
+    const char *body_data();
     size_t body_offset();
     size_t body_size();
     bool tnef();
-    mail_parser_mime * next();
-    mail_parser_mime * child();
-    mail_parser_mime * parent();
-    const std::list<size_data_t *> &header_line();
-    /* sn == 0: first, sn == -1: last */
-    size_t header_line(const char *header_name, char **data, int n = 0);
-    bool header_line(const char *header_name, std::string &result, int n = 0);
-    bool header_line(const char *header_name, std::list<const size_data_t *> &vec);
+    mail_parser_mime *next();
+    mail_parser_mime *child();
+    mail_parser_mime *parent();
+    const std::list<size_data_t> &raw_header_line();
+    /* n == 0: first, n == -1: last */
+    size_t raw_header_line(const char *header_name, char **data, int n = 0);
+    bool raw_header_line(const char *header_name, std::string &result, int n = 0);
+    bool raw_header_line(const char *header_name, std::list<size_data_t> &vec);
+    bool raw_header_line(const char *header_name, std::list<std::string> &vec);
+    bool header_line_value(const char *header_name, std::string &result, int n = 0);
+    bool header_line_value(const char *header_name, std::list<std::string> &vec);
     void decoded_content(std::string &dest);
     void decoded_content_utf8(std::string &dest);
-/* private: */
-    inline mail_parser_mime_inner *get_inner_data() { return ___data; }
 private:
-    mail_parser_mime_inner *___data;
+    mail_parser_mime_engine *___data;
 };
 
 class mail_parser
@@ -1180,66 +1171,72 @@ public:
     void set_mime_max_depth(size_t depth);
     void set_src_charset_def(const char *src_charset_def);
     void parse(const char *mail_data, size_t mail_data_len);
+    bool parse(const char *filename);
     void debug_show();
     const char *data();
     size_t size();
+    const char *header_data();
+    size_t header_offset();
     size_t header_size();
+    const char *body_data();
     size_t body_offset();
     size_t body_size();
-    const char *message_id();
-    const char *subject();
-    const char *subject_utf8();
-    const char *date();
+    const std::string &message_id();
+    const std::string &subject();
+    const std::string &subject_utf8();
+    const std::string &date();
     long date_unix();
     const mime_address &from();
     const mime_address &from_utf8();
     const mime_address &sender();
     const mime_address &reply_to();
     const mime_address &receipt();
-    const char *in_reply_to();
-    const std::list<mime_address *> &to();
-    const std::list<mime_address *> &to_utf8();
-    const std::list<mime_address *> &cc();
-    const std::list<mime_address *> &cc_utf8();
-    const std::list<mime_address *> &bcc();
-    const std::list<mime_address *> &bcc_utf8();
-    const std::list<char *> &references();
+    const std::string &in_reply_to();
+    const std::list<mime_address> &to();
+    const std::list<mime_address> &to_utf8();
+    const std::list<mime_address> &cc();
+    const std::list<mime_address> &cc_utf8();
+    const std::list<mime_address> &bcc();
+    const std::list<mime_address> &bcc_utf8();
+    const std::list<std::string> &references();
     const mail_parser_mime *top_mime();
     const std::list<mail_parser_mime *> &all_mimes();
     const std::list<mail_parser_mime *> &text_mimes();
     const std::list<mail_parser_mime *> &show_mimes();
     const std::list<mail_parser_mime *> &attachment_mimes();
-    const std::list<size_data_t *> &header_line();
-    /* sn == 0: first, sn == -1: last */;
-    size_t header_line(const char *header_name, char **data, int n = 0);
-    bool header_line(const char *header_name, std::string &result, int n = 0);
-    bool header_line(const char *header_name, std::list<const size_data_t *> &vec);
-/* private: */
-    inline mail_parser_inner *get_inner_data() { return ___data; }
+    const std::list<size_data_t> &raw_header_line();
+    /* n == 0: first, n == -1: last */;
+    size_t raw_header_line(const char *header_name, char **data, int n = 0);
+    bool raw_header_line(const char *header_name, std::string &result, int n = 0);
+    bool raw_header_line(const char *header_name, std::list<size_data_t> &vec);
+    bool raw_header_line(const char *header_name, std::list<std::string> &vec);
+    bool header_line_value(const char *header_name, std::string &result, int n = 0);
+    bool header_line_value(const char *header_name, std::list<std::string> &vec);
 private:
-    mail_parser_inner *___data;
+    void init();
+    mail_parser_engine *___data;
 };
 
 /* tnef */
-typedef struct tnef_parser_mime_t tnef_parser_mime_t;
-typedef struct tnef_parser_t tnef_parser_t;
+class tnef_parser_mime_engine;
+class tnef_parser_engine;
 class tnef_parser_mime;
 class tnef_parser;
 
 class tnef_parser_mime
 {
 public:
-    tnef_parser_mime(tnef_parser_t *parser);
+    tnef_parser_mime(tnef_parser_mime_engine *_engine);
     ~tnef_parser_mime();
-    const char * type();
-    const char * show_name();
-    const char * filename();
-    const char * filename_utf8();
-    const char * content_id();
+    const std::string &type();
+    const std::string &show_name();
+    const std::string &filename();
+    const std::string &filename_utf8();
+    const std::string &content_id();
     size_t body_offset();
     size_t body_size();
 private:
-    tnef_parser_mime_t *___data;
+    tnef_parser_mime_engine *___data;
 };
 
 class tnef_parser
@@ -1253,7 +1250,7 @@ public:
     size_t size();
     const std::list<tnef_parser_mime *> &all_mimes();
 private:
-    tnef_parser_t *___data;
+    tnef_parser_engine *___data;
 };
 
 /* http httpd ##################################################### */

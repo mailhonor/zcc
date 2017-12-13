@@ -170,23 +170,20 @@ void mime_header_line_get_params(const char *data, size_t len, std::string &val,
 }
 
 void mime_header_line_decode_content_type(const char *data, size_t len
-        , char **val, size_t *v_len
-        , char **boundary, size_t *b_len
-        , char **charset, size_t *c_len
-        , char **name, size_t *n_len
-        )
+        , std::string &_value, std::string &boundary, std::string &charset, std::string &name)
 {
     char *value, *nbuf;
     int value_len, nlen;
-
-    *v_len = *b_len = *c_len = *n_len = 0;
+    _value.clear();
+    boundary.clear();
+    charset.clear();
+    name.clear();
 
     if (find_value((char *)data, (int)len, &value, &value_len, &nbuf, &nlen)) {
         return;
     }
     if (value_len) {
-        *val = value;
-        *v_len = value_len;
+        _value.append(value, value_len);
     }
 
     if (nbuf == 0) {
@@ -207,14 +204,14 @@ void mime_header_line_decode_content_type(const char *data, size_t len
             break;
         }
         if (zcc_str_n_case_eq(key, "boundary", key_len)) {
-            *boundary = value;
-            *b_len = value_len;
+            boundary.clear();
+            boundary.append(value, value_len);
         } else if (zcc_str_n_case_eq(key, "charset", key_len)) {
-            *charset = value;
-            *c_len = value_len;
+            charset.clear();
+            charset.append(value, value_len);
         } else if (zcc_str_n_case_eq(key, "name", key_len)) {
-            *name = value;
-            *n_len = value_len;
+            name.clear();
+            name.append(value, value_len);
         }
         if (nbuf == 0) {
             break;
@@ -225,23 +222,20 @@ void mime_header_line_decode_content_type(const char *data, size_t len
 }
 
 void mime_header_line_decode_content_disposition(const char *data, size_t len
-        , char **val, size_t *v_len
-        , char **filename, size_t *f_len
-        , std::string &filename_2231
-        , bool *filename_2231_with_charset
-        )
+        , std::string &_value, std::string &filename, std::string &filename_2231, bool *filename_2231_with_charset)
 {
     char *value, *nbuf;
     int value_len, nlen;
 
-    *v_len = *f_len = 0;
+    _value.clear();
+    filename.clear();
+    filename_2231.clear();
 
     if (find_value((char *)data, (int)len, &value, &value_len, &nbuf, &nlen)) {
         return;
     }
     if (value_len) {
-        *val = value;
-        *v_len = value_len;
+        _value.append(value, value_len);
     }
 
     if (nbuf == 0) {
@@ -264,8 +258,8 @@ void mime_header_line_decode_content_disposition(const char *data, size_t len
             break;
         }
         if (zcc_str_n_case_eq(key, "filename", key_len)) {
-            *filename = value;
-            *f_len = value_len;
+            filename.clear();
+            filename.append(value, value_len);
         } else if ((key_len > 8) && (zcc_str_n_case_eq(key, "filename*", 9))) {
             filename_2231.append(value, value_len);
             if (!flag_2231) {
@@ -289,19 +283,18 @@ void mime_header_line_decode_content_disposition(const char *data, size_t len
     *filename_2231_with_charset = charset_2231;
 }
 
-void mime_header_line_decode_content_transfer_encoding(const char *data, size_t len, char **val, size_t *v_len)
+void mime_header_line_decode_content_transfer_encoding(const char *data, size_t len, std::string &_value)
 {
     char *value, *nbuf;
     int value_len, nlen;
 
-    *v_len = 0;
+    _value.clear();
 
     if (find_value((char *)data, (int)len, &value, &value_len, &nbuf, &nlen)) {
         return;
     }
     if (value_len) {
-        *val = value;
-        *v_len = value_len;
+        _value.append(value, value_len);
     }
 }
 

@@ -35,7 +35,7 @@ static int save_att_tnef(zcc::tnef_parser * parser, zcc::tnef_parser_mime * mime
     const char *sname;
     char tmpname[256];
 
-    sname = mime->show_name();
+    sname = mime->show_name().c_str();
     if (zcc::empty(sname)) {
         sprintf(tmpname, "atts/tnef_unknown_%d.dat", i);
     } else {
@@ -55,7 +55,7 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
     const char *sname;
     char tmpname[256];
 
-    sname = mime->show_name();
+    sname = mime->show_name().c_str();
     if (zcc::empty(sname)) {
         sprintf(tmpname, "atts/unknown_%d.dat", i);
     } else {

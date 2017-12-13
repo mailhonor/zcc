@@ -26,13 +26,12 @@ private:
     const char *___key;
     const char *___prefix;
     const char *___suffix;
-    stream *___fp;
+    stream ___fp;
     int ___fd;
 };
 
 redis_finder::redis_finder()
 {
-    ___fp = 0;
     ___fd = -1;
     ___url = 0;
 }
@@ -90,17 +89,17 @@ ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
             sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
             continue;
         }
-        ___fp->set_timeout(timeout_left(dtime));
-        ___fp->printf_1024("hget %s %s%s%s\r\n", ___key, ___prefix, query, ___suffix);
-        ___fp->flush();
-        if (___fp->is_exception()) {
+        ___fp.set_timeout(timeout_left(dtime));
+        ___fp.printf_1024("hget %s %s%s%s\r\n", ___key, ___prefix, query, ___suffix);
+        ___fp.flush();
+        if (___fp.is_exception()) {
             sprintf_1024(result, "finder: %s : write error((%m)", ___url);
             continue;
         }
 
         mystr.clear();
-        ___fp->gets(mystr);
-        if (___fp->is_exception()) {
+        ___fp.gets(mystr);
+        if (___fp.is_exception()) {
             sprintf_1024(result, "finder: %s : read error", ___url);
             disconnect();
             return -1;
@@ -122,15 +121,15 @@ ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
             return -1;
         }
         if (len > 0) {
-            if (___fp->readn(result, len) != len) {
+            if (___fp.readn(result, len) != len) {
                 result.clear();
                 sprintf_1024(result, "finder: %s : read result error", ___url);
                 return -1;
             }
         }
         mystr.clear();
-        ___fp->gets(mystr);
-        if (___fp->is_exception()) {
+        ___fp.gets(mystr);
+        if (___fp.is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error", ___url);
             return -1;
@@ -143,10 +142,7 @@ ssize_t redis_finder::find(const char *query, std::string &result, long timeout)
 
 void redis_finder::disconnect()
 {
-    if (___fp) {
-        delete ___fp;
-        ___fp = 0;
-    }
+    ___fp.close();
     if (___fd != -1) {
         close(___fd);
         ___fd = -1;
@@ -155,17 +151,16 @@ void redis_finder::disconnect()
 
 bool redis_finder::connect(long timeout)
 {
-    if (___fp) {
+    if (___fd != -1) {
         return true;
     }
-    if (___fd <0) {
+    if (___fd ==-1) {
         ___fd = zcc::connect(___destination);
     }
     if (___fd < 0) {
-
         return false;
     }
-    ___fp = new stream(___fd);
+    ___fp.open(___fd);
     return true;
 }
 

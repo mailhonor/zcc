@@ -26,13 +26,12 @@ private:
     const char *___postfix_dict;
     const char *___prefix;
     const char *___suffix;
-    stream *___fp;
+    stream ___fp;
     int ___fd;
 };
 
 postproxy_finder::postproxy_finder()
 {
-    ___fp = 0;
     ___fd = -1;
     ___url = 0;
 }
@@ -90,38 +89,38 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
             sprintf_1024(result, "finder: %s : connection error((%m)", ___url);
             continue;
         }
-        ___fp->set_timeout(timeout_left(dtime));
-        ___fp->puts("request");
-        ___fp->put('\0');
-        ___fp->puts("lookup");
-        ___fp->put('\0');
+        ___fp.set_timeout(timeout_left(dtime));
+        ___fp.puts("request");
+        ___fp.put('\0');
+        ___fp.puts("lookup");
+        ___fp.put('\0');
 
-        ___fp->puts("table");
-        ___fp->put('\0');
-        ___fp->puts(___postfix_dict);
-        ___fp->put('\0');
+        ___fp.puts("table");
+        ___fp.put('\0');
+        ___fp.puts(___postfix_dict);
+        ___fp.put('\0');
 
-        ___fp->puts("flags");
-        ___fp->put('\0');
-        ___fp->printf_1024("%d", (1 << 6));
-        ___fp->put('\0');
+        ___fp.puts("flags");
+        ___fp.put('\0');
+        ___fp.printf_1024("%d", (1 << 6));
+        ___fp.put('\0');
 
-        ___fp->puts("key");
-        ___fp->put('\0');
-        ___fp->puts(query);
-        ___fp->put('\0');
+        ___fp.puts("key");
+        ___fp.put('\0');
+        ___fp.puts(query);
+        ___fp.put('\0');
 
-        ___fp->put('\0');
+        ___fp.put('\0');
 
-        ___fp->flush();
-        if (___fp->is_exception()) {
+        ___fp.flush();
+        if (___fp.is_exception()) {
             result.clear();
             sprintf_1024(result, "finder: %s : write error(%m)", ___url);
             continue;
         }
 
         mystr.clear();
-        ret = ___fp->gets(mystr, '\0');
+        ret = ___fp.gets(mystr, '\0');
         if ((ret != 7) || (strcmp(mystr.c_str(), "status"))) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error, need status name", ___url);
@@ -130,7 +129,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         }
 
         mystr.clear();
-        ret = ___fp->gets(mystr, '\0');
+        ret = ___fp.gets(mystr, '\0');
         if ((ret != 2)) {
             sprintf_1024(result, "finder: %s : read error, need status value", ___url);
             disconnect();
@@ -139,7 +138,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
         status = atoi(mystr.c_str());
 
         mystr.clear();
-        ret = ___fp->gets(mystr, '\0');
+        ret = ___fp.gets(mystr, '\0');
         if ((ret != 6) || (strcmp(mystr.c_str(), "value"))) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error, need value name", ___url);
@@ -147,14 +146,14 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
             return -1;
         }
         mystr.clear();
-        ret = ___fp->gets(result, '\0');
+        ret = ___fp.gets(result, '\0');
         if ((ret<0)) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error, need status value", ___url);
             disconnect();
             return -1;
         }
-        if (___fp->get() < 0) {
+        if (___fp.get() < 0) {
             result.clear();
             sprintf_1024(result, "finder: %s : read error, need end", ___url);
             disconnect();
@@ -177,10 +176,7 @@ ssize_t postproxy_finder::find(const char *query, std::string &result, long time
 
 void postproxy_finder::disconnect()
 {
-    if (___fp) {
-        delete ___fp;
-        ___fp = 0;
-    }
+    ___fp.close();
     if (___fd != -1) {
         close(___fd);
         ___fd = -1;
@@ -189,17 +185,16 @@ void postproxy_finder::disconnect()
 
 bool postproxy_finder::connect(long timeout)
 {
-    if (___fp) {
+    if (___fd != -1) {
         return true;
     }
-    if (___fd <0) {
+    if (___fd ==-1) {
         ___fd = zcc::connect(___destination);
     }
     if (___fd < 0) {
-
         return false;
     }
-    ___fp = new stream(___fd);
+    ___fp.open(___fd);
     return true;
 }
 
