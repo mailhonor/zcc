@@ -261,7 +261,7 @@ size_t json::object_get_size()
     return ___val.m->size();
 }
 
-json * json::array_add_element(json *j)
+json * json::array_add_element(json *j, bool return_child)
 {
     j->___parent = this;
     if (___type == json_type_null) {
@@ -272,10 +272,54 @@ json * json::array_add_element(json *j)
         zcc_fatal("value's type of json is not array");
     }
     ___val.v->push_back(j);
-    return this;
+    return (return_child?j:this);
 }
 
-json * json::array_add_element(size_t idx, json *j, json **old)
+json * json::array_add_element(size_t idx, json *j, bool return_child)
+{
+    json *d;
+    j->___parent = this;
+    if (___type == json_type_null) {
+        ___type = json_type_array;
+        ___val.v = new std::vector<json *>();
+    }
+    if (___type != json_type_array) {
+        zcc_fatal("value's type of json is not array");
+    }
+    if (idx < ___val.v->size()) {
+        d = (*___val.v)[idx];
+        (*___val.v)[idx] = j;
+        if (d) {
+            delete d;
+        }
+    } else {
+        ___val.v->resize(idx);
+        ___val.v->push_back(j);
+    }
+
+    return (return_child?j:this);
+}
+
+json * json::object_add_element(const char *key, json *j, bool return_child)
+{
+    json *d;
+    j->___parent = this;
+    if (___type == json_type_null) {
+        ___type = json_type_object;
+        ___val.m = new std::map<std::string, json *>();
+    }
+    if (___type != json_type_object) {
+        zcc_fatal("value's type of json is not object");
+    }
+    std_map_update(*___val.m, key, j, d);
+    if (d) {
+        delete d;
+    }
+
+    return (return_child?j:this);
+}
+
+json * json::array_add_element(size_t idx, json *j, json **old, bool return_child)
 {
     json *d;
     j->___parent = this;
@@ -303,10 +347,10 @@ json * json::array_add_element(size_t idx, json *j, json **old)
         ___val.v->push_back(j);
     }
 
-    return this;
+    return (return_child?j:this);
 }
 
-json * json::object_add_element(const char *key, json *j, json **old)
+json * json::object_add_element(const char *key, json *j, json **old, bool return_child)
 {
     json *d;
     j->___parent = this;
@@ -326,43 +370,75 @@ json * json::object_add_element(const char *key, json *j, json **old)
     } else if (d) {
         delete d;
     }
-    return this;
+
+    return (return_child?j:this);
 }
 
-json * json::array_erase_element(size_t idx, json **old)
+json * json::array_detach_element(size_t idx)
 {
-    if (old) {
-        *old = 0;
-    }
     if (___type != json_type_array) {
-        return this;
+        return 0;
     }
-    json *r = 0;
-    if (idx < ___val.v->size()) {
-        std::vector<json *>::iterator it = ___val.v->begin() + idx;
-        ___val.v->erase(it);
-    } else {
-        r = 0;
+
+    if (idx >=  ___val.v->size()) {
+        return 0;
     }
+
+    std::vector<json *>::iterator it = ___val.v->begin() + idx;
+    json *r = *it;
+    ___val.v->erase(it);
     if (r) {
         r->___parent = 0;
     }
-    if (old) {
-        *old = r;
-    } else {
+
+    return r;
+}
+
+json * json::object_detach_element(const char *key)
+{
+    if (___type != json_type_object) {
+        return 0;
+    }
+
+    std::map<std::string, json *>::iterator it = ___val.m->find(key);
+    if (it == ___val.m->end()) {
+        return 0;
+    }
+    json *r = it->second;
+    ___val.m->erase(it);
+    if (r) {
+        r->___parent = 0;
+    }
+
+    return r;
+}
+
+json * json::array_erase_element(size_t idx)
+{
+    if (___type != json_type_array) {
+        return this;
+    }
+
+    if (idx >=  ___val.v->size()) {
+        return this;
+    }
+
+    std::vector<json *>::iterator it = ___val.v->begin() + idx;
+    json *r = *it;
+    ___val.v->erase(it);
+    if (r) {
         delete r;
     }
+
     return this;
 }
 
-json * json::object_erase_element(const char *key, json **old)
+json * json::object_erase_element(const char *key)
 {
-    if (old) {
-        *old = 0;
-    }
     if (___type != json_type_object) {
         return this;
     }
+
     std::map<std::string, json *>::iterator it = ___val.m->find(key);
     if (it == ___val.m->end()) {
         return this;
@@ -370,13 +446,9 @@ json * json::object_erase_element(const char *key, json **old)
     json *r = it->second;
     ___val.m->erase(it);
     if (r) {
-        r->___parent = 0;
-    }
-    if (old) {
-        *old = r;
-    } else {
         delete r;
     }
+
     return this;
 }
 

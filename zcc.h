@@ -1474,48 +1474,85 @@ public:
     json * object_get_element(const char *key);
     size_t array_get_size();
     size_t object_get_size();
-    /* set, old == 0: deleted old child */
-    json * array_add_element(json *j);
-    json * array_add_element(size_t idx, json *j, json **old = 0);
-    json * object_add_element(const char *key, json *j, json **old = 0);
-    /* set2, return child */
-    inline json * array_add_element2(json *j) { array_add_element(j); return j; }
-    inline json * array_add_element2(size_t idx, json *j, json **old = 0) {
-        array_add_element(idx, j, old); return j;
-    }
-    inline json * object_add_element2(const char *key, json *j, json **old = 0) {
-        object_add_element(key, j, old); return j;
-    }
-#define ___add_element(TTT) \
+
+    /*
+     * @array_add_element 向array类型的json追加成员 j
+     * @return_child 为true 返回 j, 否则 返回self.    下同...
+     */
+    json * array_add_element(json *j, bool return_child = false);
+
+    /* 
+     * @array_add_element 给键idx设置成员 j. 如果键idx存在则, 首先销毁对应的成员
+     * 如: 已知 json [1, {}, "ss" "aaa"], 则:
+     * 操作 array_add_element(2, j), 意味着 先销毁 "ss", 并替换为 j, 结果为:
+     * [1, {}, j, "aaa"]
+     */
+    json * array_add_element(size_t idx, json *j, bool return_child = false);
+
+    /* @object_add_element 如上 */
+    json * object_add_element(const char *key, json *j, bool return_child = false);
+
+    /* 
+     * @array_add_element 给键idx设置成员 j. 
+     * 如果键idx存在则, 则把idx对应的json赋给 *old, 如果old不存在, 则销毁
+     */
+    json * array_add_element(size_t idx, json *j, json **old, bool return_child = false);
+
+    /* @object_add_element 如上 */
+    json * object_add_element(const char *key, json *j, json **old, bool return_child = false);
+
+
+#define ___zcc_json_add_element(TTT) \
     inline json * array_add_element(TTT val) { \
         return array_add_element(new json(val)); \
     } \
-    inline json * array_add_element(size_t idx, TTT val, json **old = 0) { \
-        return array_add_element(idx, new json(val), old); \
+    inline json * array_add_element(size_t idx, TTT val, bool return_child = false) { \
+        return array_add_element(idx, new json(val), return_child); \
     } \
-    inline json * object_add_element(const char *key, TTT val, json **old = 0) { \
-        return object_add_element(key, new json(val), old); \
+    inline json * object_add_element(const char *key, TTT val, bool return_child = false) { \
+        return object_add_element(key, new json(val), return_child); \
     } \
-    inline json * array_add_element2(TTT val) { \
-        return array_add_element2(new json(val)); \
+    inline json * array_add_element(size_t idx, TTT val, json **old, bool return_child = false) { \
+        return array_add_element(idx, new json(val), old, return_child); \
     } \
-    inline json * array_add_element2(size_t idx, TTT val, json **old = 0) { \
-        return array_add_element2(idx, new json(val), old); \
-    } \
-    inline json * object_add_element2(const char *key, TTT val, json **old = 0) { \
-        return object_add_element2(key, new json(val), old); \
+    inline json * object_add_element(const char *key, TTT val, json **old, bool return_child = false) { \
+        return object_add_element(key, new json(val), old, return_child); \
     }
-    ___add_element(const std::string &);
-    ___add_element(const char *);
-    ___add_element(long);
-    ___add_element(double);
-    ___add_element(bool);
-#undef ___add_element
-    /* */
-    json * array_erase_element(size_t idx, json **old = 0);
-    json * object_erase_element(const char *key, json **old = 0);
-    /* */
+
+    /* 
+     * @___zcc_json_add_element
+     * 这几组方法类似 array_add_element,object_add_element, 只不过参数不同
+     */
+    ___zcc_json_add_element(const std::string &);
+    ___zcc_json_add_element(const char *);
+    ___zcc_json_add_element(long);
+    ___zcc_json_add_element(double);
+    ___zcc_json_add_element(bool);
+#undef ___zcc_json_add_element
+
+    /*  @array_detach_element 删除索引为idx的键, 但是保留其值, 并返回这个值 */
+    json * array_detach_element(size_t idx);
+
+    /*  @object_detach_element 删除key键, 但是保留其值, 并返回这个值 */
+    json * object_detach_element(const char *key);
+
+    /*  @array_erase_element 删除索引为idx的键, 同时销毁其值, 并返回self */
+    json * array_erase_element(size_t idx);
+
+    /*  @object_erase_element 删除key键, 同时销毁其值, 并返回self */
+    json * object_erase_element(const char *key);
+
+    /*
+     * @get_element_by_path 得到路径path对应的json值, 并返回
+     * 如 已知json {group:{linux:[{}, {}, {me: {age:18, sex:"male"}}, 则
+     * get_element_by_path("group/linux/2/me") 返回的 应该是 {age:18, sex:"male"} 
+     */
     json * get_element_by_path(const char *path);
+
+    /*
+     * @get_element_by_path_vec 如上 
+     * get_element_by_path_vec("group", "linux", "2", "me", 0);
+     */
     json * get_element_by_path_vec(const char *path0, ...);
     /* */
     inline json * get_parent() { return ___parent; }

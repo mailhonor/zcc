@@ -37,7 +37,7 @@ int main()
     
     json.object_add_element("author", new zcc::json("eli960"));
 
-    json.object_add_element2("thanks", new zcc::json())
+    json.object_add_element("thanks", new zcc::json(), true)
         ->array_add_element("you")
         ->array_add_element("he")
         ->array_add_element(123L)
@@ -45,13 +45,13 @@ int main()
         ->array_add_element(2.01)
         ->array_add_element(new zcc::json());
 
-    json.object_add_element2("APIS", new zcc::json())
-        ->object_add_element2("constructor", new zcc::json())
+    json.object_add_element("APIS", new zcc::json(), true)
+        ->object_add_element("constructor", new zcc::json(), true)
         ->array_add_element("json()")
         ->array_add_element("json(std::string &str)")
         ->array_add_element("json(bool val)")
         ->get_parent()
-        ->object_add_element2("array_add_element", new zcc::json())
+        ->object_add_element("array_add_element", new zcc::json(), true)
         ->array_add_element(new zcc::json("给数组添加一个子节点"))
         ->array_add_element("add a new zcc::json element")
         ->array_add_element("nothing")
@@ -61,7 +61,7 @@ int main()
         ->object_add_element("score", 0.98)
         ->object_add_element("version", new zcc::json(12L))
         ->object_add_element("published", false)
-        ->object_add_element2("published2", false)
+        ->object_add_element("published2", false, true)
         ->set_string_value("sssss");
 
 
