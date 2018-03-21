@@ -6,7 +6,7 @@ CC=g++
 
 CFLAGS= -Wall -I./ -O3 -g
 
-SRCS_COROUTINE=${shell find src -type f -name "*.cpp"}
+SRCS_COROUTINE=${shell find src/coroutine/ -type f -name "*.cpp"}
 OBJS_COROUTINE = $(patsubst %.cpp, OBJS_DEST/%.o, $(SRCS_COROUTINE))
 
 
