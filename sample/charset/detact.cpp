@@ -38,9 +38,9 @@ int main(int argc, char **argv)
     }
     zcc::main_parameter_run(argc, argv);
 
-    std_vector_walk_begin(zcc::main_parameter_values, fn) {
-        dorun(fn);
-    } std_vector_walk_end;
+    for (int i = 0; i < zcc::main_parameter_argc; i++) {
+        dorun(zcc::main_parameter_argv[i]);
+    }
 
     return 0;
 }

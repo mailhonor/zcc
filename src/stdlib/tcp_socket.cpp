@@ -14,21 +14,6 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-static inline int ___zcc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
-{
-    return accept(sockfd, addr, addrlen);
-}
-
-static inline int ___zcc_listen(int sockfd, int backlog)
-{
-    return listen(sockfd, backlog);
-}
-
-static inline int ___zcc_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
-{
-    return connect(sockfd, addr, addrlen);
-}
-
 namespace zcc
 {
 
@@ -56,7 +41,7 @@ static int ___sane_accept(int sock, struct sockaddr *sa, socklen_t * len)
     int fd;
     int errno2;
 
-    if ((fd = ___zcc_accept(sock, sa, len)) < 0) {
+    if ((fd = ::accept(sock, sa, len)) < 0) {
         errno2 = errno;
         for (count = 0; (err = accept_ok_errors[count]) != 0; count++) {
             if (errno2 == err) {
@@ -92,30 +77,15 @@ int inet_accept(int fd)
 int accept(int sock, int type)
 {
     int fd = -1;
-    while(1) {
-        if (timed_wait_readable(sock, 1 * 1000) < 0) {
-            zcc_fatal("accept sock:%d error(%m)", sock);
-        }
-        if (var_proc_stop) {
-            return -1;
-        }
-        if (type == var_tcp_listen_type_inet) {
-            fd = inet_accept(sock);
-        } else if (type == var_tcp_listen_type_unix) {
-            fd = unix_accept(sock);
-        } else  {
-            zcc_fatal("accept only support inet/unix");
-        }
-        if (fd<0) {
-            int eo = errno;
-            if (eo == EAGAIN || eo == EINTR) {
-                continue;
-            }
-            zcc_fatal("accept sock:%d error(%m)", sock);
-        }
-        return fd;
+    if (type == var_tcp_listen_type_inet) {
+        fd = inet_accept(sock);
+    } else if (type == var_tcp_listen_type_unix) {
+        fd = unix_accept(sock);
+    } else  {
+        zcc_fatal("accept only support inet/unix");
     }
-    return -1;
+
+    return fd;
 }
 
 /* listen */
@@ -148,7 +118,7 @@ int unix_listen(char *addr, int backlog)
     }
 
     nonblocking(sock);
-    if (___zcc_listen(sock, backlog) < 0) {
+    if (::listen(sock, backlog) < 0) {
         goto err;
     }
 
@@ -196,7 +166,7 @@ int inet_listen(const char *sip, int port, int backlog)
     }
 
     nonblocking(sock);
-    if (___zcc_listen(sock, backlog) < 0) {
+    if (::listen(sock, backlog) < 0) {
         goto err;
     }
 
@@ -299,7 +269,7 @@ static int ___sane_connect(int sock, struct sockaddr *sa, int len)
     }
 
     nonblocking(sock);
-    if ((___zcc_connect(sock, sa, len) < 0) && (errno != EINPROGRESS)) {
+    if ((::connect(sock, sa, len) < 0) && (errno != EINPROGRESS)) {
         return (-1);
     }
 
@@ -399,6 +369,30 @@ int connect(const char *netpath)
     }
 
     return fd;
+}
+
+int netpaths_expand(const char *netpaths, std::list<std::string> &netpath_list)
+{
+    ssize_t old_size = netpath_list.size();
+    std::list<std::string> ip_vec;
+    argv nps;
+    nps.split(netpaths, " \t;,\r\n");
+    zcc_argv_walk_begin(nps, np) {
+        char *p = strchr(np, ':');
+        if (!p) {
+            netpath_list.push_back(np);
+        } else {
+            ip_vec.clear();
+            *p = 0;
+            get_hostaddr(np, ip_vec);
+            *p = ':';
+            std_list_walk_begin(ip_vec, ip) {
+                ip.append(p);
+                netpath_list.push_back(ip);
+            } std_list_walk_end;
+        }
+    } zcc_argv_walk_end;
+    return (int)(netpath_list.size() - old_size);
 }
 
 }

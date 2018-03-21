@@ -10,12 +10,6 @@
 
 static int enable_att = 0;
 
-static void ___usage(char *parameter)
-{
-    printf("USAGE: %s eml_filename [ eml_fn2 ... ] [--att ] \n", zcc::var_progname);
-    exit(1);
-}
-
 static char *name_char_validate(char *abc)
 {
     char key[] = "?<>\"'|/\\*", *p = abc, ch;
@@ -117,12 +111,9 @@ int main(int argc, char **argv)
     zcc::main_parameter_run(argc, argv);
     enable_att = zcc::default_config.get_bool("att", false);
 
-    if (zcc::main_parameter_values.empty()) {
-        ___usage(0);
+    for (int i = 0; i < zcc::main_parameter_argc; i++) {
+        do_parse(zcc::main_parameter_argv[i]);
     }
-    std_vector_walk_begin(zcc::main_parameter_values, fn) {
-        do_parse(fn);
-    } std_vector_walk_end;
 
     return 0;
 }

@@ -134,6 +134,7 @@ static void *pthread_proxy(void *arg)
             timeout.tv_nsec = 0;
             pthread_cond_timedwait(&proxy_cond, &proxy_mutex, &timeout);
             if (var_proc_stop) {
+                zcc_pthread_unlock(&proxy_mutex);
                 return 0;
             }
         }
@@ -218,6 +219,7 @@ static void *pthread_log(void *arg)
             timeout.tv_nsec = 0;
             pthread_cond_timedwait(&log_cond, &log_mutex, &timeout);
             if (var_proc_stop) {
+                zcc_pthread_unlock(&log_mutex);
                 return 0;
             }
             if (timeout_set(0) - last_log > 1024) {
@@ -336,7 +338,7 @@ void sqlite3_proxyd::before_exit()
             zcc_fatal("FATAL close sqlite %s(%s)", sqlite3_proxy_filename, sqlite3_errmsg(sqlite3_handler));
         }
     }
-    zcc_pthread_lock(&sqlite3_mutex);
+    zcc_pthread_unlock(&sqlite3_mutex);
 }
 
 void sqlite3_proxyd::simple_service(int fd)

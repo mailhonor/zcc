@@ -41,7 +41,7 @@ int main(int argc, char **argv)
             printf("error: %s\n", pr.get_errmsg());
             exit(1);
         }
-        zcc::size_data_t *sdvec;
+        std::string *sdvec;
 
         while (1) {
             int r = pr.get_row(&sdvec);
@@ -52,8 +52,9 @@ int main(int argc, char **argv)
             if (r == 0) {
                 break;
             }
+
             for (int idx = 0; idx < (int)pr.get_column(); idx++) {
-                printf("%s ",  sdvec[idx].data);
+                printf("%s ",  sdvec[idx].c_str());
             }
             printf("\n");
         }

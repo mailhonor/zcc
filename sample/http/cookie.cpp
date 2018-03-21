@@ -18,9 +18,9 @@ int main(int argc, char **argv)
         printf("USAGE: %s -cookie http_cookie_string\n", argv[0]);
         exit(1);
     }
-    zcc::dict dt;
+    std::map<std::string, std::string> dt;
     zcc::http_cookie_parse_request(dt, cookie);
-    dt.debug_show();
+    zcc::dict_debug(dt);
 
     return 0;
 }

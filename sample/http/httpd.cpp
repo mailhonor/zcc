@@ -37,7 +37,7 @@ void myhttpd::handler()
 
 static void ___usage()
 {
-    printf("USAGE: %s --zlisten listen_address [ -f file_output(index.html)] [ -times stop_after_loop_times ]\n", zcc::var_progname);
+    printf("USAGE: %s -listen listen_address [ -f file_output(index.html)] [ -times stop_after_loop_times ]\n", zcc::var_progname);
     exit(1);
 }
 
@@ -54,8 +54,12 @@ static void *do_http(void *arg)
 static void *accept_incoming(void *arg)
 {
     while (1) {
+        zcc::timed_wait_readable(sock, 1000);
         int fd = zcc::accept(sock, sock_type);
         if (fd < 0) {
+            if (errno == EAGAIN) {
+                continue;
+            }
             break;
         }
         if (times) {
@@ -78,13 +82,13 @@ int main(int argc, char **argv)
     zcc::main_parameter_run(argc, argv);
     file_output = zcc::default_config.get_str("f", "./index.html");
     times = zcc::default_config.get_int("times", 0, 0, 100000);
-    listenon = zcc::default_config.get_str("zlisten", "");
+    listenon = zcc::default_config.get_str("listen", "");
     if (zcc::empty(listenon)) {
         ___usage();
     }
 
     zcc::coroutine_base_init();
-    sock = zcc::listen(listenon, &sock_type);
+    sock = zcc::listen(listenon, &sock_type, 10000);
     if (sock < 0) {
         printf("open %s error (%m)\n", listenon);
         exit(1);

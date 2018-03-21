@@ -122,7 +122,7 @@ static int find_value(char *buf, int len, char **value, int *value_len, char **n
     return 0;
 }
 
-void mime_header_line_get_params(const char *data, size_t len, std::string &val, dict &params)
+void mime_header_line_get_params(const char *data, size_t len, std::string &val, std::map<std::string, std::string> &params)
 {
     char *value, *nbuf;
     int value_len, nlen;

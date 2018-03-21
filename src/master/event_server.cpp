@@ -210,12 +210,12 @@ void master_event_server::master_register(char *master_url)
             case var_tcp_listen_type_fifo:
                 break;
             default:
-                zcc_fatal("master_coroutine_server: unknown service type %c", fdtype);
+                zcc_fatal("master_event_server: unknown service type %c", fdtype);
                 break;
         }
         int fd = atoi(typefd+1);
         if (fd < var_master_server_listen_fd) {
-            zcc_fatal("master_coroutine_server: fd is invalid", typefd+1);
+            zcc_fatal("master_event_server: fd is invalid", typefd+1);
         }
         close_on_exec(fd);
         nonblocking(fd);
@@ -224,10 +224,6 @@ void master_event_server::master_register(char *master_url)
 }
 
 void master_event_server::before_service()
-{
-}
-
-void master_event_server::before_service_for_enduser()
 {
 }
 
@@ -269,7 +265,7 @@ void master_event_server::service_register(const char *service_name, int fd, int
 void master_event_server::run(int argc, char ** argv)
 {
     if (flag_run) {
-        zcc_fatal("master_coroutine_server:: only run one time");
+        zcc_fatal("master_event_server:: only run one time");
     }
     flag_run = true;
     ___instance = this;
@@ -305,7 +301,6 @@ void master_event_server::run(int argc, char ** argv)
     }
 
     before_service();
-    before_service_for_enduser();
 
     if (!default_config.get_bool("MASTER", false)) {
         alone_register(default_config.get_str("server-service", ""));

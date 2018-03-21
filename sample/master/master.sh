@@ -28,7 +28,7 @@ case $subcmd in
 			exit 1
 		}
 		$INFO starting the system
-		$master_cmd -C $config_dir -pid-file $pid_file -log-service log.socket,./log_dir/,hour -server-log masterlog,master,master &
+		$master_cmd -C $config_dir -pid-file $pid_file -log-service log.socket,./log_dir/,hour -server-log masterlog,master &
 		;;
 
 	stop)

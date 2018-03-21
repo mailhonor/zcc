@@ -38,3 +38,16 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+/*
+anvil_rate_time_unit = 60000s
+anvil_status_update_time = 600000s
+append_dot_mydomain = no
+append_dot_mydomain + ssssss, 
+append_dot_mydomain + ooooooo
+biff + no
+inet_interfaces = all
+mailbox_command = procmail -a "$EXTENSION"
+mailbox_size_limit = 0
+mydestination = zytest.localdomain, localhost.localdomain, , localhost
+*/

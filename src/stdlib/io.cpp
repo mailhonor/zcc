@@ -11,11 +11,6 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 
-static inline int ___zcc_flock(int fd, int operation)
-{
-    return flock(fd, operation);
-}
-
 namespace zcc
 {
 
@@ -124,7 +119,7 @@ int is_writeable(int fd)
 bool flock(int fd, int flags)
 {
     int ret;
-    while ((ret = ___zcc_flock(fd, flags)) < 0 && errno == EINTR)
+    while ((ret = ::flock(fd, flags)) < 0 && errno == EINTR)
         msleep(1);
     return (ret==0);
 }
@@ -132,7 +127,7 @@ bool flock(int fd, int flags)
 bool flock_share(int fd)
 {
     int ret;
-    while ((ret = ___zcc_flock(fd, LOCK_SH)) < 0 && errno == EINTR)
+    while ((ret = ::flock(fd, LOCK_SH)) < 0 && errno == EINTR)
         msleep(1);
     return (ret==0);
 }
@@ -140,7 +135,7 @@ bool flock_share(int fd)
 bool flock_exclusive(int fd)
 {
     int ret;
-    while ((ret = ___zcc_flock(fd, LOCK_EX)) < 0 && errno == EINTR)
+    while ((ret = ::flock(fd, LOCK_EX)) < 0 && errno == EINTR)
         msleep(1);
     return (ret==0);
 }
@@ -148,7 +143,7 @@ bool flock_exclusive(int fd)
 bool funlock(int fd)
 {
     int ret;
-    while ((ret = ___zcc_flock(fd, LOCK_UN)) < 0 && errno == EINTR)
+    while ((ret = ::flock(fd, LOCK_UN)) < 0 && errno == EINTR)
         msleep(1);
     return (ret==0);
 }

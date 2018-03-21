@@ -61,7 +61,6 @@ struct coroutine_sys_context {
 	size_t ss_size;
 	char *ss_sp;
 };
-
 class coroutine
 {
 public:
@@ -106,6 +105,7 @@ struct coroutine_fd_attribute {
     unsigned short int nonblock:1;
     unsigned short int pseudo_mode:1;
     unsigned short int in_epoll:1;
+    unsigned short int by_epoll:1;
     unsigned short int read_timeout;
     unsigned short int write_timeout;
     unsigned int revents;
@@ -234,7 +234,7 @@ coroutine::coroutine(coroutine_base *base)
     ___ended = 0;
     ___mutex_list = 0;
     memset(&___sys_context, 0, sizeof(___sys_context));
-    ___sys_context.ss_sp = (char *)malloc(var_coroutine_stack_size);
+    ___sys_context.ss_sp = (char *)malloc(var_coroutine_stack_size + 16 + 10);
     ___sys_context.ss_size = var_coroutine_stack_size;
     coroutine_sys_context_init(&___sys_context, (void *)this);
 }
@@ -806,8 +806,13 @@ void coroutine_base_loop()
                 zcc_fatal("fd:%d be closed unexpectedly", fd);
                 continue;
             }
+            cfa->by_epoll = 1;
             cfa->revents = epev->events;
             co = cfa->co;
+            if (co->___active_list == 1) {
+                zcc_mlink_detach(cobs->active_coroutines_head, cobs->active_coroutines_tail, co, ___prev, ___next);
+                co->___active_list = 0;
+            }
             if (co->___active_list == 0) {
                 zcc_mlink_append(cobs->active_coroutines_head, cobs->active_coroutines_tail, co, ___prev, ___next);
                 co->___active_list = 1;
@@ -896,6 +901,7 @@ static int coroutine_poll(coroutine *co, struct pollfd fds[], nfds_t nfds, int t
             return syscall_poll(fds, nfds, timeout);
         }
         is_epoll_ctl = true;
+        cfa->by_epoll = 0;
         cfa->co = co;
         cfa->timeout = now_ms + timeout;
         rbtree_attach(&(cobs->fd_timeout_rbtree), &(cfa->rbnode));
@@ -928,7 +934,8 @@ static int coroutine_poll(coroutine *co, struct pollfd fds[], nfds_t nfds, int t
         } else {
             cfa->in_epoll = 0;
             unsigned int revents = cfa->revents;
-            if (revents) {
+            fds[i].revents = 0;
+            if (cfa->by_epoll && revents) {
                 raise_count++;
                 short int p_events = 0;	
                 if(revents & EPOLLIN)     p_events |= POLLIN;

@@ -44,15 +44,15 @@ memcache_finder::~memcache_finder()
 bool memcache_finder::open(const char *url)
 {
     http_url urlobj(url);
-    if (empty(urlobj.get_destination())) {
+    if (urlobj.destination.empty()) {
         return false;
     }
 
     stringsdup sdup;
     sdup.push_back(url);
-    sdup.push_back(urlobj.get_destination());
-    sdup.push_back(urlobj.get_query_variate("prefix", ""));
-    sdup.push_back(urlobj.get_query_variate("suffix", ""));
+    sdup.push_back(urlobj.destination.c_str());
+    sdup.push_back(dict_get_str(urlobj.query_variates, "prefix"));
+    sdup.push_back(dict_get_str(urlobj.query_variates, "suffix"));
 
     ___url = sdup.dup();
     std::vector<size_t> &offsets = sdup.offsets();

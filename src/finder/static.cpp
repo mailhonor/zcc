@@ -44,11 +44,11 @@ ssize_t static_finder::find(const char *query, std::string &result, long timeout
 bool static_finder::open(const char *url)
 {
     http_url urlobj(url);
-    if (empty(urlobj.get_destination())) {
+    if (urlobj.destination.empty()) {
         return false;
     }
 
-    ___destination = strdup(urlobj.get_destination());
+    ___destination = strdup(urlobj.destination.c_str());
     ___len = strlen(___destination);
     return true;
 }

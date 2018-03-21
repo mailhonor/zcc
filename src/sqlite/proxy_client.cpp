@@ -11,75 +11,65 @@
 namespace zcc
 {
 
-#define proxy_set_errmsg(fmt, args...)      sprintf_1024(*cache, fmt, ##args)
+#define proxy_set_errmsg(fmt, args...)      sprintf_1024(errmsg, fmt, ##args)
 
 bool var_sqlite3_proxy_set_errmsg = false;
 
-sqlite3_proxy::sqlite3_proxy(const char *_destination, std::string *_cache)
+sqlite3_proxy::sqlite3_proxy(const char *_destination)
 {
     destination = strdup(_destination);
-    fp = 0;
-    if (_cache) {
-        cache = cache;
-        cache_flag = false;
-    } else {
-        cache = new std::string();
-        cache_flag = true;
-    }
+    rows = 0;
+    query_over = true;
 }
 
 sqlite3_proxy::~sqlite3_proxy()
 {
-    if (fp) {
-        int fd = fp->get_fd();
-        delete fp;
-        close(fd);
-    }
-    if (cache_flag) {
-        delete cache;
+    free(destination);
+    if (rows) {
+        delete[] rows;
     }
 }
 
 bool sqlite3_proxy::connect()
 {
     int retry;
-    int fd;
-    if (fp) {
+    int fd = -1;
+    if (fp.get_fd() > -1) {
         return true;
     }
+    query_over = true;
     for (retry = 0; retry < 2; retry++) {
-        if (fp == 0) {
-            fd = zcc::connect(destination);
-            if(fd < 0) {
-                continue;
-            }
-            fp = new stream(fd);
-            break;
+        fd = zcc::connect(destination);
+        if(fd < 0) {
+            continue;
         }
+        break;
     }
-    if (fp == 0) {
+    if (fd == -1) {
         proxy_set_errmsg("connect %s", destination);
         return false;
     }
+    fp.open(fd);
+    fp.set_auto_close_fd();
     return true;
 }
 
 bool sqlite3_proxy::disconnect(bool tf)
 {
-    if (fp) {
-        int fd = fp->get_fd();
-        delete fp;
-        fp = 0;
-        close(fd);
-    }
+    fp.close();
+    query_over = true;
     return tf;
 }
 
 bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
 {
+    errmsg.clear();
     char buf[32];
     int slen;
-    std::string &cbuf = *cache;
+
+    if (!query_over) {
+        clear_query();
+    }
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -88,15 +78,15 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
         return false;
     }
 
-    fp->set_timeout(timeout);
+    fp.set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
     buf[slen] = 'L';
 
-    fp->write(buf, slen+1);
-    fp->write(sql, size);
-    fp->flush();
-    if (fp->is_exception()) {
+    fp.write(buf, slen+1);
+    fp.write(sql, size);
+    fp.flush();
+    if (fp.is_exception()) {
         proxy_set_errmsg("write to %s", destination);
         return disconnect();
     }
@@ -106,9 +96,13 @@ bool sqlite3_proxy::log(const char *sql, size_t size, long timeout)
 
 bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
 {
+    errmsg.clear();
     char buf[32];
     int len, slen;
-    std::string &cbuf = *cache;
+
+    if (!query_over) {
+        clear_query();
+    }
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -117,33 +111,35 @@ bool sqlite3_proxy::exec(const char *sql, size_t size, long timeout)
         return false;
     }
 
-    fp->set_timeout(timeout);
+    fp.set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
     buf[slen] = 'E';
 
-    fp->write(buf, slen+1);
-    fp->write(sql, size);
-    fp->flush();
-    if (fp->is_exception()) {
+    fp.write(buf, slen+1);
+    fp.write(sql, size);
+    fp.flush();
+    if (fp.is_exception()) {
         proxy_set_errmsg("write to %s", destination);
         return disconnect();
     }
 
-    len = fp->size_data_get_size();
+    len = fp.size_data_get_size();
     if ((len < 1) || (len > 10000)) {
         proxy_set_errmsg("read from %s", destination);
         return disconnect();
     }
-    cbuf.clear();
-    int r = fp->get();
-    if ((len > 1) && (fp->readn(cbuf, len-1) < len - 1)) {
+    int r = fp.get();
+    std::string cbuf;
+    if ((len > 1) && (fp.readn(cbuf, len-1) < len - 1)) {
         proxy_set_errmsg("read from %s", destination);
         return disconnect();
     }
     if (r == 'O') {
         return true;
     }
+
+    proxy_set_errmsg("server: %s", cbuf.c_str());
     return false;
 }
 
@@ -151,7 +147,10 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
 {
     char buf[32];
     int len, slen;
-    std::string &cbuf = *cache;
+
+    if (!query_over) {
+        clear_query();
+    }
 
     if (empty(sql) || (size<1)) {
         return true;
@@ -160,31 +159,35 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
     if (!connect() < 0) {
         return false;
     }
-    fp->set_timeout(timeout);
+
+    query_over =false;
+    fp.set_timeout(timeout);
 
     slen = size_data_put_size(size + 1, buf);
     buf[slen] = 'Q';
-    fp->write(buf, slen+1);
-    fp->write(sql, size);
-    fp->flush();
-    if (fp->is_error()) {
+    fp.write(buf, slen+1);
+    fp.write(sql, size);
+    fp.flush();
+    if (fp.is_error()) {
         proxy_set_errmsg("write to %s", destination);
         return disconnect();
     }
 
-    len = fp->size_data_get_size();
+    len = fp.size_data_get_size();
     if (len < 1) {
         proxy_set_errmsg("read from %s", destination);
         return disconnect();
     }
 
-    cbuf.clear();
-    int r = fp->get();
-    if ((len > 1) && (fp->readn(cbuf, len-1) < len - 1)) {
+    int r = fp.get();
+    std::string cbuf;
+    if ((len > 1) && (fp.readn(cbuf, len-1) < len - 1)) {
         proxy_set_errmsg("read from %s", destination);
         return disconnect();
     }
     if (r == 'E') {
+        query_over = true;
+        proxy_set_errmsg("server: %s", cbuf.c_str());
         return false;
     }
 
@@ -193,34 +196,37 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
     return true;
 }
 
-int sqlite3_proxy::get_row(size_data_t **row)
+int sqlite3_proxy::get_row(std::string **row)
 {
-    size_data_t *sdvector;
     char buf[32];
     int len;
-    std::string &cbuf = *cache;
 
-    if (!fp) {
+    if (fp.get_fd() == -1) {
         proxy_set_errmsg("read from %s", destination);
+        query_over = true;
         return -1;
     }
-    len = fp->size_data_get_size();
+    len = fp.size_data_get_size();
     if (len < 1) {
         proxy_set_errmsg("read from %s", destination);
         disconnect();
         return -1;
     }
-    if ((fp->readn(buf, 1) < 0) || ((len>1) && (fp->readn(cbuf, len-1) < len - 1))) {
+    std::string cbuf;
+    if ((fp.readn(buf, 1) < 0) || ((len>1) && (fp.readn(cbuf, len-1) < len - 1))) {
         proxy_set_errmsg("read from %s", destination);
         disconnect();
         return -1;
     }
     if (buf[0] == 'E') {
+        proxy_set_errmsg("server: %s", cbuf.c_str());
+        query_over = true;
         return -1;
     }
 
     if (buf[0] == 'O') {
         *row = 0;
+        query_over = true;
         return 0;
     }
 
@@ -230,18 +236,52 @@ int sqlite3_proxy::get_row(size_data_t **row)
         return -1;
     }
 
-    cbuf.reserve(sizeof(size_data_t) * ncolumns+10);
-    *row = sdvector = (size_data_t *)(cbuf.c_str() + cbuf.size() + 8);
-    if ((int)zcc::size_data_unescape_all(cbuf.c_str(), cbuf.size(), sdvector, ncolumns) < ncolumns) {
-        proxy_set_errmsg("unescape row");
-        disconnect();
-        return -1;
+    if (rows) {
+        delete[] rows;
     }
+
+    rows = new std::string[ncolumns];
+    *row = rows;
+    size_data_parser sdparser(cbuf.c_str(), cbuf.size());
     for (int i = 0; i < ncolumns; i++) {
-        sdvector[i].data[sdvector[i].size] = 0;
+        const char *sdata;
+        size_t slen;
+        if (sdparser.shift(&sdata, &slen) < 1) {
+            proxy_set_errmsg("unescape row");
+            disconnect();
+            return -1;
+        }
+        if (slen) {
+            rows[i].append(sdata, slen);
+        }
     }
 
     return 1;
+}
+
+bool sqlite3_proxy::clear_query()
+{
+    if (query_over) {
+        return true;
+    }
+    if (!connect()) {
+        return false;
+    }
+    if (query_over) {
+        return true;
+    }
+    query_over = true;
+    std::string *row;
+    while(1) {
+        int ret = get_row(&row);
+        if (ret == 0) {
+            break;
+        }
+        if (ret < 0) {
+            return false;
+        }
+    }
+    return 0;
 }
 
 }

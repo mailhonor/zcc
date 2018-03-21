@@ -11,108 +11,66 @@
 namespace zcc
 {
 
-class http_url_inner
-{
-public:
-     http_url_inner();
-    ~http_url_inner();
-    char *scheme;
-    char *destination;
-    char *host;
-    int port;
-    char *path;
-    char *query;
-    dict query_variates;
-    char *fragment;
-};
-
-http_url_inner::http_url_inner()
-{
-    scheme = blank_buffer;
-    destination = blank_buffer;
-    host = blank_buffer;
-    path = blank_buffer;
-    query = blank_buffer;
-    fragment = blank_buffer;
-    port = 0;
-}
-
-http_url_inner::~http_url_inner()
-{
-    free(scheme);
-    free(destination);
-    free(host);
-    free(path);
-    free(query);
-    free(fragment);
-}
-
 http_url::http_url()
 {
-    memset(___data, 0, sizeof(___data));
-    new(___data) http_url_inner();
+    port = 0;
 }
 
 http_url::http_url(const char *url)
 {
-    memset(___data, 0, sizeof(___data));
-    new(___data) http_url_inner();
+    port = 0;
     parse(url);
 }
 
 http_url::~http_url()
 {
-    http_url_inner *urldata = (http_url_inner*)___data;
-    urldata->~http_url_inner();
 }
 
 void http_url::clear()
 {
-    http_url_inner *urldata = (http_url_inner*)___data;
-#define ___rfree(s) { free(urldata->s); urldata->s = blank_buffer; }
-    ___rfree(scheme);
-    ___rfree(destination);
-    ___rfree(host);
-    ___rfree(path);
-    ___rfree(query);
-#undef ___rfree
+    scheme.clear();
+    destination.clear();
+    host.clear();
+    path.clear();
+    query.clear();
+    port = 0;
+    query_variates.clear();
 }
 
 void http_url::parse(const char *url)
 {
-    http_url_inner *urldata = (http_url_inner*)___data;
     char *ps = const_cast<char *>(url);
     char *p;
 
     clear();
-    urldata->query_variates.clear();
-    urldata->port = 0;
 
     p = strstr(ps, "://");
     if (!p) {
         if ((ps[0] == '/') || (ps[1] == '/')) {
-            urldata->scheme = strdup("http");
+            scheme = "http";
             ps = p + 2;
         } else {
             return;
         }
     } else {
-        urldata->scheme = memdupnull(ps, p - ps);
-        tolower(urldata->scheme);
+        scheme.append(ps, p - ps);
+        tolower(scheme);
         ps = p + 3;
     }
+    char *tmp_destination = ps;
+
     if ((!strncmp(ps, "local:", 6))) {
-        urldata->host = strdup("local");
+        host = "local";
         p = ps + 6;
         while(1) {
             if ((*p == '?')||(*p == '#') || (*p == '\0')) {
-                urldata->path = memdupnull(ps + 6, p - (ps + 6));
-                urldata->destination = memdupnull(ps, p - ps);
+                path.append(ps + 6, p - (ps + 6));
+                destination.append(ps, p - ps);
                 break;
             }
             p ++;
         }
-        ps = p ++;
+        ps = p + 1;
         if (*p == '?') {
             goto query;
         }
@@ -123,13 +81,12 @@ void http_url::parse(const char *url)
     } 
 
     p = ps;
-    urldata->destination = ps;
     while(1) {
         if ((*p == '?')||(*p == '#') || (*p == '/') || (*p == ':') || (*p == '\0')) {
             if (*p != ':') {
-                urldata->destination = memdupnull(ps, p - ps);
+                destination.append(ps, p - ps);
             }
-            urldata->host = memdupnull(ps, p - ps);
+            host.append(ps, p - ps);
             break;
         }
         p ++;
@@ -153,10 +110,8 @@ port:
     p = ps;
     while(1) {
         if ((*p == '?')||(*p == '#') || (*p == '/') || (*p == '\0')) {
-            urldata->destination = memdupnull(urldata->destination, p - urldata->destination);
-            char *tmp = memdupnull(ps, p - ps);
-            urldata->port = atoi(tmp);
-            free(tmp);
+            destination.append(tmp_destination, p - tmp_destination);
+            port = atoi(ps);
             break;
         }
         p ++;
@@ -177,7 +132,7 @@ path:
     p = ps;
     while(1) {
         if ((*p == '?')||(*p == '#')|| (*p == '\0')) {
-            urldata->path = memdupnull(ps, p - ps);
+            path.append(ps, p - ps);
             break;
         }
         p ++;
@@ -195,8 +150,8 @@ query:
     p = ps;
     while(1) {
         if ((*p == '#')|| (*p == '\0')) {
-            urldata->query = memdupnull(ps, p - ps);
-            urldata->query_variates.parse_url_query(urldata->query);
+            query.append(ps, p - ps);
+            http_url_parse_query(query_variates, query.c_str());
             break;
         }
         p ++;
@@ -208,83 +163,103 @@ query:
     return;
 
 fragment:
-    urldata->fragment = strdup(ps);
-}
-
-char *http_url::get_scheme(const char *def_val)
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->scheme;
-}
-
-char * http_url::get_destination()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->destination;
-}
-
-char * http_url::get_host()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->host;
-}
-
-int http_url::get_port(int def_val)
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->port;
-}
-
-char * http_url::get_path()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->path;
-}
-
-char * http_url::get_query()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->query;
-}
-
-char * http_url::get_query_variate(const char *name, const char *def_val)
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->query_variates.get_str(name, def_val);
-}
-
-dict &http_url::get_query_variate()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->query_variates;
-}
-
-char * http_url::get_fragment()
-{
-    http_url_inner *urldata = (http_url_inner*)___data;
-    return urldata->fragment;
+    fragment = ps;
 }
 
 void http_url::debug_show()
 {
-    debug_kv_show("scheme", get_scheme());
-    debug_kv_show("host", get_host());
-    debug_kv_show("port", get_port());
-    debug_kv_show("destination", get_destination());
-    debug_kv_show("path", get_path());
-    debug_kv_show("query", get_query());
-    debug_kv_show("fragment", get_fragment());
+    debug_kv_show("scheme", scheme.c_str());
+    debug_kv_show("host", host.c_str());
+    debug_kv_show("port", port);
+    debug_kv_show("destination", destination.c_str());
+    debug_kv_show("path", path.c_str());
+    debug_kv_show("query", query.c_str());
+    debug_kv_show("fragment", fragment.c_str());
     printf("query variates\n");
-    get_query_variate().debug_show();
+    std_map_walk_begin(query_variates, k, v) {
+        debug_kv_show(k.c_str(), v.c_str());
+    } std_map_walk_end;
 }
 
+void http_url_parse_query(std::map<std::string, std::string> &result, const char *query)
+{
+    char *q, *p, *ps = const_cast<char *>(query);
+    std::string name(32, 0), value(128, 0);
+    while(1) {
+        p = ps;
+        while((*p != '\0') && (*p != '&')) {
+            p++;
+        }
+        do {
+            q = ps;
+            while(q < p) {
+                if (*q  == '=') {
+                    break;
+                }
+                q ++ ;
+            }
+            if (q == p) {
+                break;
+            }
+            name.clear();
+            name.append(ps, q - ps);
+            tolower(name.c_str());
+            value.clear();
+            q ++;
+            url_hex_decode(q, p - q, value);
+        } while(0);
+        result[name] = value;
+        if (*p == '\0') {
+            break;
+        }
+        ps = p + 1;
+    }
 }
 
-#ifdef __ZCC_SIZEOF_PROBE__
-int main()
-{ 
-    _ZCC_SIZEOF_DEBUG(zcc::http_url, zcc::http_url_inner);
-    return 0;
+char *http_url_build_query(std::string &query, std::map<std::string, std::string> &dict, bool strict)
+{
+    bool first = true;
+    std_map_walk_begin(dict, key, val) {
+        if (first) {
+            first = false;
+        } else {
+            query.push_back('&');
+        }
+        query.append(key);
+        query.push_back('&');
+        size_t i, len = val.size();
+        char *v = (char *)val.c_str();
+        for (i = 0; i < len; i++) {
+            unsigned char ch = v[i];
+            if (ch == ' ') {
+                query.push_back('+');
+                continue;
+            }
+            if (isalnum(ch)) {
+                query.push_back(ch);
+                continue;
+            }
+            if (strict) {
+                query.push_back('%');
+                query.push_back(ch>>4);
+                query.push_back(ch&0X0F);
+                continue;
+            } 
+            if (ch > 127) {
+                query.push_back(ch);
+                continue;
+            }
+            if (strchr("._-", ch)) {
+                query.push_back(ch);
+                continue;
+            }
+            query.push_back('%');
+            query.push_back(ch>>4);
+            query.push_back(ch&0X0F);
+        }
+    } std_map_walk_end;
+    return (char *)(void *)query.c_str();
 }
-#endif
 
+
+}

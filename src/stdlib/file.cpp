@@ -12,16 +12,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-static inline void * ___zcc_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
-{
-    return mmap(addr, length, prot, flags, fd, offset);
-}
-
-static inline int ___zcc_munmap(void *data, size_t size)
-{
-    return munmap(data, size);
-}
-
 namespace zcc
 {
 
@@ -196,7 +186,7 @@ bool file_mmap::mmap(const char *filename)
         return false;
     }
     size = st.st_size;
-    data = ___zcc_mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    data = ::mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (data == MAP_FAILED) {
         errno2 = errno;
         close(fd);
@@ -212,7 +202,7 @@ bool file_mmap::mmap(const char *filename)
 void file_mmap::munmap()
 {
     if (_fd != -1) {
-        ___zcc_munmap(_data, _size);
+        ::munmap(_data, _size);
         close(_fd);
         _fd = -1;
     }

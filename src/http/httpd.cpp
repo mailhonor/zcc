@@ -6,50 +6,87 @@
  * ================================
  */
 
-#include "httpd.h"
+#include "zcc.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 
 namespace zcc
 {
 
 bool var_httpd_debug = false;
+bool var_httpd_no_cache = false;
+
+static const int var_httpd_header_line_max_size = 10240;
+
+class httpd_engine
+{
+public:
+    inline httpd_engine() {}
+    inline ~httpd_engine() {}
+    int fd;
+    SSL *ssl;
+    stream http_fp;
+    /* control */
+    bool stop;
+    /* request */
+    char * method;
+    char * uri;
+    char * version;
+    char * path;
+    int request_content_length;
+    std::map<std::string, std::string> request_query;
+    std::map<std::string, std::string> request_post;
+    std::map<std::string, std::string> request_headers;
+    std::map<std::string, std::string> request_cookies;
+    std::list<httpd_upload_file> request_upload_files;
+    /* */
+    bool request_keep_alive;
+    bool response_initialization;
+    bool response_content_type;
+    bool get_post_data_myself;
+    bool exception;
+    bool tls_mode;
+};
 
 httpd::httpd()
 {
-    memset(___data, 0, sizeof(___data));
-    new (___data) httpd_engine();
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->loop_clear();
-    httpddata->fd = -1;
-    httpddata->exception = false;
+    h_engine = new httpd_engine();
+    h_engine->method = blank_buffer;
+    h_engine->uri = blank_buffer;
+    h_engine->version = blank_buffer;
+    h_engine->path = blank_buffer;
+    h_engine->fd = -1;
+    h_engine->ssl = 0;
+    h_engine->request_keep_alive = false;
+    h_engine->response_initialization = false;
+    h_engine->response_content_type = false;
+    h_engine->get_post_data_myself = false;
+    h_engine->exception = false;
+    h_engine->tls_mode = false;
+
+    loop_clear();
+    h_engine->fd = -1;
+    h_engine->exception = false;
 }
 
 httpd::~httpd()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->loop_clear();
-    if (httpddata->http_fp) {
-        SSL *s = 0;
-        if (httpddata->ssl_auto_release) {
-            s = ((stream *)(httpddata->http_fp))->get_SSL();
-        }
-        delete httpddata->http_fp;
-        if (s) {
-            openssl_SSL_free(s);
-        }
-    }
-    httpddata->~httpd_engine();
+    h_engine->http_fp.close();
+    loop_clear();
+    delete h_engine;
 }
 
 void httpd::bind(int fd)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->http_fp = new stream(fd);
+    h_engine->http_fp.open(fd);
 }
 
 void httpd::bind(SSL *ssl)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->http_fp = new stream(ssl);
+    h_engine->http_fp.open(ssl);
 }
 
 bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
@@ -57,70 +94,55 @@ bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
     if (timeout < 1) {
         timeout = var_max_timeout;
     }
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    SSL *s = openssl_create_SSL(sslctx, sock);
-    if (!s) {
+    h_engine->http_fp.open(sock);
+    if (!h_engine->http_fp.tls_accept(sslctx)) {
         return false;
     }
-    if (timeout < 1) {
-        timeout = var_max_timeout;
-    }
-    if (!openssl_timed_accept(s, timeout)) {
-        openssl_SSL_free(s);
-        return false;
-    }
-    httpddata->http_fp = new stream(s);
-    httpddata->ssl_auto_release = true;
     return true;
 }
 
 void httpd::handler_after_request_header()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->get_post_data_myself = true;
+    h_engine->get_post_data_myself = true;
 }
 
 void httpd::get_post_data_default()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->request_data_do_true();
+    request_data_do_true();
 }
 
 void httpd::set_exception()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->exception = true;
+    h_engine->exception = true;
 }
 
 bool httpd::run()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     bool first = true;
     while(1) {
-        httpddata->loop_clear();
-        httpddata->request_header_do(first);
+        loop_clear();
+        request_header_do(first);
         first = false;
-        if (httpddata->exception || http_fp->is_exception()) {
+        if (h_engine->exception || h_engine->http_fp.is_exception()) {
             return false;
         }
-        httpddata->http_fp->set_timeout(-1);
-        httpddata->request_data_do();
-        if (httpddata->exception || http_fp->is_exception()) {
+        h_engine->http_fp.set_timeout(-1);
+        request_data_do();
+        if (h_engine->exception || h_engine->http_fp.is_exception()) {
             return false;
         }
         handler();
-        if (httpddata->exception || http_fp->is_exception()) {
+        if (h_engine->exception || h_engine->http_fp.is_exception()) {
             return false;
         }
-        http_fp->flush();
-        if (httpddata->exception || http_fp->is_exception()) {
+        h_engine->http_fp.flush();
+        if (h_engine->exception || h_engine->http_fp.is_exception()) {
             return false;
         }
-        if (httpddata->stop) {
+        if (h_engine->stop) {
             return true;
         }
-        if (!httpddata->request_keep_alive) {
+        if (!h_engine->request_keep_alive) {
             return true;
         }
     }
@@ -134,8 +156,7 @@ void httpd::handler()
 
 void httpd::stop()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    httpddata->stop = true;
+    h_engine->stop = true;
 }
 
 long httpd::keep_alive_timeout()
@@ -165,102 +186,51 @@ char *httpd::gzip_file_suffix()
 
 char *httpd::request_method()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->method;
+    return h_engine->method;
 }
 
 char *httpd::request_uri()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->uri;
+    return h_engine->uri;
 }
 
 char *httpd::request_path()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->path;
+    return h_engine->path;
 }
 
 char *httpd::request_version()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->version;
+    return h_engine->version;
 }
 
-static char *request_something_fn(dict &dt, const char *name, const char *def_val)
+const std::map<std::string, std::string> &httpd::request_header()
 {
-    char nbuf[1024 + 1];
-    int len = strlen(name);
-    if (len > 1024) {
-        return const_cast<char *>(def_val);
-    }
-    if (len == 0) {
-        return const_cast<char *>(def_val);
-    }
-    memcpy(nbuf, name, len);
-    nbuf[len] = 0;
-    tolower(nbuf);
-    return dt.get_str(nbuf, def_val);
+    return h_engine->request_headers;
 }
 
-char *httpd::request_header(const char *name, const char *def_val)
+const std::map<std::string, std::string> &httpd::request_query_variates()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return request_something_fn(httpddata->request_headers, name, def_val);
+    return h_engine->request_query;
 }
 
-dict &httpd::request_header()
+const std::map<std::string, std::string> &httpd::request_post_variates()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->request_headers;
+    return h_engine->request_post;
 }
 
-char *httpd::request_query_variate(const char *name, const char *def_val)
+const std::map<std::string, std::string> &httpd::request_cookie()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return request_something_fn(httpddata->request_query, name, def_val);
+    return h_engine->request_cookies;
 }
 
-dict &httpd::request_query_variate()
+const std::list<httpd_upload_file> &httpd::upload_files()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->request_query;
-}
-
-char *httpd::request_post_variate(const char *name, const char *def_val)
-{
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return request_something_fn(httpddata->request_post, name, def_val);
-}
-
-dict &httpd::request_post_variate()
-{
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->request_post;
-}
-
-char *httpd::request_cookie(const char *name, const char *def_val)
-{
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return request_something_fn(httpddata->request_cookies, name, def_val);
-}
-
-dict &httpd::request_cookie()
-{
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->request_cookies;
-}
-
-std::list<httpd_upload_file *> &httpd::upload_files()
-{
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->request_upload_files;
+    return h_engine->request_upload_files;
 }
 
 void httpd::response_500()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     char output[] = "HTTP/1.0 500 Error\r\n"
         "Server: ZCC HTTPD\r\n"
         "Content-Type: text/html\r\n"
@@ -268,14 +238,12 @@ void httpd::response_500()
         "Content-Length: 25\r\n"
         "\r\n"
         "500 Internal Server Error ";
-    http_fp->write(output, sizeof(output) - 1);
-    http_fp->flush();
+    h_engine->http_fp.write(output, sizeof(output) - 1);
+    h_engine->http_fp.flush();
 }
 
 void httpd::response_file(const char *filename, const char *content_type)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     if (empty(content_type)) {
         content_type = mime_type_from_filename(filename, var_mime_type_application_cotec_stream);
     }
@@ -288,7 +256,7 @@ void httpd::response_file(const char *filename, const char *content_type)
             if (zcc::empty(gzip_file_suffix())) {
                 continue;
             }
-            if (!strcasestr(request_header("accept-encoding", ""), "gzip")) {
+            if (!strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "gzip")) {
                 continue;
             }
             std::string fn(filename);
@@ -318,25 +286,29 @@ void httpd::response_file(const char *filename, const char *content_type)
         response_404();
         return;
     }
-    char *old_etag = request_header("if-none-match", "");
+    char *old_etag = dict_get_str(h_engine->request_headers,"if-none-match");
     autobuffer rwbuffer;
     rwbuffer.data = (char *)malloc(4096 + 1);
     char *new_etag = rwbuffer.data;
     sprintf(new_etag, "%lx_%lx", st.st_size, st.st_mtime);
     if (!strcmp(old_etag, new_etag)) {
-        response_304(new_etag);
-        close(fd);
-        return;
+        if (var_httpd_no_cache == false) {
+            response_304(new_etag);
+            close(fd);
+            return;
+        }
     }
 
     response_header_content_type(content_type);
     response_header_content_length(st.st_size);
-    response_header("Etag", new_etag);
+    if (var_httpd_no_cache == false) {
+        response_header("Etag", new_etag);
+    }
     if (is_gzip) {
         response_header("Content-Encoding", "gzip");
     }
     response_header("Last-Modified", st.st_mtime);
-    if (httpddata->request_keep_alive) {
+    if (h_engine->request_keep_alive) {
         response_header("Connection", "keep-alive");
     }
     response_header_over();
@@ -352,8 +324,8 @@ void httpd::response_file(const char *filename, const char *content_type)
         rlen = syscall_read(fd, rwline, rlen);
         if (rlen > 0) {
             rlen_sum += rlen;
-            http_fp->write(rwline, rlen);
-            if (http_fp->is_exception()) {
+            h_engine->http_fp.write(rwline, rlen);
+            if (h_engine->http_fp.is_exception()) {
                 break;
             }
             continue;
@@ -367,17 +339,16 @@ void httpd::response_file(const char *filename, const char *content_type)
         break;
     }
     close(fd);
+    h_engine->http_fp.flush();
     if (rlen_sum != st.st_size) {
         stop();
     } else {
-        http_fp->flush();
+        h_engine->http_fp.flush();
     }
 }
 
 void httpd::response_404()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     char output[] = "HTTP/1.0 404 Not Found\r\n"
         "Server: ZCC HTTPD\r\n"
         "Content-Type: text/html\r\n"
@@ -385,59 +356,52 @@ void httpd::response_404()
         "Content-Length: 13\r\n"
         "\r\n"
         "404 Not Found ";
-    http_fp->write(output, sizeof(output) - 1);
-    http_fp->flush();
+    h_engine->http_fp.write(output, sizeof(output) - 1);
+    h_engine->http_fp.flush();
 }
 
 void httpd::response_200(const char *data, size_t size)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     response_header_content_length((int)size);
     response_header_over();
     if (size > 0) {
-        http_fp->write(data, size);
+        h_engine->http_fp.write(data, size);
     }
     response_flush();
 }
 
 void httpd::response_304(const char *etag)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
     std::string output = "HTTP/1.1 304 Not Modified\r\n";
     output += "Etag: ";
     output += etag;
     output += "\r\n";
-    http_fp->write(output.c_str(), output.size());
-    http_fp->flush();
+    h_engine->http_fp.write(output.c_str(), output.size());
+    h_engine->http_fp.flush();
 }
 
 void httpd::response_header_initialization(const char *initialization)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
     if (initialization == 0) {
         initialization = "HTTP/1.1 200 ZCC";
     }
-    httpddata->http_fp->puts(initialization);
-    httpddata->http_fp->puts("\r\n");
-    httpddata->response_initialization = true;
+    h_engine->http_fp.puts(initialization);
+    h_engine->http_fp.puts("\r\n");
+    h_engine->response_initialization = true;
 }
 
 void httpd::response_header(const char *name, const char *value)
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    stream *http_fp = httpddata->http_fp;
-    if (!httpddata->response_initialization) {
+    if (!h_engine->response_initialization) {
         response_header_initialization();
     }
-    http_fp->puts(name);
-    http_fp->puts(": ");
-    http_fp->puts(value);
-    http_fp->puts("\r\n");
-    if (!httpddata->response_content_type) {
+    h_engine->http_fp.puts(name);
+    h_engine->http_fp.puts(": ");
+    h_engine->http_fp.puts(value);
+    h_engine->http_fp.puts("\r\n");
+    if (!h_engine->response_content_type) {
         if (!strcasecmp(name, "Content-Type")) {
-            httpddata->response_content_type = true;
+            h_engine->response_content_type = true;
         }
     }
 }
@@ -483,25 +447,360 @@ void httpd::response_header_unset_cookie(const char *name)
 
 void httpd::response_header_over()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    if (!httpddata->response_content_type) {
+    if (!h_engine->response_content_type) {
         response_header("Content-Type", "text/html");
     }
-    httpddata->http_fp->puts("\r\n");
+    h_engine->http_fp.puts("\r\n");
 }
 
 bool httpd::response_flush()
 {
-    httpd_engine *httpddata = (httpd_engine *)___data;
-    return httpddata->http_fp->flush();
+    return h_engine->http_fp.flush();
+}
+
+void httpd::loop_clear()
+{
+
+#define ___FR(m) free(m); m=blank_buffer;
+    ___FR(h_engine->method);
+    ___FR(h_engine->path);
+#undef ___FR
+
+    h_engine->stop = false;
+    h_engine->request_content_length = -1;
+    h_engine->request_query.clear();
+    h_engine->request_post.clear();
+    h_engine->request_headers.clear();
+    h_engine->request_cookies.clear();
+    h_engine->request_upload_files.clear();
+    h_engine->request_keep_alive = false;
+    h_engine->response_initialization = false;
+    h_engine->response_content_type = false;
+}
+
+void httpd::request_header_do(bool first)
+{
+    autobuffer readline_auto;
+    char *linebuf = (char *)malloc(var_httpd_header_line_max_size + 1);
+    readline_auto.data = linebuf;
+    char *p, *ps = linebuf;
+    int llen;
+    bool need_body = false;
+
+    /* read first header line */
+    if (first) {
+        h_engine->http_fp.set_timeout(request_header_timeout());
+    } else {
+        h_engine->http_fp.set_timeout(keep_alive_timeout());
+    }
+    int first_ch = h_engine->http_fp.get();
+    if (first_ch == -1) {
+        h_engine->exception = true; return;
+    }
+    if (!first) {
+        h_engine->http_fp.set_timeout(keep_alive_timeout());
+    }
+    linebuf[0] = first_ch;
+    if ((llen = h_engine->http_fp.gets(linebuf + 1, var_httpd_header_line_max_size - 1)) < 10) {
+        h_engine->exception = true; return;
+    }
+    llen ++;
+    if (linebuf[llen-1] != '\n') {
+        h_engine->exception = true; return;
+    }
+    llen--;
+    if (linebuf[llen-1] == '\r') {
+        llen --;
+    }
+    linebuf[llen] = 0;
+    h_engine->method = memdupnull(linebuf, llen);
+    ps = h_engine->method;
+    p = strchr(ps, ' ');
+    if (!p) {
+        h_engine->exception = true; return;
+    }
+    *p = 0;
+    toupper(ps);
+    if (zcc_str_eq(ps, "GET")) {
+    } else if (zcc_str_eq(ps, "POST")) {
+        need_body = true;
+    } else if (zcc_str_eq(ps, "HEAD")) {
+    } else if (zcc_str_eq(ps, "PUT")) {
+        need_body = true;
+    } else if (zcc_str_eq(ps, "TRACE")) {
+    } else if (zcc_str_eq(ps, "OPTIONS")) {
+    } else {
+        h_engine->exception = true; return;
+    }
+    llen -= (p - ps) + 1;
+    ps = h_engine->uri = p + 1;
+
+    if (llen < 10) {
+        h_engine->exception = true; return;
+    }
+    p += llen;
+    for (;p > ps; p--) {
+        if (*p ==' ') {
+            break;
+        }
+    }
+    if (ps == p) {
+        h_engine->exception = true; return;
+    }
+    *p = 0;
+    h_engine->version = p + 1;
+    toupper(h_engine->version);
+
+    ps = h_engine->uri;
+    p = strchr(ps, '?');
+    if (!p) {
+        h_engine->path = strdup(ps);
+    } else {
+        h_engine->path = memdupnull(ps, p - ps);
+        ps = p + 1;
+        p = strchr(ps, '#');
+        if (p) {
+            *p = 0;
+        }
+        http_url_parse_query(h_engine->request_query, ps);
+        if (p) {
+            *p = '#';
+        }
+    }
+
+    /* read other header lines */
+    while(1) {
+        if ((llen = h_engine->http_fp.gets(linebuf, var_httpd_header_line_max_size)) < 1) {
+            h_engine->exception = true; return;
+        }
+        if (linebuf[llen-1] != '\n') {
+            h_engine->exception = true; return;
+        }
+        llen--;
+        if ((llen>0) && (linebuf[llen-1] == '\r')) {
+            llen --;
+        }
+        linebuf[llen] = 0;
+        if (llen == 0) {
+            break;
+        }
+        ps = linebuf;
+        p = strchr(ps, ':');
+        if (!p) {
+            continue;
+        }
+        *p = 0;
+        tolower(linebuf);
+        ps = p + 1;
+        while (*ps == ' ') {
+            ps ++;
+        }
+        h_engine->request_headers[linebuf] = ps;
+        if (zcc_str_eq(linebuf, "content-length")) {
+            h_engine->request_content_length = atoi(ps);
+        } else if (zcc_str_eq(linebuf, "cookie")) {
+            http_cookie_parse_request(h_engine->request_cookies, ps);
+        } else if (zcc_str_eq(linebuf, "connection")) {
+            if (strcasestr(p, "keep-alive")) {
+                h_engine->request_keep_alive = true;
+            }
+        }
+    }
+
+    /* read body */
+    if (!need_body) {
+        return;
+    }
+
+    if (h_engine->request_content_length < 1) {
+        return;
+    }
+}
+
+void httpd::request_data_do()
+{
+    h_engine->get_post_data_myself = false;
+    handler_after_request_header();
+    if (!h_engine->get_post_data_myself) {
+        return;
+    }
+    if (h_engine->request_content_length < 1) {
+        return;
+    }
+    if (max_length_for_post() <  h_engine->request_content_length) {
+        h_engine->exception = true;
+        return;
+    }
+    request_data_do_true();
+}
+
+void httpd::request_data_do_true()
+{
+    char *p = dict_get_str(h_engine->request_headers,"content-type");
+    int ctype = 0;
+    if (!strncasecmp(p, "application/x-www-form-urlencoded", 33)) {
+        ctype = 'u';
+    } else if (!strncasecmp(p, "multipart/form-data", 19)) {
+        ctype = 'f';
+    }
+    if (ctype == 0) {
+        return;
+    }
+
+    if (ctype == 'u') {
+        /* application/x-www-form-urlencoded */
+        std::string mbuf;
+        if (h_engine->http_fp.readn(mbuf, h_engine->request_content_length) < h_engine->request_content_length) {
+            h_engine->exception = true;
+            return;
+        }
+        http_url_parse_query(h_engine->request_post, mbuf.c_str());
+        return;
+    }
+
+    /* multipart/form-data */
+    autobuffer readline_auto;
+    char *linebuf = (char *)malloc(var_httpd_header_line_max_size + 1);
+    readline_auto.data = linebuf;
+
+    /* tmp filename */
+    strcpy(linebuf, tmp_path_for_post());
+    int len = strlen(linebuf);
+    if (linebuf[0] == 0) {
+        strcpy(linebuf, "/tmp/");
+        len = 5;
+    } else {
+        if (linebuf[len-1] != '/') {
+            linebuf[len++] = '/';
+            linebuf[len] = 0;
+        }
+    }
+
+    build_unique_filename_id(linebuf+len);
+    char *data_filename = strdup(linebuf);
+    autobuffer data_filename_auto;
+    data_filename_auto.data = data_filename;
+
+    /* save to tmp file */
+    FILE *fp = fopen(data_filename, "w+");
+    if (!fp) {
+        zcc_info("error open tmp file %s(%m)", data_filename);
+        h_engine->exception = true;
+        return;
+    }
+    long left = h_engine->request_content_length;
+    while(left > 0) {
+        int rlen = left;
+        if (rlen > var_httpd_header_line_max_size) {
+            rlen = var_httpd_header_line_max_size;
+        }
+        rlen = h_engine->http_fp.readn(linebuf, rlen);
+        if (rlen < 1) {
+            fclose(fp);
+            unlink(data_filename);
+            h_engine->exception = true;
+            return;
+        }
+        left -= rlen;
+    }
+    fflush(fp);
+    if (ferror(fp)) {
+        fclose(fp);
+        unlink(data_filename);
+        h_engine->exception = true;
+        return;
+    }
+    fclose(fp);
+}
+
+
+void httpd::upload_file_parse_dump_file(const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, const char *name, const char *filename)
+{
+    saved_path = data_filename;
+    saved_path.append("_");
+    saved_path += file_id_plus;
+    if (!file_put_contents(saved_path.c_str(), content.c_str(), content.size())) {
+        h_engine->exception = true;
+        return;
+    }
+
+    httpd_upload_file huf;
+    huf.name = name;
+    huf.filename = filename;
+    huf.saved_filename = saved_path;
+    huf.size = content.size();
+    h_engine->request_upload_files.push_back(huf);
+}
+
+void httpd::upload_file_parse_walk_mime(mail_parser_mime * mime, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, std::string &disposition_raw, std::map<std::string, std::string> &params)
+{
+    const char *disposition = mime->disposition().c_str();
+    if (strncasecmp(disposition, "form-data", 9)) {
+        return;
+    }
+    disposition_raw.clear();
+    if(!mime->raw_header_line("content-disposition", disposition_raw)){
+        return;
+    }
+    params.clear();
+    content.clear();
+    mime_header_line_get_params(disposition_raw.c_str(), disposition_raw.size(), content, params);
+    char *name = dict_get_str(params, "name");
+    tolower(name);
+    char *filename = dict_get_str(params, "filename");
+    const char *ctype = mime->type().c_str();
+    if (strncasecmp(ctype, "multipart/", 10)) {
+        mime->decoded_content(content);
+        if (empty(filename)) {
+            h_engine->request_post[name]= content;
+            return;
+        } else {
+            upload_file_parse_dump_file(data_filename, saved_path, content, file_id_plus, name, filename);
+        }
+    } else {
+        for (mail_parser_mime *mm = mime->child(); mm; mm = mm->next()) {
+            ctype = mm->type().c_str();
+            if (!strncasecmp(ctype, "multipart/", 10)) {
+                return;
+            }
+            disposition_raw.clear();
+            filename = blank_buffer;
+            if(mime->raw_header_line("content-disposition", disposition_raw)){
+                params.clear();
+                content.clear();
+                mime_header_line_get_params(disposition_raw.c_str(), disposition_raw.size(), content, params);
+                filename = dict_get_str(params, "filanme");
+            }
+            upload_file_parse_dump_file(data_filename, saved_path, content, file_id_plus, name, filename);
+            if (h_engine->exception) {
+                return;
+            }
+        }
+    }
+}
+
+void httpd::upload_file_parse(const char *data_filename)
+{
+    std::string saved_path;
+    file_mmap mreader;
+
+    if (!mreader.mmap(data_filename)) {
+        h_engine->exception = true;
+        return;
+    }
+    mail_parser mparser;
+    mparser.parse(mreader.data(), mreader.size());
+
+    const std::list<mail_parser_mime *> &all_mimes = mparser.all_mimes();
+    std::string disposition_raw, content;
+    std::map<std::string, std::string> params;
+    int file_id_plus = 0;
+    std_list_walk_begin(all_mimes, mime) {
+        upload_file_parse_walk_mime(mime, data_filename, saved_path, content, file_id_plus++, disposition_raw, params);
+        if (h_engine->exception) {
+            return;
+        }
+    } std_list_walk_end;
 }
 
 }
-
-#ifdef __ZCC_SIZEOF_PROBE__
-int main()
-{ 
-    _ZCC_SIZEOF_DEBUG(zcc::httpd, zcc::httpd_engine);
-    return 0;
-}
-#endif

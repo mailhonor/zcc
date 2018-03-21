@@ -12,6 +12,8 @@
 namespace zcc
 {
 
+std::string var_std_string_ignore("");
+
 std::string &sprintf_1024(std::string &str, const char *fmt, ...)
 {
     va_list ap;
@@ -20,6 +22,14 @@ std::string &sprintf_1024(std::string &str, const char *fmt, ...)
     va_start(ap, fmt);
     ::vsnprintf(buf, 1024, fmt, ap);
     va_end(ap);
+    str.append(buf);
+    return str;
+}
+
+std::string &vsprintf_1024(std::string &str, const char *fmt, va_list ap)
+{
+    char buf[1024+1];
+    ::vsnprintf(buf, 1024, fmt, ap);
     str.append(buf);
     return str;
 }
@@ -40,7 +50,7 @@ std::string &size_data_escape(std::string &str, const void *data, size_t n)
 {
     int ch, left;
     if (n == 0) {
-        if (*((const char *)data)) {
+        if (data) {
             n = strlen((const char *)data);
         }
     }

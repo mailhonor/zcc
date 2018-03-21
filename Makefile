@@ -1,5 +1,5 @@
 
-all: libzcc sizeof
+all: libzcc
 
 .PHONY: test sample
 
@@ -25,7 +25,7 @@ tag tags:
 clean:
 	make -f makefiles/clean.makefile
 	make clean -f makefiles/sample_list.makefile
-	rm -f libzcc.a
+	rm -f libzcc.a libzcc_coroutine.a
 
 CLEAN: clean
 	rm -r tags plist

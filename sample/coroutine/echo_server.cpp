@@ -10,7 +10,7 @@
 
 void ___usage(const char *p = 0)
 {
-    printf("USAGE: %s --zlisten address\n", zcc::var_progname);
+    printf("USAGE: %s -listen address\n", zcc::var_progname);
     exit(1);
 }
 
@@ -36,9 +36,6 @@ void *echo_service(void *context)
 
 void *do_listen(void *context)
 {
-    if (zcc::empty(zcc::var_listen_address)) {
-        ___usage();
-    }
     int sock_type;
     int sock = zcc::listen("0:8899", &sock_type); 
     while(1) {

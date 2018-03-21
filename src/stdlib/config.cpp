@@ -29,20 +29,177 @@ bool config::load_by_filename(const char *filename)
         if ((!*key) || (*key == '#')) {
             continue;
         }
-        val = strchr(key, '=');
-        if (val) {
-            *val++ = 0;
+        val = key;
+        while(*val) {
+            if ((*val == '=') || (*val == '+')) {
+                break;
+            }
+            val++;
         }
-        key = trim_right(key);
-        if (val) {
+
+        if (*val == 0) {
+            key = trim_right(key);
+            (*this)[key] = "";
+        } else if (*val == '=') {
+            *val = 0;
+            val ++;
+            key = trim_right(key);
             val = trim(val);
+            (*this)[key] = val;
+        } else if (*val == '+') {
+            *val = 0;
+            val ++;
+            key = trim_right(key);
+            val = trim(val);
+            config::iterator it = find(key);
+            if (it == end()) {
+                (*this)[key] = val;
+            } else {
+                it->second.append(val);
+            }
         }
-        (*this)[key] = val?val:"";
     }
 
     fclose(fp);
 
     return true;
+}
+
+void config::debug_show()
+{
+    std_map_walk_begin(*this, k, v) {
+        debug_kv_show(k.c_str(), v.c_str());
+    } std_map_walk_end;
+}
+
+bool config::find(const std::string &key, char **val)
+{
+    if (val) {
+        *val = 0;
+    }
+    iterator it = find(key);
+    if (it == end()) {
+        return false;
+    }
+    if (val) {
+        *val = (char *)it->second.c_str();
+    }
+    return true;
+}
+
+bool config::find(const char *key, char **val)
+{
+    if (val) {
+        *val = 0;
+    }
+    iterator it = find(key);
+    if (it == end()) {
+        return false;
+    }
+    if (val) {
+        *val = (char *)it->second.c_str();
+    }
+    return true;
+}
+
+char *config::get_str(const std::string &key, const char *def)
+{
+    char *v;
+    if (find(key, &v)) {
+        return v;
+    }
+    return const_cast<char *>(def);
+}
+
+char *config::get_str(const char *key, const char *def)
+{
+    char *v;
+    if (find(key, &v)) {
+        return v;
+    }
+    return const_cast<char *>(def);
+}
+
+bool config::get_bool(const std::string &key, bool def)
+{
+    return to_bool(get_str(key, ""), def);
+}
+
+bool config::get_bool(const char *key, bool def)
+{
+    return to_bool(get_str(key, ""), def);
+}
+
+int config::get_int(const std::string &key, int def, int min, int max)
+{
+    int r = atoi(get_str(key, ""));
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+int config::get_int(const char *key, int def, int min, int max)
+{
+    int r = atoi(get_str(key, ""));
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_long(const std::string &key, long def, long min, long max)
+{
+    long r = atol(get_str(key, ""));
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_long(const char *key, long def, long min, long max)
+{
+    long r = atol(get_str(key, ""));
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_second(const std::string &key, long def, long min, long max)
+{
+    int r = to_second(get_str(key, ""), def);
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_second(const char *key, long def, long min, long max)
+{
+    int r = to_second(get_str(key, ""), def);
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_size(const std::string &key, long def, long min, long max)
+{
+    int r = to_size(get_str(key, ""), def);
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
+}
+
+long config::get_size(const char *key, long def, long min, long max)
+{
+    int r = to_size(get_str(key, ""), def);
+    if ((r < min) || (r > max)) {
+        return def;
+    }
+    return r;
 }
 
 void config::load_another(config &cf)
@@ -52,7 +209,7 @@ void config::load_another(config &cf)
     }
 }
 
-void config::get_str_table(config_str_table_t * table)
+void config::get_str_table(const config_str_table_t * table)
 {
     while (table->name) {
         *(table->target) = get_str(table->name, table->defval);
@@ -60,7 +217,7 @@ void config::get_str_table(config_str_table_t * table)
     }
 }
 
-void config::get_bool_table(config_bool_table_t * table)
+void config::get_bool_table(const config_bool_table_t * table)
 {
     while (table->name) {
         *(table->target) = get_bool(table->name, table->defval);
@@ -69,7 +226,7 @@ void config::get_bool_table(config_bool_table_t * table)
 }
 
 #define ___ZCC_CONFIG_GET_TABLE(ttype) \
-    void config::get_## ttype ## _table(config_ ## ttype ## _table_t * table) \
+    void config::get_## ttype ## _table(const config_ ## ttype ## _table_t * table) \
     { \
         while (table && table->name) \
         { \

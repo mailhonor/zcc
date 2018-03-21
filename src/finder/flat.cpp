@@ -20,7 +20,7 @@ public:
     ssize_t find(const char *query, std::string &result, long timeout);
 private:
     bool load_dict(const char *fn);
-    dict ___dict;
+    std::map<std::string, std::string> ___dict;
     const char *___url;
 };
 
@@ -37,20 +37,20 @@ flat_finder::~flat_finder()
 bool flat_finder::open(const char *url)
 {
     http_url urlobj(url);
-    if (zcc::empty(urlobj.get_destination())) {
+    if (urlobj.destination.empty()) {
         return false;
     }
-    if (!load_dict(urlobj.get_destination())) {
+    if (!load_dict(urlobj.destination.c_str())) {
         return false;
     }
-    ___url = strdup(urlobj.get_destination());
+    ___url = strdup(urlobj.destination.c_str());
     return true;
 }
 ssize_t flat_finder::find(const char *query, std::string &result, long timeout)
 {
     char *v;
     
-    v = ___dict.get_str(query, 0);
+    v = dict_get_str(___dict, query, 0);
     if (!v) {
         return 0;
     }

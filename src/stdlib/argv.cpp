@@ -25,6 +25,15 @@ argv::~argv()
     free(___data);
 }
 
+argv::argv(const char *str, const char *delim)
+{
+    ___size = 0;
+    ___capacity = 13;
+    ___data = (char **)malloc(sizeof(char *) * (___capacity  + 1));
+    ___data[___size] = 0;
+    split(str, delim);
+}
+
 void argv::push_back(const std::string &v)
 {
     ___append(memdupnull(v.c_str(), v.size()));

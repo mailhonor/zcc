@@ -11,7 +11,7 @@
 int main()
 {
     zcc::pm_pool *pm = new zcc::pm_pool();
-    pm->option_piece_size(10, 5);
+    pm->set_piece_size(10, 5);
 
     std::list<char *> ms;
 

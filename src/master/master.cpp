@@ -42,14 +42,9 @@ static int var_masterlog_sock = -1;
 static std::list<char *> var_masterlog_content_list;
 static pthread_mutex_t var_masterlog_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t var_masterlog_cond = PTHREAD_COND_INITIALIZER;
-struct log_stream{
-    long hour_id;
-    int fd;
-    std::string cache;
-};
-typedef struct log_stream log_stream;
-static std::map<std::string, log_stream *> var_masterlog_streams;
-static std::map<std::string, log_stream *>::iterator var_masterlog_streams_iterator;
+static long var_masterlog_hour_id = -1;
+static int var_masterlog_fd = -1;
+static std::string var_masterlog_cache;
 
 static void log_write_file(int fd, const char *content, size_t clen)
 {
@@ -69,16 +64,8 @@ static void log_write_file(int fd, const char *content, size_t clen)
 
 static void log_save_content(char *logcontent) 
 {
-    char fpath[4096];
-    log_stream *stream;
-    char *fileid = logcontent;
-    char *p = strchr(fileid, ',');
-    if (!p) {
-        return;
-    }
-    *p = 0;
-    char *identity = p + 1;
-    p = strchr(identity, ',');
+    char *identity = logcontent;
+    char *p = strchr(identity, ',');
     if (!p) {
         return;
     }
@@ -102,67 +89,54 @@ static void log_save_content(char *logcontent)
     } else {
         hour_id = tm.tm_year * (100 * 100 * 100) + tm.tm_mon * (100 * 100) + tm.tm_mday * 100;
     }
-    var_masterlog_streams_iterator = var_masterlog_streams.find(fileid);
-    if (var_masterlog_streams_iterator == var_masterlog_streams.end()) {
-        stream = new log_stream();
-        stream->fd = -1;
-        stream->hour_id = 0;
-        stream->cache.reserve(1024 * 100);
-        var_masterlog_streams[fileid] = stream;
-    } else {
-        stream = var_masterlog_streams_iterator->second;
-    }
-    if (stream->hour_id != hour_id) {
-        if (stream->fd != -1) {
-            if (stream->cache.size()) {
-                log_write_file(stream->fd, stream->cache.c_str(), stream->cache.size());
+    if (var_masterlog_hour_id != hour_id) {
+        if (var_masterlog_fd != -1) {
+            if (var_masterlog_cache.size()) {
+                log_write_file(var_masterlog_fd, var_masterlog_cache.c_str(), var_masterlog_cache.size());
             }
-            close(stream->fd);
-            stream->fd = -1;
+            close(var_masterlog_fd);
+            var_masterlog_fd = -1;
         }
-        stream->cache.clear();
+        var_masterlog_cache.clear();
     }
-    stream->hour_id = hour_id;
-    if (stream->fd == -1) {
+    var_masterlog_hour_id = hour_id;
+    if (var_masterlog_fd == -1) {
+        char fpath[4096];
         if (var_masterlog_timeunit == 1) {
-            snprintf(fpath, 4096, "%s/%s-%d%02d%02d.log", var_masterlog_path.data, fileid, tm.tm_year+1900, tm.tm_mon + 1, tm.tm_mday); 
+            snprintf(fpath, 4096, "%s/%d%02d%02d.log", var_masterlog_path.data, tm.tm_year+1900, tm.tm_mon + 1, tm.tm_mday); 
         }else {
-            snprintf(fpath, 4096, "%s/%s-%d%02d%02d%02d.log", var_masterlog_path.data, fileid, tm.tm_year+1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour); 
+            snprintf(fpath, 4096, "%s/%d%02d%02d%02d.log", var_masterlog_path.data, tm.tm_year+1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour); 
         }
-        while (((stream->fd = open(fpath, O_CREAT|O_APPEND|O_RDWR, 0666))==-1) && (errno == EINTR)) {
+        while (((var_masterlog_fd = open(fpath, O_CREAT|O_APPEND|O_RDWR, 0666))==-1) && (errno == EINTR)) {
             msleep(100);
         }
-        if (stream->fd == -1) {
+        if (var_masterlog_fd == -1) {
             zcc_info("can not open %s (%m)", fpath);
             return;
         }
+        close_on_exec(var_masterlog_fd);
     }
-    sprintf_1024(stream->cache, "%02d:%02d:%02d %s[%s] ", tm.tm_hour, tm.tm_min, tm.tm_sec, identity, pids);
-    stream->cache.append(content);
-    stream->cache.append("\n");
-    if (stream->cache.size() > 1024 * (100 -1)) {
-        log_write_file(stream->fd, stream->cache.c_str(), stream->cache.size());
-        stream->cache.clear();
+    sprintf_1024(var_masterlog_cache, "%02d:%02d:%02d %s[%s] ", tm.tm_hour, tm.tm_min, tm.tm_sec, identity, pids);
+    var_masterlog_cache.append(content);
+    var_masterlog_cache.append("\n");
+    if (var_masterlog_cache.size() > 1024 * (100 -1)) {
+        log_write_file(var_masterlog_fd, var_masterlog_cache.c_str(), var_masterlog_cache.size());
+        var_masterlog_cache.clear();
     }
 }
 
 static void log_flush_all()
 {
-    std_map_walk_begin(var_masterlog_streams, fileid, stream) {
-        if ((stream->fd != -1) && (stream->cache.size())) {
-            log_write_file(stream->fd, stream->cache.c_str(), stream->cache.size());
-        }
-        stream->cache.clear();
-    } std_map_walk_end;
+    if ((var_masterlog_fd != -1) && (var_masterlog_cache.size())) {
+        log_write_file(var_masterlog_fd, var_masterlog_cache.c_str(), var_masterlog_cache.size());
+    }
+    var_masterlog_cache.clear();
 
     if (___log_stop) {
-        std_map_walk_begin(var_masterlog_streams, fileid, stream) {
-            if (stream->fd != -1) {
-                close(stream->fd);
-            }
-            delete stream;
-        } std_map_walk_end;
-        var_masterlog_streams.clear();
+        if (var_masterlog_fd != -1) {
+            close(var_masterlog_fd);
+            var_masterlog_fd = -1;
+        }
     }
 }
 
@@ -257,6 +231,7 @@ static void log_pthread_init()
     if (bind(var_masterlog_sock, (struct sockaddr *)&server_un, sizeof(struct sockaddr_un)) < 0) {
         zcc_fatal("bind %s (%m)", listen_path);
     }
+    close_on_exec(var_masterlog_sock);
 
     pthread_t pth;
     if(pthread_create(&pth, 0, log_save_pthread, 0)) {
@@ -792,7 +767,6 @@ void master::run(int argc, char **argv)
     init_all(*this, argc, argv);
     reload_server(*this);
     before_service();
-    before_service_for_enduser();
     sighup_reload_on = 0;
     while (1) {
         if (sigterm_stop_on) {
@@ -850,10 +824,6 @@ void master::load_server_config(std::list<config *> &cfs)
 }
 
 void master::before_service()
-{
-}
-
-void master::before_service_for_enduser()
 {
 }
 

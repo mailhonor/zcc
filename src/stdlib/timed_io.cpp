@@ -25,9 +25,6 @@ int timed_wait_readable(int fd, long timeout)
     struct pollfd pollfd;
     long critical_time, left_time;
 
-    pollfd.fd = fd;
-    pollfd.events = POLLIN;
-
     if (timeout < 1) {
         timeout = var_max_timeout;
     }
@@ -42,6 +39,8 @@ int timed_wait_readable(int fd, long timeout)
             left_time = 1000 * 3600;
             ccc = true;
         }
+        pollfd.fd = fd;
+        pollfd.events = POLLIN;
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
             if (errno != EINTR) {
@@ -162,9 +161,6 @@ int timed_wait_writeable(int fd, long timeout)
     struct pollfd pollfd;
     long critical_time, left_time;
 
-    pollfd.fd = fd;
-    pollfd.events = POLLOUT;
-    
     if (timeout < 1) {
         timeout = var_max_timeout;
     }
@@ -179,6 +175,9 @@ int timed_wait_writeable(int fd, long timeout)
             left_time = 1000 * 3600;
             ccc = true;
         }
+
+        pollfd.fd = fd;
+        pollfd.events = POLLOUT;
         switch (poll(&pollfd, 1, left_time)) {
         case -1:
             if (errno != EINTR) {

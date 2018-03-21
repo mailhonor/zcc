@@ -9,7 +9,6 @@
 #include "zcc.h"
 #include <ctype.h>
 
-static int (*___vsnprintf)(char *str, size_t size, const char *fmt, va_list ap) = vsnprintf;
 namespace zcc
 {
 /* ################################################################## */
@@ -130,12 +129,15 @@ strtok::~strtok()
 }
 void strtok::set_str(const char *str)
 {
-    your_str = str;
+    your_str = str?str:"";
     next_ptr = 0;
     next_len = 0;
 }
 bool strtok::tok(const char *delim)
 {
+    if (empty(delim)) {
+        return false;
+    }
     if (*your_str == 0) {
         return false;
     }
@@ -188,10 +190,10 @@ char *trim(char *str)
 /* ################################################################## */
 /* skip */
 
-size_t skip(const char *line, size_t size, const char *ignores_left, const char *ignores_right, char **start)
+size_t skip(const char *line, size_t size_size, const char *ignores_left, const char *ignores_right, char **start)
 {
+    int i, size = size_size;
     const char *ps,  *pend = line + size;
-    size_t i;
     int ch;
 
     for (i = 0; i < size; i++) {
@@ -416,7 +418,7 @@ char *memcasestr(const void *s, const char *needle, size_t len)
 
 size_t vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 {
-    size_t ret=___vsnprintf(str, size, fmt, ap);
+    size_t ret=::vsnprintf(str, size, fmt, ap);
     return ((ret<size)?ret:(size-1));
 }
 

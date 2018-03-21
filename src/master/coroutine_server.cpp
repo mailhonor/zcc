@@ -107,13 +107,13 @@ void master_coroutine_server::alone_register(char *alone_url)
         }
 
         int fd_type;
-        int fd = listen(url, &fd_type);
+        int fd = listen(url, &fd_type, 1000);
         if (fd < 0) {
             zcc_fatal("alone_register: open %s(%m)", alone_url);
         }
         close_on_exec(fd);
-        nonblocking(fd);
         coroutine_enable_fd(fd);
+        nonblocking(fd);
         service_register(service, fd, fd_type);
     }
 }
@@ -148,17 +148,13 @@ void master_coroutine_server::master_register(char *master_url)
             zcc_fatal("master_coroutine_server: fd is invalid", typefd+1);
         }
         close_on_exec(fd);
-        nonblocking(fd);
         coroutine_enable_fd(fd);
+        nonblocking(fd);
         service_register(service_name, fd, fdtype);
     }
 }
 
 void master_coroutine_server::before_service()
-{
-}
-
-void master_coroutine_server::before_service_for_enduser()
 {
 }
 
@@ -202,7 +198,6 @@ void master_coroutine_server::run(int argc, char ** argv)
     }
 
     before_service();
-    before_service_for_enduser();
 
     if (!default_config.get_bool("MASTER", false)) {
         alone_register(default_config.get_str("server-service", ""));

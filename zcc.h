@@ -208,13 +208,28 @@ public:
     char *data;
 };
 
-/* std::string extend ################################################### */
+/* std extend ################################################### */
+extern std::string var_std_string_ignore;
+inline bool is_std_string_ignore(const std::string &s) { return (s.c_str() == var_std_string_ignore.c_str()); }
 std::string &sprintf_1024(std::string &str, const char *fmt, ...);
+std::string &vsprintf_1024(std::string &str, const char *fmt, va_list ap);
+inline std::string &to_string(std::string &str, int i) {return sprintf_1024(str, "%d", i);}
+inline std::string &to_string(std::string &str, unsigned int i) {return sprintf_1024(str, "%u", i);}
+inline std::string &to_string(std::string &str, long i) {return sprintf_1024(str, "%ld", i);}
+inline std::string &to_string(std::string &str, unsigned long i) {return sprintf_1024(str, "%lu", i);}
+inline std::string &to_string(std::string &str, double i) {return sprintf_1024(str, "%f", i);}
+inline std::string &to_string(std::string &str, float i) {return sprintf_1024(str, "%f", i);}
 std::string &tolower(std::string &str);
 std::string &toupper(std::string &str);
 std::string &size_data_escape(std::string &str, const void *data, size_t n = 0);
 std::string &size_data_escape(std::string &str, int i);
 std::string &size_data_escape(std::string &str, long i);
+
+void dict_debug(std::map<std::string, std::string> &dict);
+bool dict_find(std::map<std::string, std::string> &dict, const std::string &key, char **val);
+bool dict_find(std::map<std::string, std::string> &dict, const char *key, char **val);
+char *dict_get_str(std::map<std::string, std::string> &dict,const std::string &key,const char *def = blank_buffer);
+char *dict_get_str(std::map<std::string, std::string> &dict, const char *key, const char *def = blank_buffer);
 
 /* ################################################################## */
 /* log, 通用 */
@@ -233,9 +248,9 @@ extern bool var_log_debug_enable;
 void log_use_syslog(int facility, const char *identity);
 void log_use_syslog(const char *facility, const char *identity);
 
-void log_use_masterlog(const char *dest, const char *facility, const char *identity);
+void log_use_masterlog(const char *dest, const char *identity);
 
-bool log_use_by(char *progname, char *log_info);
+bool log_use_by(char *progname, char *log_uri);
 
 /* greedy_mem_pool ############################################## */
 class gm_pool
@@ -350,6 +365,7 @@ class argv
 {
 public:
     argv();
+    argv(const char *str, const char *delim);
     ~argv();
     inline size_t size() const { return ___size; }
     inline char ** data() const { return ___data; }
@@ -373,33 +389,6 @@ private:
     for (size_t var_zcc_argv_opti = 0; var_zcc_argv_opti < ___V_ARGV.size(); var_zcc_argv_opti++) { \
         var_your_value = (char *)(___V_ARGV[var_zcc_argv_opti]); {
 #define zcc_argv_walk_end }}}
-
-/* dict ############################################################ */
-class dict: public std::map<std::string, std::string>
-{
-public:
-    using std::map<std::string, std::string>::find;
-    inline dict() {}
-    inline ~dict() {}
-    /* extend */
-    bool find(const std::string &key, char **val);
-    bool find(const char *key, char **val);
-    void debug_show();
-    char *get_str(const std::string &key, const char *def = blank_buffer);
-    char *get_str(const char *key, const char *def = blank_buffer);
-    bool get_bool(const std::string &key, bool def);
-    bool get_bool(const char *key, bool def);
-    int get_int(const std::string &key, int def, int min, int max);
-    int get_int(const char *key, int def, int min, int max);
-    long get_long(const std::string &key, long def, long min, long max);
-    long get_long(const char *key, long def, long min, long max);
-    long get_second(const std::string &key, long def, long min, long max);
-    long get_second(const char *key, long def, long min, long max);
-    long get_size(const std::string &key, long def, long min, long max);
-    long get_size(const char *key, long def, long min, long max);
-    void parse_url_query(const char *query);
-    char *build_url_query(std::string &query, bool strict = true);
-};
 
 /* size_data ######################################################## */
 ssize_t size_data_unescape(const void *src_data, size_t src_size, char **result_data, size_t *result_size);
@@ -455,12 +444,7 @@ size_t ncr_decode(size_t ins, char *wchar);
 /* crc32 crc64 ###################################################### */
 unsigned int get_crc32_result(const void *data, size_t size, unsigned int init_value = 0);
 unsigned long get_crc64_result(const void *data, size_t size, unsigned long init_value = 0);
-
-/* time ############################################################ */
-long timeout_set(long timeout);
-long timeout_left(long timeout);
-void msleep(long delay);
-void sleep(long delay);
+unsigned short int get_crc16_result(const void *data, size_t size, unsigned short int init_value = 0);
 
 /* date ############################################################ */
 char *build_rfc1123_date_string(long t, std::string &result);
@@ -479,7 +463,7 @@ ssize_t get_mac_list(std::list<std::string> &mac_list);
 typedef struct {
     const char *name;
     const char *defval;
-    char **target;
+    const char **target;
 } config_str_table_t;
 typedef struct {
     const char *name;
@@ -503,20 +487,39 @@ typedef struct {
 typedef config_long_table_t config_second_table_t;
 typedef config_long_table_t config_size_table_t;
 
-class config:public dict
+class config:public std::map<std::string, std::string>
 {
 public:
     inline config() {}
     inline ~config() {}
     bool load_by_filename(const char *filename);
     void load_another(config &cf);
+    /* extend */
+    using std::map<std::string, std::string>::find;
+    bool find(const std::string &key, char **val);
+    bool find(const char *key, char **val);
+    void debug_show();
+    char *get_str(const std::string &key, const char *def = blank_buffer);
+    char *get_str(const char *key, const char *def = blank_buffer);
+    bool get_bool(const std::string &key, bool def);
+    bool get_bool(const char *key, bool def);
+    int get_int(const std::string &key, int def, int min, int max);
+    int get_int(const char *key, int def, int min, int max);
+    long get_long(const std::string &key, long def, long min, long max);
+    long get_long(const char *key, long def, long min, long max);
+    long get_second(const std::string &key, long def, long min, long max);
+    long get_second(const char *key, long def, long min, long max);
+    long get_size(const std::string &key, long def, long min, long max);
+    long get_size(const char *key, long def, long min, long max);
+    void parse_url_query(const char *query);
+    char *build_url_query(std::string &query, bool strict = true);
     /* table */
-    void get_str_table(config_str_table_t * table);
-    void get_int_table(config_int_table_t * table);
-    void get_long_table(config_long_table_t * table);
-    void get_bool_table(config_bool_table_t * table);
-    void get_second_table(config_second_table_t * table);
-    void get_size_table(config_size_table_t * table);
+    void get_str_table(const config_str_table_t * table);
+    void get_int_table(const config_int_table_t * table);
+    void get_long_table(const config_long_table_t * table);
+    void get_bool_table(const config_bool_table_t * table);
+    void get_second_table(const config_second_table_t * table);
+    void get_size_table(const config_size_table_t * table);
 };
 extern config default_config;
 
@@ -558,8 +561,15 @@ void license_mac_build(const char *salt, const char *_mac, std::string &license)
 extern char *var_progname;
 extern bool var_proc_stop;
 
-extern std::vector<char *> main_parameter_values;
+extern char ** main_parameter_argv;
+extern int main_parameter_argc;
 void main_parameter_run(int argc, char **argv);
+
+/* time ############################################################ */
+long timeout_set(long timeout);
+long timeout_left(long timeout);
+void msleep(long delay);
+void sleep(long delay);
 
 /* io ############################################################# */
 /* return , -1: error, 0: not, 1: yes */
@@ -612,6 +622,7 @@ int unix_connect(const char *addr);
 int inet_connect(const char *dip, int port);
 int host_connect(const char *host, int port);
 int connect(const char *netpath);
+int netpaths_expand(const char *netpaths, std::list<std::string> &netpath_list);
 
 /* openssl ######################################################## */
 extern bool var_openssl_debug;
@@ -647,24 +658,24 @@ public:
     stream &close();
     stream &set_timeout(long timeout);
     inline long get_timeout() { return ___timeout; }
-    stream &set_auto_close_fd(bool flag = true) { ___auto_release=flag; return *this; }
+    inline stream &set_auto_close_fd(bool flag = true) { ___auto_release=flag; return *this; }
     inline bool is_error() { return ___error; }
     inline bool is_eof() { return ___eof; }
     inline bool is_exception() { return ___error || ___eof; }
-    inline int get_fd() { return (___opened?(___ssl_mode?openssl_SSL_get_fd(___fd.ssl):___fd.fd):-1); }
-    inline SSL *get_SSL() { return (___opened&&___ssl_mode)?___fd.ssl:0; }
+    int get_fd();
+    SSL *get_SSL();
     bool tls_connect(SSL_CTX *ctx);
     bool tls_accept(SSL_CTX *ctx);
     /* read */
-    inline int get() {
-        return ((read_buf_p1<read_buf_p2)?(read_buf[read_buf_p1++]):(get_char_do()));
-    }
+    int timed_wait_readable(long timeout);
+    inline int get() { return ((read_buf_p1<read_buf_p2)?(read_buf[read_buf_p1++]):(get_char_do())); }
     ssize_t readn(void *buf, size_t size);
     ssize_t readn(std::string &str, size_t size);
     ssize_t gets(void *buf, size_t size, int delimiter='\n');
     ssize_t gets(std::string &str, int delimiter = '\n');
     ssize_t size_data_get_size();
     /* write */
+    int timed_wait_writeable(long timeout);
     inline stream &put(int ch) {
         write_buf[write_buf_len++]=ch; ___flushed = false;
         (write_buf_len<stream_write_buf_size)?(1):(flush());
@@ -674,6 +685,7 @@ public:
     stream &write(const void *buf, size_t size);
     stream &puts(const char *str);
     stream &printf_1024(const char *format, ...);
+    inline stream &append(std::string &str) { return write(str.c_str(), str.size()); }
     inline stream &append(const char *str) { return puts(str); }
     inline stream &append(int i) {return printf_1024("%d", i);}
     inline stream &append(unsigned int i) {return printf_1024("%u", i);}
@@ -684,16 +696,13 @@ public:
 private:
     void init_all();
     int get_char_do();
+    char *read_buf;
+    char *write_buf;
+    long ___timeout;
+    union { int fd; SSL *ssl; } ___fd;
     int read_buf_p1:16;
     int read_buf_p2:16;
-    union {
-        int fd;
-        SSL *ssl;
-    } ___fd;
-    long ___timeout;
     unsigned short int write_buf_len;
-    char read_buf[stream_read_buf_size + 1];
-    char write_buf[stream_write_buf_size + 1];
     bool ___opened;
     bool ___auto_release;
     bool ___ssl_mode;
@@ -703,27 +712,17 @@ private:
     bool ___flushed;
 };
 
-/* lock ####################################################### */
-class locker
-{
-public:
-    inline locker() {}
-    inline virtual ~locker() {};
-    virtual void rlock() = 0;
-    virtual void wlock() = 0;
-    inline void lock() { wlock(); }
-    virtual void unlock() = 0;
-};
-
-locker *pthread_locker_create();
-void pthread_locker_free(locker *lock);
-
 /* event ####################################################### */
 class event_io;
 class async_io;
 class event_timer;
 class event_base;
 extern event_base default_evbase;
+
+typedef struct event_io_t event_io_t;
+typedef struct async_io_t async_io_t;
+typedef struct event_timer_t event_timer_t;
+typedef struct event_base_t event_base_t;
 
 class event_io
 {
@@ -740,7 +739,7 @@ public:
     void set_context(const void *ctx);
     void * get_context();
     event_base &get_event_base();
-    char ___data[31];
+    event_io_t *eio_data;
 };
 
 class async_io
@@ -773,7 +772,7 @@ public:
     size_t get_cache_size();
     void sleep(void (*callback)(async_io &), long timeout);
     event_base &get_event_base();
-    char ___data[122];
+    async_io_t *aio_data;
 };
 
 class event_timer
@@ -788,7 +787,7 @@ public:
     void set_context(const void *ctx);
     void * get_context();
     event_base &get_event_base();
-    char ___data[57];
+    event_timer_t *et_data;
 };
 
 class event_base
@@ -801,7 +800,7 @@ public:
     void notify();
     void set_local();
     void dispatch(long delay = 1000);
-    char ___data[117];
+    event_base_t *eb_data;
 };
 
 void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *aio);
@@ -888,7 +887,6 @@ public:
     void load_server_config_from_dir(const char *config_path, std::list<config *> &cfs);
     virtual void load_server_config(std::list<config *> &cfs);
     virtual void before_service();
-    virtual void before_service_for_enduser();
     virtual void event_loop();
     void set_reload_signal(int sig);
 };
@@ -900,7 +898,6 @@ public:
     master_event_server();
     ~master_event_server();
     virtual void before_service();
-    virtual void before_service_for_enduser();
     virtual void event_loop();
     virtual void before_exit();
     virtual void simple_service(int fd);
@@ -922,7 +919,6 @@ public:
     master_coroutine_server();
     ~master_coroutine_server();
     virtual void before_service();
-    virtual void before_service_for_enduser();
     virtual void before_exit();
     virtual void service_register(const char *service_name, int fd, int fd_type) = 0;
     void run(int argc, char **argv);
@@ -1073,7 +1069,7 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_line,
 void mime_header_line_get_utf8_2231(const char *src_charset_def, const char *in_line, size_t in_len
         , std::string &dest , bool with_charset = true);
 
-void mime_header_line_get_params(const char *in_line, size_t in_len, std::string &value, dict &params);
+void mime_header_line_get_params(const char *in_line, size_t in_len, std::string &value, std::map<std::string, std::string> &params);
 void mime_header_line_decode_content_type(const char *data, size_t len
         , std::string &value, std::string &boundary, std::string &charset, std::string &name);
 void mime_header_line_decode_content_disposition(const char *data, size_t len
@@ -1259,37 +1255,39 @@ class http_url
 public:
     http_url();
     ~http_url();
-    /* parse */
     http_url(const char *url);
-    void clear();
     void parse(const char *url);
-    char *get_scheme(const char *def_val = blank_buffer);
-    char *get_destination();
-    char *get_host();
-    int get_port(int def_val = -1);
-    char *get_path();
-    char *get_query();
-    char *get_query_variate(const char *name, const char *def_val = blank_buffer);
-    dict &get_query_variate();
-    char *get_fragment();
     void debug_show();
-    char ___data[104];
+    std::string scheme;
+    std::string destination;
+    std::string host;
+    std::string path;
+    std::string query;
+    std::map<std::string, std::string> query_variates;
+    std::string fragment;
+    int port;
+private:
+    void clear();
 };
+void http_url_parse_query(std::map<std::string, std::string> &result, const char *query);
+char *http_url_build_query(std::string &query, std::map<std::string, std::string> &dict, bool strict);
 
-void http_cookie_parse_request(dict &result, const char *raw_cookie);
+void http_cookie_parse_request(std::map<std::string, std::string> &result, const char *raw_cookie);
 void http_cookie_build(std::string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);
 
 extern bool var_httpd_debug;
-struct httpd_upload_file {
-    char *name;
-    char *filename;
-    char *saved_filename;
+class httpd_upload_file
+{
+public:
+    inline httpd_upload_file() { size = 0; }
+    inline ~httpd_upload_file() {}
+    std::string name;
+    std::string filename;
+    std::string saved_filename;
     size_t size;
 };
-typedef struct httpd_upload_file httpd_upload_file;
 
-void httpd_upload_file_parse_pthread();
-
+class httpd_engine;
 class httpd
 {
 public:
@@ -1317,16 +1315,11 @@ public:
     char *request_path();
     char *request_uri();
     char *request_version();
-    char *request_header(const char *name, const char *def_val = blank_buffer);
-    dict &request_header();
-    char *request_query_variate(const char *name, const char *def_val = blank_buffer);
-    dict &request_query_variate();
-    char *request_post_variate(const char *name, const char *def_val = blank_buffer);
-    dict &request_post_variate();
-    char *request_cookie(const char *name, const char *def_val = blank_buffer);
-    dict &request_cookie();
-    std::list<httpd_upload_file *> &upload_files();
-
+    const std::map<std::string, std::string> &request_header();
+    const std::map<std::string, std::string> &request_query_variates();
+    const std::map<std::string, std::string> &request_post_variates();
+    const std::map<std::string, std::string> &request_cookie();
+    const std::list<httpd_upload_file> &upload_files();
     /* response completly*/
     virtual void response_304(const char *etag);
     virtual void response_404();
@@ -1349,69 +1342,54 @@ public:
     bool response_flush();
     stream &get_stream();
     /* */
-    char ___data[286];
+private:
+    void loop_clear();
+    void request_header_do(bool first);
+    void request_data_do();
+    void request_data_do_true();
+    void upload_file_parse_dump_file(const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, const char *name, const char *filename);
+    void upload_file_parse_walk_mime(mail_parser_mime * mime, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, std::string &disposition_raw, std::map<std::string, std::string> &params);
+    void upload_file_parse(const char *data_filename);
+    httpd_engine *h_engine;
 };
 
 /* sqlite3 */
+std::string &sqlite3_escape_append(std::string &sql, const void *data, size_t size = var_size_max);
+inline std::string &sqlite3_escape_append(std::string &sql, const std::string &data) {
+    return sqlite3_escape_append(sql, data.c_str(), data.size());
+}
 class sqlite3_proxyd: public master_event_server
 {
 public:
     sqlite3_proxyd();
     ~sqlite3_proxyd();
     void simple_service(int fd);
-    void before_service();
-    void before_exit();
+    virtual void before_service();
+    virtual void before_exit();
 };
 
 extern bool var_sqlite3_proxy_debug;
 class sqlite3_proxy
 {
 public:
-    sqlite3_proxy(const char *_destination, std::string *_cache = 0);
+    sqlite3_proxy(const char *_destination);
     ~sqlite3_proxy();
-    bool log(const char *sql, size_t size, long timeout);
-    bool exec(const char *sql, size_t size, long timeout);
-    bool query(const char *sql, size_t size, long timeout);
-    int get_row(size_data_t **row);
-    inline const char *get_errmsg() { return cache->c_str(); }
+    bool log(const char *sql, size_t size, long timeout = -1);
+    bool exec(const char *sql, size_t size, long timeout = -1);
+    bool query(const char *sql, size_t size, long timeout = -1);
+    int get_row(std::string **row);
+    inline const char *get_errmsg() { return errmsg.c_str(); }
     inline size_t get_column() { return ncolumns; }
 private:
     bool connect();
     bool disconnect(bool tf = false);
+    bool clear_query();
     char *destination;
-    stream *fp;
-    std::string *cache;
+    stream fp;
+    std::string errmsg;
+    std::string *rows;
     short int ncolumns;
-    bool cache_flag;
-};
-
-/* memkv ****************************************************************/
-class memkvd: public master_event_server
-{
-public:
-    memkvd();
-    ~memkvd();
-    void before_service();
-    void simple_service(int fd);
-};
-
-class memkv
-{
-public:
-    memkv(const char *_destination);
-    ~memkv();
-    int set(const char *partition, const char *key, const char *val, ssize_t vlen = -1);
-    int set(const char *partition, const char *key, long val);
-    int del(const char *partition, const char *key);
-    int inc(const char *partition, const char *key, long num, long *result = 0);
-    int clear(const char *partition = 0);
-    int exists(const char *partition, const char *key);
-    int get(const char *partition, const char *key, std::string &result);
-    int get(const char *partition, const char *key, long *result);
-private:
-    int require(char op, const char *partition, const char *key, const char *val, ssize_t vlen, std::string *result);
-    char *destination;
-    stream *fp;
+    bool query_over;
 };
 
 /* json ##################################################### */
@@ -1440,9 +1418,9 @@ public:
     bool unserialize(const char *jstr);
     bool unserialize(const char *jstr, size_t jsize);
     void serialize(std::string &result, int flag = 0);
-    inline int get_type() { return ___type; }
+    inline int get_type()   { return ___type; }
     inline bool is_string() { return ___type==json_type_string; }
-    inline bool is_long() { return ___type==json_type_long; }
+    inline bool is_long()   { return ___type==json_type_long; }
     inline bool is_double() { return ___type==json_type_double; }
     inline bool is_object() { return ___type==json_type_object; }
     inline bool is_array()  { return ___type==json_type_array; }
@@ -1544,7 +1522,7 @@ public:
 
     /*
      * @get_element_by_path 得到路径path对应的json值, 并返回
-     * 如 已知json {group:{linux:[{}, {}, {me: {age:18, sex:"male"}}, 则
+     * 如 已知json {group:{linux:[{}, {}, {me: {age:18, sex:"male"}}}}, 则
      * get_element_by_path("group/linux/2/me") 返回的 应该是 {age:18, sex:"male"} 
      */
     json * get_element_by_path(const char *path);
@@ -1570,6 +1548,71 @@ private:
     json *___parent;
 };
 #pragma pack(pop)
+
+/* redis client ############################################## */
+class redis_client_query
+{
+public:
+    inline redis_client_query() { memset(this, 0, sizeof(redis_client_query)); }
+    inline ~redis_client_query() { }
+    long *number_ret;
+    std::string *string_ret;
+    std::list<std::string> *list_ret;
+    json *json_ret;
+    long timeout_milliseconds;
+    std::list<std::string> *protocol_tokens;
+    std::string *msg_info;
+};
+typedef struct redis_client_query redis_client_query;
+
+class redis_client_basic_engine
+{
+public:
+    inline redis_client_basic_engine() {}
+    virtual inline ~redis_client_basic_engine() {}
+    int query_protocol_io(redis_client_query &query, stream &fp);
+    virtual int query_protocol(redis_client_query &query);
+    virtual int timed_wait_readable(long timeout);
+    virtual int timed_wait_writeable(long timeout);
+};
+
+class redis_client
+{
+public:
+    class client_info;
+    redis_client();
+    redis_client(const char *destination, const char *password = 0);
+    redis_client(redis_client_basic_engine &engine);
+    ~redis_client();
+    const std::string &get_msg();
+    void set_timeout(long timeout_milliseconds);
+    int exec_command(const char *redis_fmt, ...);
+    int exec_command(long &number_ret, const char *redis_fmt, ...);
+    int exec_command(std::string &string_ret, const char *redis_fmt, ...);
+    int exec_command(std::list<std::string> &list_ret, const char *redis_fmt, ...);
+    int exec_command(json &json_ret, const char *redis_fmt, ...);
+    /* */
+    int fetch_channel_message(std::list<std::string> &list_ret);
+    /* 如: scan_special(list_ret, cursor_ret, "ssd", "HSCAN", "somekey", 0); */
+    int scan_special(std::list<std::string> &list_ret, long &cursor_ret, const char *redis_fmt, ...);
+    int info_special(std::map<std::string, std::string> &name_value_dict, std::string &string_ret);
+private:
+    int exec_command(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, const char *redis_fmt, va_list ap);
+    client_info *r_info;
+    redis_client_basic_engine *r_engine;
+};
+
+/* redis puny server ######################################### */
+class redis_puny_server: public master_coroutine_server
+{
+public:
+    redis_puny_server();
+    ~redis_puny_server();
+    virtual void service_register(const char *service_name, int fd, int fd_type);
+    virtual void before_service();
+    virtual void before_exit();
+};
 
 }
 

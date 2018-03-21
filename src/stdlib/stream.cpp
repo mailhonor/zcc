@@ -13,17 +13,20 @@ namespace zcc
 
 stream::stream()
 {
+    read_buf = (char *) malloc(stream_read_buf_size + 1 + stream_write_buf_size+ 1);
     init_all();
 }
 
 stream::stream(SSL *ssl)
 {
+    read_buf = (char *) malloc(stream_read_buf_size + 1 + stream_write_buf_size+ 1);
     init_all();
     open(ssl);
 }
 
 stream::stream(int fd)
 {
+    read_buf = (char *) malloc(stream_read_buf_size + 1 + stream_write_buf_size+ 1);
     init_all();
     open(fd);
 }
@@ -31,6 +34,7 @@ stream::stream(int fd)
 stream::~stream()
 {
     close();
+    free(read_buf);
 }
 
 stream &stream::open(SSL *ssl)
@@ -84,6 +88,25 @@ stream &stream::set_timeout(long timeout)
     }
     ___timeout = timeout_set(timeout);
     return *this;
+}
+
+int stream::timed_wait_readable(long timeout)
+{
+    if (!___opened) {
+        return -1;
+    }
+    if (read_buf_p1 < read_buf_p2) {
+        return 1;
+    }
+    return zcc::timed_wait_readable(___ssl_mode?openssl_SSL_get_fd(___fd.ssl):___fd.fd, timeout);
+}
+
+int stream::timed_wait_writeable(long timeout)
+{
+    if (!___opened) {
+        return -1;
+    }
+    return zcc::timed_wait_writeable(___ssl_mode?openssl_SSL_get_fd(___fd.ssl):___fd.fd, timeout);
 }
 
 /* read */
@@ -148,13 +171,23 @@ ssize_t stream::readn(void *buf, size_t size)
     if (size < 1) {
         return 0;
     }
-    while (left_size) {
-        ch = get();
-        if (ch == -1) {
-            break;
+    if (ptr) {
+        while (left_size) {
+            ch = get();
+            if (ch == -1) {
+                break;
+            }
+            *ptr++ = ch;
+            left_size-- ;
         }
-        *ptr++ = ch;
-        left_size-- ;
+    } else {
+        while (left_size) {
+            ch = get();
+            if (ch == -1) {
+                break;
+            }
+            left_size-- ;
+        }
     }
 
     if (size > left_size) {
@@ -203,18 +236,30 @@ ssize_t stream::gets(void *buf, size_t size, int delimiter)
         return 0;
     }
 
-    while(left_size) {
-        ch = get();
-        if (ch == -1) {
-            break;
+    if (ptr) {
+        while(left_size) {
+            ch = get();
+            if (ch == -1) {
+                break;
+            }
+            *ptr++ = ch;
+            left_size --;
+            if (ch == delimiter) {
+                break;
+            }
         }
-        *ptr++ = ch;
-        left_size --;
-        if (ch == delimiter) {
-            break;
+    } else {
+        while(left_size) {
+            ch = get();
+            if (ch == -1) {
+                break;
+            }
+            left_size --;
+            if (ch == delimiter) {
+                break;
+            }
         }
     }
-
     if (size > left_size) {
         return size - left_size;
     }
@@ -384,7 +429,18 @@ void stream::init_all()
     ___error = false;
     ___eof = false;
     ___flushed = false;
+    write_buf = read_buf + stream_read_buf_size + 1;
     set_timeout(-1);
+}
+
+int stream::get_fd()
+{
+    return (___opened?(___ssl_mode?openssl_SSL_get_fd(___fd.ssl):___fd.fd):-1);
+}
+
+SSL *stream::get_SSL()
+{
+    return (___opened&&___ssl_mode)?___fd.ssl:0;
 }
 
 bool stream::tls_connect(SSL_CTX *ctx)

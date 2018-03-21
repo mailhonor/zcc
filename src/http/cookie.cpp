@@ -13,7 +13,7 @@
 namespace zcc
 {
 
-void http_cookie_parse_request(dict &result, const char *raw_cookie)
+void http_cookie_parse_request(std::map<std::string, std::string> &result, const char *raw_cookie)
 {
     char *q, *p, *ps = const_cast<char *>(raw_cookie);
     std::string name(32, 0), value(128, 0);

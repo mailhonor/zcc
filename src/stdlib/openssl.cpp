@@ -212,7 +212,6 @@ int openssl_SSL_get_fd(SSL *ssl)
         } \
     }
 
-
 bool openssl_timed_connect(SSL * ssl, long timeout)
 {
     if (timeout < 1) {

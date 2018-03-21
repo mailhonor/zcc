@@ -12,6 +12,21 @@
 namespace zcc
 {
 
+/* lock ####################################################### */
+class locker
+{
+public:
+    inline locker() {}
+    inline virtual ~locker() {};
+    virtual void rlock() = 0;
+    virtual void wlock() = 0;
+    inline void lock() { wlock(); }
+    virtual void unlock() = 0;
+};
+
+locker *pthread_locker_create();
+void pthread_locker_free(locker *lock);
+
 class pthread_locker_0411: public locker
 {
 public:

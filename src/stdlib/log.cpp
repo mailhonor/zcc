@@ -136,16 +136,17 @@ static void vprintf_masterlog(const char *source_fn, size_t line_number, const c
     free(buf);
 }
 
-void log_use_masterlog(const char *dest, const char *facility, const char *identity)
+void log_use_masterlog(const char *dest, const char *identity)
 {
     log_vprintf = vprintf_masterlog;
     char buf[256];
-    snprintf(buf, 255, "%s,%s,%d,", facility, identity, getpid());
+    snprintf(buf, 255, "%s,%d,", identity, getpid());
     var_masterlog_prefix.data = strdup(buf);
     var_masterlog_prefix_len = strlen(buf);
 
 
-    if ((var_masterlog_sock=socket(AF_UNIX, SOCK_DGRAM,0)) < 0) {
+    int syscall_socket(int domain, int type, int protocol);
+    if ((var_masterlog_sock=syscall_socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
         fprintf(stderr, "ERR socket (%m)");
         exit(1);
     }
@@ -156,7 +157,9 @@ void log_use_masterlog(const char *dest, const char *facility, const char *ident
         exit(1);
     }
     strcpy(var_masterlog_client_un.sun_path, dest);
+#if 0
     coroutine_disable_fd(var_masterlog_sock);
+#endif
 }
 
 /* log_use_by_config ###################################################### */
@@ -188,17 +191,16 @@ bool log_use_by(char *progname, char *log_info)
         return true;
     } else if (!strcmp(type, "masterlog")) {
         if (var_masterlog_listen.empty()) {
-            zcc_info("masterlog mode, need parameter '-log-service x,x,x' on master cmd");
+            zcc_info("masterlog mode, need parameter '-log-service x,x' on master cmd");
             return false;
         }
-        if ((lv.size() <2) || (lv.size() > 3)) {
-            zcc_fatal("masterlog mode, value: masterlog,filename,identity or masterlog,filename");
+        if (lv.size() > 2) {
+            zcc_fatal("masterlog mode, value: masterlog,identity or masterlog");
         }
-        facility = lv[1];
-        if (lv.size() == 3) {
-            identity = lv[2];
+        if (lv.size() == 2) {
+            identity = lv[1];
         }
-        log_use_masterlog(var_masterlog_listen.c_str(), facility, identity);
+        log_use_masterlog(var_masterlog_listen.c_str(), identity);
         return true;
     }
     return false;

@@ -22,20 +22,10 @@ event_base default_evbase;
 
 #pragma pack(push, 1)
 /* {{{ global vars, declare, macro, etc */
-typedef struct event_io_t event_io_t;
-typedef struct async_io_t async_io_t;
-typedef struct event_timer_t event_timer_t;
-typedef struct event_base_t event_base_t;
-
 #define lock_evbase(eb)   {if(((event_base_t *)(eb))->plocker_flag){ \
     zcc_pthread_lock(&(((event_base_t *)(eb))->plocker));}}
 #define unlock_evbase(eb)   {if(((event_base_t *)(eb))->plocker_flag){ \
     zcc_pthread_unlock(&(((event_base_t *)(eb))->plocker));}}
-
-#define event_io_get_data(o)      ((event_io_t *)(o))
-#define async_io_get_data(o)      ((async_io_t *)(o))
-#define event_timer_get_data(o)   ((event_timer_t *)(o))
-#define event_base_get_data(o)    ((event_base_t *)(o))
 
 ssize_t syscall_read(int fd, void *buf, size_t count);
 ssize_t syscall_write(int fd, const void *buf, size_t count);
@@ -74,23 +64,28 @@ static void async_io_ready_do(async_io_t * aio_data);
 #define var_async_io_event_enable                1
 #define var_async_io_event_reserve               2
 
-#define var_epoll_vecotr_count              4096
+#define var_epoll_vector_count              4096
 /* }}} */
 
 /* {{{ struct event_io_t, async_io_t, event_timer_t, event_timer_t, event_base_t */
 typedef void (*event_io_cb_t) (event_io &ev);
+typedef struct aio_rwbuf_list_t aio_rwbuf_list_t;
+typedef struct aio_rwbuf_longbuf_t aio_rwbuf_longbuf_t;
+typedef void (*async_io_cb_t) (async_io &as);
+typedef void (*event_timer_cb_t) (event_timer &);
+
 struct event_io_t {
     unsigned char aio_type:3;
     unsigned char is_local:1;
     unsigned char events;
     unsigned char revents;
     int fd;
-    event_io_cb_t callback;
+    void (*callback) (event_io &ev);
     void *context;
     event_base *evbase;
+    event_io *eio;
 };
 
-typedef struct aio_rwbuf_list_t aio_rwbuf_list_t;
 const int var_async_io_rwbuf_size  = 4096;
 struct aio_rwbuf_t {
     aio_rwbuf_t *next;
@@ -99,8 +94,6 @@ struct aio_rwbuf_t {
     unsigned int p2:15;
     char data[var_async_io_rwbuf_size];
 };
-
-typedef struct aio_rwbuf_longbuf_t aio_rwbuf_longbuf_t;
 struct aio_rwbuf_longbuf_t {
     size_t p1;
     size_t p2;
@@ -111,8 +104,6 @@ struct aio_rwbuf_list_t {
     aio_rwbuf_t *head;
     aio_rwbuf_t *tail;
 };
-
-typedef void (*async_io_cb_t) (async_io &as);
 struct async_io_t {
     unsigned char aio_type:4;
     unsigned char is_local:1;
@@ -126,7 +117,7 @@ struct async_io_t {
     int fd;
     int read_magic_len;
     int ret;
-    async_io_cb_t callback;
+    void (*callback) (async_io &as);
     aio_rwbuf_list_t read_cache;
     aio_rwbuf_list_t write_cache;
     long timeout;
@@ -141,22 +132,23 @@ struct async_io_t {
     SSL *ssl;
     void *context;
     event_base *evbase;
+    async_io *aio;
 };
 
-typedef void (*event_timer_cb_t) (event_timer &);
 struct event_timer_t {
     long timeout;
-    event_timer_cb_t callback;
+    void (*callback) (event_timer &);
     void *context;
     rbtree_node_t rbnode_time;
     event_base *evbase;
     unsigned char in_time:1;
     unsigned char is_local:1;
+    event_timer *et;
 };
 
 struct event_base_t {
     int epoll_fd;
-    struct epoll_event *epool_event_vector;
+    void *epool_event_vector;
     rbtree_t async_io_timeout_tree;
     rbtree_t event_timer_timeout_tree;
     event_io *eventfd_event;
@@ -167,8 +159,9 @@ struct event_base_t {
 
     pthread_mutex_t plocker;
     bool plocker_flag;
-};
 
+    event_base *eb;
+};
 /* }}} */
 
 /* {{{ event_timer */
@@ -196,52 +189,51 @@ static int event_timer_timeout_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
 
 event_timer::event_timer()
 {
-    memset(&___data, 0, sizeof(___data));
+    et_data = (event_timer_t *)calloc(1, sizeof(event_timer_t));
+    et_data->et = this;
 }
 
 event_timer::~event_timer()
 {
-    event_timer_t * et_data = (event_timer_t*)(___data);
     if (et_data->evbase) {
         stop();
     }
+    free(et_data);
 }
 
 void event_timer::bind(event_base &evbase)
 {
-    event_timer_t * et_data = event_timer_get_data(this);
     et_data->evbase = &evbase;
 }
 
 void event_timer::start(event_timer_cb_t callback, long timeout)
 {
-    event_timer_t *timer = event_timer_get_data(this);
-    event_base *eb = timer->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base *eb = et_data->evbase;
+    event_base_t *eb_data = eb->eb_data;
     rbtree_t *timer_tree = &(eb_data->event_timer_timeout_tree);
-    rbtree_node_t *rn = &(timer->rbnode_time);
+    rbtree_node_t *rn = &(et_data->rbnode_time);
 
-    if (!timer->evbase) {
+    if (!et_data->evbase) {
         return;
     }
 
-    lock_evbase(eb_data);
+    lock_evbase(eb->eb_data);
     if (timeout > 0) {
-        if (timer->in_time) {
+        if (et_data->in_time) {
             rbtree_detach(timer_tree, rn);
         }
-        timer->callback = callback;
-        timer->timeout = timeout_set(timeout);
+        et_data->callback = callback;
+        et_data->timeout = timeout_set(timeout);
         rbtree_attach(timer_tree, rn);
-        timer->in_time = 1;
+        et_data->in_time = 1;
     } else {
-        if (timer->in_time) {
+        if (et_data->in_time) {
             rbtree_detach(timer_tree, rn);
         }
-        timer->in_time = 0;
+        et_data->in_time = 0;
     }
-    unlock_evbase(eb_data);
-    if (!(timer->is_local)) {
+    unlock_evbase(eb->eb_data);
+    if (!(et_data->is_local)) {
         eb->notify();
     }
 }
@@ -253,20 +245,17 @@ void event_timer::stop()
 
 void event_timer::set_local()
 {
-    event_timer_t *timer = event_timer_get_data(this);
-    timer->is_local = 1;
+    et_data->is_local = 1;
 }
 
 void *event_timer::get_context()
 {
-    event_timer_t *timer = event_timer_get_data(this);
-    return timer->context;
+    return et_data->context;
 }
 
 event_base &event_timer::get_event_base()
 {
-    event_timer_t *timer = event_timer_get_data(this);
-    return *(timer->evbase);
+    return *(et_data->evbase);
 }
 
 static inline long event_timer_timeout_check(event_base_t * eb_data)
@@ -302,7 +291,7 @@ static inline long event_timer_timeout_check(event_base_t * eb_data)
         unlock_evbase(eb_data);
 
         if (callback) {
-            (callback) (*(event_timer *)(timer));
+            (callback) (*(timer->et));
         }
     }
     return 1 * 1000;
@@ -312,23 +301,22 @@ static inline long event_timer_timeout_check(event_base_t * eb_data)
 /* {{{ event_io */
 event_io::event_io()
 {
-    memset(___data, 0, sizeof(___data));
-    event_io_t *eio_data = (event_io_t *)___data;
+    eio_data = (event_io_t *)calloc(1, sizeof(event_io_t));
+    eio_data->eio = this;
     eio_data->aio_type = var_event_type_event;
     eio_data->fd = -1;
 }
 
 event_io::~event_io()
 {
-    event_io_t *eio_data = (event_io_t *)___data;
     if (eio_data->fd != -1) {
         disable();
     }
+    free(eio_data);
 }
 
 void event_io::bind(int fd, event_base &eb)
 {
-    event_io_t *eio_data = (event_io_t *)___data;
     eio_data->aio_type = var_event_type_event;
     eio_data->evbase = &eb;
     eio_data->fd = fd;
@@ -336,13 +324,11 @@ void event_io::bind(int fd, event_base &eb)
 
 void event_io::set_local()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     eio_data->is_local = 1;
 }
 
 ssize_t event_io::get_result()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     if (eio_data->revents & (var_event_error | var_event_hup)) {
         return -1;
     }
@@ -357,14 +343,13 @@ ssize_t event_io::get_result()
 
 int event_io::get_fd()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     return eio_data->fd;
 }
 
 static void ___enable_event(event_io_t *eio_data, unsigned char events, void (*callback)(event_io&))
 {
     event_base *eb = eio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
     int fd = eio_data->fd;
     struct epoll_event epev;
     unsigned char old_events = eio_data->events;
@@ -402,37 +387,31 @@ static void ___enable_event(event_io_t *eio_data, unsigned char events, void (*c
 
 void event_io::enable_read(void (*callback)(event_io &))
 {
-    event_io_t *eio_data = event_io_get_data(this);
     ___enable_event(eio_data, var_event_read, callback);
 }
 
 void event_io::enable_write(void (*callback)(event_io &))
 {
-    event_io_t *eio_data = event_io_get_data(this);
     ___enable_event(eio_data, var_event_write, callback);
 }
 
 void event_io::disable()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     ___enable_event(eio_data, 0, 0);
 }
 
 void event_io::set_context(const void *ctx)
 {
-    event_io_t *eio_data = event_io_get_data(this);
     eio_data->context = const_cast<void *>(ctx);;
 }
 
 void *event_io::get_context()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     return eio_data->context;
 }
 
 event_base &event_io::get_event_base()
 {
-    event_io_t *eio_data = event_io_get_data(this);
     return *(eio_data->evbase);
 }
 
@@ -670,7 +649,7 @@ static inline int async_io_ssl_init___inner(async_io_t * aio_data, async_io_cb_t
 static void async_io_ssl_init(async_io_t *aio_data, SSL_CTX * ctx, async_io_cb_t callback, long timeout, bool server_or_client)
 {
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->ssl = openssl_create_SSL(ctx, aio_data->fd);
     aio_data->ssl_server_or_client = (server_or_client?1:0);
@@ -679,9 +658,9 @@ static void async_io_ssl_init(async_io_t *aio_data, SSL_CTX * ctx, async_io_cb_t
     aio_data->callback = callback;
     aio_data->ret = timeout;
 
-    lock_evbase(eb_data);
-    async_io_append_queue(eb_data, aio_data);
-    unlock_evbase(eb_data);
+    lock_evbase(eb->eb_data);
+    async_io_append_queue(eb->eb_data, aio_data);
+    unlock_evbase(eb->eb_data);
     if (eb_data->plocker_flag) {
         eb->notify();
     }
@@ -709,7 +688,7 @@ static void async_io_ready_do(async_io_t * aio_data)
     }
 
     aio_data->action_type = var_async_io_type_none;
-    (callback) (*((async_io *)(aio_data)));
+    (callback) (*(aio_data->aio));
 }
 /* }}} */
 
@@ -717,7 +696,7 @@ static void async_io_ready_do(async_io_t * aio_data)
 static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
 {
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
     rbtree_t *timer_tree = &(eb_data->async_io_timeout_tree);
 
     /* timeout */
@@ -1166,14 +1145,13 @@ static void async_io_action(async_io_t * aio_data)
 /* {{{ async_io construct/unconstruct  */
 async_io::async_io()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
-    memset(&___data, 0, sizeof(___data));
+    aio_data = (async_io_t *)calloc(1, sizeof(async_io_t));
+    aio_data->aio = this;
     aio_data->fd = -1;
 }
 
 async_io::~async_io()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     if (aio_data->fd != -1){
         async_io_event_set(aio_data, var_async_io_event_disable, 0);
 
@@ -1187,17 +1165,15 @@ async_io::~async_io()
             openssl_SSL_free(aio_data->ssl);
             aio_data->ssl = 0;
         }
-
-        memset(&___data, 0, sizeof(___data));
         aio_data->fd = -1;
     }
+    free(aio_data);
 }
 /* }}} */
 
 /* {{{ async_io::bind, set_local, get_result, get_fd, context, get_cache_size, get_event_base */
 void async_io::bind(int fd, event_base &eb)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     aio_data->aio_type = var_event_type_aio;
     aio_data->fd = fd;
     aio_data->evbase = &eb;
@@ -1205,37 +1181,31 @@ void async_io::bind(int fd, event_base &eb)
 
 void async_io::set_local()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     aio_data->is_local = 1;
 }
 
 int async_io::get_result()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     return aio_data->ret;
 }
 
 int async_io::get_fd()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     return aio_data->fd;
 }
 
 void async_io::set_context(const void *ctx)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     aio_data->context = const_cast<void *>(ctx);
 }
 
 size_t async_io::get_cache_size()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     return aio_data->write_cache.len;
 }
 
 void *async_io::get_context()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     return aio_data->context;
 }
 /* }}} */
@@ -1243,19 +1213,16 @@ void *async_io::get_context()
 /* {{{  async_io::tls_connect, tls_accept */
 void async_io::tls_connect(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     async_io_ssl_init(aio_data, ctx, callback, timeout, false);
 }
 
 void async_io::tls_accept(SSL_CTX * ctx, async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     async_io_ssl_init(aio_data, ctx, callback, timeout, true);
 }
 
 event_base &async_io::get_event_base()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     return *(aio_data->evbase);
 }
 /* }}} */
@@ -1263,7 +1230,6 @@ event_base &async_io::get_event_base()
 /* {{{ async_io::detach_SSL */
 SSL *async_io::detach_SSL()
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     SSL *r = aio_data->ssl;
     aio_data->ssl = 0;
     aio_data->ssl_server_or_client = 0;
@@ -1280,14 +1246,12 @@ SSL *async_io::detach_SSL()
 /* {{{ async_io::fetch_rbuf */
 void async_io::fetch_rbuf(char *buf, int len)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     ___async_io_cache_shift(aio_data, &(aio_data->read_cache), buf, len);
 }
 
 void async_io::fetch_rbuf(std::string &dest, int len)
 {
     dest.clear();
-    async_io_t * aio_data = (async_io_t *)___data;
     size_t last_size = dest.size();
     dest.resize(last_size + len + 1);
     char *buf = const_cast<char *>(dest.c_str());
@@ -1299,18 +1263,17 @@ void async_io::fetch_rbuf(std::string &dest, int len)
 /* {{{ async_io::read */
 void async_io::read(size_t max_len, async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->action_type = var_async_io_type_read;
     aio_data->callback = callback;
     aio_data->read_magic_len = max_len;
     aio_data->ret = timeout;
 
-    lock_evbase(eb_data);
-    async_io_append_queue(eb_data, aio_data);
-    unlock_evbase(eb_data);
+    lock_evbase(eb->eb_data);
+    async_io_append_queue(eb->eb_data, aio_data);
+    unlock_evbase(eb->eb_data);
     if (eb_data->plocker_flag) {
         eb->notify();
     }
@@ -1318,9 +1281,8 @@ void async_io::read(size_t max_len, async_io_cb_t callback, long timeout)
 
 void async_io::readn(size_t strict_len, async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->action_type = var_async_io_type_read_n;
     aio_data->callback = callback;
@@ -1337,9 +1299,8 @@ void async_io::readn(size_t strict_len, async_io_cb_t callback, long timeout)
 
 void async_io::read_size_data(async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->delimiter = 0;
     aio_data->action_type = var_async_io_type_read_size_data;
@@ -1357,9 +1318,8 @@ void async_io::read_size_data(async_io_cb_t callback, long timeout)
 
 void async_io::read_delimiter(int delimiter, size_t max_len, async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->action_type = var_async_io_type_read_delimeter;
     aio_data->delimiter = delimiter;
@@ -1405,7 +1365,6 @@ void async_io::cache_write(const void *buf, size_t len)
     if (len < 1) {
         return;
     }
-    async_io_t * aio_data = (async_io_t *)___data;
     ___async_io_cache_append(aio_data, &(aio_data->write_cache), buf, len);
 }
 
@@ -1424,7 +1383,6 @@ void async_io::cache_write_direct(const void *buf, size_t len)
     if (len < 1) {
         return;
     }
-    async_io_t * aio_data = (async_io_t *)___data;
  
     rwb = (aio_rwbuf_t *) calloc(1, sizeof(aio_rwbuf_t));
     rwb->next = 0;
@@ -1448,9 +1406,8 @@ void async_io::cache_write_direct(const void *buf, size_t len)
 
 void async_io::cache_flush(async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->action_type = var_async_io_type_write;
     aio_data->callback = callback;
@@ -1468,9 +1425,8 @@ void async_io::cache_flush(async_io_cb_t callback, long timeout)
 /* {{{ async_io::sleep */
 void async_io::sleep(async_io_cb_t callback, long timeout)
 {
-    async_io_t * aio_data = (async_io_t *)___data;
     event_base *eb = aio_data->evbase;
-    event_base_t *eb_data = event_base_get_data(eb);
+    event_base_t *eb_data = eb->eb_data;
 
     aio_data->action_type = var_async_io_type_sleep;
     aio_data->callback = callback;
@@ -1573,7 +1529,7 @@ long async_io_timeout_check(event_base_t * eb_data)
         unlock_evbase(eb_data);
 
         if (callback) {
-            (callback) (*((async_io *)(aio_data)));
+            (callback) (*(aio_data->aio));
         } else {
             zcc_fatal("aio_data: not found callback");
         }
@@ -1585,13 +1541,13 @@ long async_io_timeout_check(event_base_t * eb_data)
 /* {{{ async_io_list_do for others */
 void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *aio)
 {
-    rbtree_node_t *h = 0, *t = 0, *n = &(async_io_get_data(aio)->rbnode_time);
+    rbtree_node_t *h = 0, *t = 0, *n = &(aio->aio_data->rbnode_time);
     h = t = 0;
     if (*list_head) {
-        h = &(async_io_get_data(*list_head)->rbnode_time);
+        h = &((*list_head)->aio_data->rbnode_time);
     }
     if (*list_tail) {
-        t = &(async_io_get_data(*list_tail)->rbnode_time);
+        t = &((*list_tail)->aio_data->rbnode_time);
     }
     zcc_mlink_append(h, t, n, rbtree_left, rbtree_right);
     if (h == 0) {
@@ -1608,13 +1564,13 @@ void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *
 
 void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *aio)
 {
-    rbtree_node_t *h = 0, *t = 0, *n = &(async_io_get_data(aio)->rbnode_time);
+    rbtree_node_t *h = 0, *t = 0, *n = &(aio->aio_data->rbnode_time);
     h = t = 0;
     if (*list_head) {
-        h = &(async_io_get_data(*list_head)->rbnode_time);
+        h = &((*list_head)->aio_data->rbnode_time);
     }
     if (*list_tail) {
-        t = &(async_io_get_data(*list_tail)->rbnode_time);
+        t = &((*list_tail)->aio_data->rbnode_time);
     }
     zcc_mlink_detach(h, t, n, rbtree_left, rbtree_right);
     if (h == 0) {
@@ -1639,17 +1595,15 @@ static void evbase_notify_reader(event_io &eio)
 
 event_base::event_base()
 {
-    event_base_t *eb_data = (event_base_t *)___data;
     int eventfd_fd;
-
-    memset(eb_data, 0, sizeof(___data));
-
+    eb_data = (event_base_t *)calloc(1, sizeof(event_base_t));
+    eb_data->eb = this;
     rbtree_init(&(eb_data->event_timer_timeout_tree), event_timer_timeout_cmp);
     rbtree_init(&(eb_data->async_io_timeout_tree), async_io_timeout_cmp);
 
     eb_data->epoll_fd = epoll_create(1024);
     close_on_exec(eb_data->epoll_fd, true);
-    eb_data->epool_event_vector = (struct epoll_event *)malloc(sizeof(struct epoll_event) * var_epoll_vecotr_count);
+    eb_data->epool_event_vector = (struct epoll_event *)malloc(sizeof(struct epoll_event) * var_epoll_vector_count);
 
     eventfd_fd = eventfd(0, 0);
     close_on_exec(eventfd_fd, true);
@@ -1666,31 +1620,28 @@ event_base::event_base()
 
 event_base::~event_base()
 {
-    event_base_t *eb_data = (event_base_t *)___data;
     int eventfd_fd = eb_data->eventfd_event->get_fd();
     delete eb_data->eventfd_event;
     close(eventfd_fd);
     close(eb_data->epoll_fd);
     free(eb_data->epool_event_vector);
     pthread_mutex_destroy(&(eb_data->plocker));
+    free(eb_data);
 }
 
 void event_base::notify()
 {
     uint64_t u = 1;
-    event_base_t *eb_data = (event_base_t *)___data;
     syscall_write(eb_data->eventfd_event->get_fd(), &u, sizeof(uint64_t));
 }
 
 void event_base::set_local()
 {
-    event_base_t *eb_data = (event_base_t *)___data;
     eb_data->plocker_flag = false;
 }
 
 void event_base::dispatch(long default_delay)
 {
-    event_base_t *eb_data = (event_base_t *)___data;
     int nfds;
     struct epoll_event *epev;
     event_io_t *eio_data;
@@ -1721,7 +1672,7 @@ void event_base::dispatch(long default_delay)
     if (delay > default_delay) {
         delay = default_delay;
     }
-    nfds = epoll_wait(eb_data->epoll_fd, eb_data->epool_event_vector, var_epoll_vecotr_count, delay);
+    nfds = epoll_wait(eb_data->epoll_fd, (struct epoll_event *) eb_data->epool_event_vector, var_epoll_vector_count, delay);
     if (nfds == -1) {
         if (errno != EINTR) {
             zcc_fatal("event_base::dispath: epoll_wait: %m");
@@ -1733,7 +1684,7 @@ void event_base::dispatch(long default_delay)
         if (var_proc_stop) {
             return;
         }
-        epev = eb_data->epool_event_vector + i;
+        epev = (struct epoll_event *)eb_data->epool_event_vector + i;
         unsigned int events = epev->events;
         unsigned char revents = 0;
         if (events & EPOLLHUP) {
@@ -1758,7 +1709,7 @@ void event_base::dispatch(long default_delay)
             event_io_cb_t callback = eio_data->callback;
 
             if (callback) {
-                (callback) (*((event_io *)(eio_data)));
+                (callback) (*(eio_data->eio));
             } else {
                 zcc_fatal("event_io: not found callback");
             }
@@ -1776,17 +1727,6 @@ void event_base::dispatch(long default_delay)
 #pragma pack(pop)
 
 }
-
-#ifdef __ZCC_SIZEOF_PROBE__
-int main()
-{ 
-    _ZCC_SIZEOF_DEBUG(zcc::event_timer, zcc::event_timer_t);
-    _ZCC_SIZEOF_DEBUG(zcc::event_io, zcc::event_io_t);
-    _ZCC_SIZEOF_DEBUG(zcc::async_io, zcc::async_io_t);
-    _ZCC_SIZEOF_DEBUG(zcc::event_base, zcc::event_base_t);
-    return 0;
-}
-#endif
 
 /* Local variables:
 * End:
