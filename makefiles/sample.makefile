@@ -2,6 +2,8 @@ all: target
 
 .PHONY: tags
 
+LIBCOROUTINE= ../../libzcc_coroutine.a
+
 CC=g++
 CFLAGS= -ggdb -Wall -I../../ -O3
 GLOBAL_LIBS= -pthread
@@ -10,7 +12,7 @@ DEST := $(SRCS:.cpp=)
 
 $(DEST): ../../libzcc.a
 .cpp:
-	$(CC) $*.cpp -o $* $(CFLAGS) ../../libzcc.a $(GLOBAL_LIBS) $($*_LIB) $(LIBS)
+	$(CC) $*.cpp -o $* $(CFLAGS)  -Xlinker "-(" ../../libzcc.a $(GLOBAL_LIBS) $($*_LIB) $(LIBS)
 
 target: libzcc $(DEST)
 

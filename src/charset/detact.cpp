@@ -93,7 +93,7 @@ static double ___chinese_score(const char *fromcode, char *str, int len, int omi
         return 0;
     }
 
-    zdebug("        # %-20s, score:%ld, count:%d, omit:%d" , fromcode, score, count, omit_invalid_bytes_count);
+    zdebug("        # %-20s, score:%lu, count:%lu, omit:%d" , fromcode, score, count, omit_invalid_bytes_count);
     return ((double)score / (count + omit_invalid_bytes_count));
 }
 
@@ -105,7 +105,7 @@ bool charset_detect(const char *data, size_t size, std::string &charset_result, 
     size_t len_to_use, list_len;
     double result_score, max_score;
     int out_string_len = 4096 * 5 + 16;
-    char out_string[out_string_len + 1];
+    char *out_string = (char *) malloc(out_string_len  + 1);
     size_t converted_len, omit_invalid_bytes_count;
     charset_result.clear();
 
@@ -136,7 +136,7 @@ bool charset_detect(const char *data, size_t size, std::string &charset_result, 
             continue;
         }
         if (omit_invalid_bytes_count > 5) {
-            zdebug("        # %-20s, omit_invalid_bytes: %d", fromcode, omit_invalid_bytes_count);
+            zdebug("        # %-20s, omit_invalid_bytes: %ld", fromcode, omit_invalid_bytes_count);
             continue;
         }
         if (converted_len < 1) {
@@ -148,6 +148,7 @@ bool charset_detect(const char *data, size_t size, std::string &charset_result, 
             max_score = result_score;
         }
     }
+    free(out_string);
 
     if (max_i == (ssize_t)-1) {
         return false;

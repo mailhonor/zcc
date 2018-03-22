@@ -14,7 +14,7 @@ namespace zcc
 /* {{{ structure */
 typedef struct main_node_t main_node_t;
 typedef struct hash_node_t hash_node_t;
-#pragma pack(push, 1)
+#pragma pack(push, 4)
 enum node_type_t {
     node_type_init = 0,
     node_type_string,
@@ -77,7 +77,7 @@ static int main_key_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
 {
     main_node_t *t1, *t2;
     char *key1, *key2;
-    int len, i;
+    int len, i, cmp;
 
     t1 = zcc_container_of(n1, main_node_t, rbkey);
     key1 = t1->key.ptr;
@@ -90,16 +90,19 @@ static int main_key_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
     if (t2->key_len <= (int)sizeof(char *)) {
         key2 = t2->key.str;
     }
+    std::string s1, s2;
+    s1.append(key1, t1->key_len);
+    s2.append(key2, t2->key_len);
+    return s1.compare(s2);
 
     len = t1->key_len;
     if (t2->key_len < len) {
         len = t2->key_len;
     }
     for(i=0;i<len;i++) {
-        if(key1[i]<key2[i]) {
-            return -1;
-        } else if (key1[i] > key2[i]){
-            return 1;
+        cmp = (int)(key1[i]) - (int)(key2[i]);
+        if (cmp) {
+            return cmp;
         }
     }
     if (t1->key_len <t2->key_len) {
@@ -587,6 +590,7 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
     long epx = 1, epx_tmp;
     bool syntax_error = false, number_error = false;
     while (pcount > idx) {
+        break;
         char *epnx = (char *)cmd_vector[idx].c_str();
         if ((cmd_vector[idx].size() != 2) || (toupper(epnx[1]) != 'X')) {
             syntax_error = true;
@@ -629,8 +633,7 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
         RETURN_WRONG_NUMBER_ARGUMENTS("set");
     }
     if (number_error) {
-        /* FIXME */
-        return;
+        RETURN_WRONG_VALUE_TYPE();
     }
 
     bool gogogo = false;
@@ -1077,6 +1080,33 @@ void redis_puny_server::before_service()
     rbtree_init(&main_key_tree, main_key_cmp);
     rbtree_init(&main_timeout_tree, main_timeout_cmp);
     redis_cmd_tree_init();
+    if (1) {
+        std::vector<std::string> cmd_query;
+        connection_context context;
+        
+#define setsetset(k, v) \
+        cmd_query.clear(); \
+        cmd_query.push_back("SET"); \
+        cmd_query.push_back(k); \
+        cmd_query.push_back(v); \
+        do_cmd_set(context, cmd_query); 
+        setsetset("abc", "xxx");
+        setsetset("abd", "xxd");
+        setsetset("abx", "xxd");
+#if 1
+        setsetset("ffff", "sfaf");
+        setsetset("eee", "xxd");
+        for (int i=0; i < 1000; i++) {
+            char buf[99];
+            sprintf(buf, "%d", i);
+            setsetset(buf, "xxd");
+        }
+#endif
+        cmd_query.clear();
+        cmd_query.push_back("KEYS");
+        cmd_query.push_back("*");
+        do_cmd_keys(context, cmd_query); 
+    }
 }
 
 void redis_puny_server::before_exit()

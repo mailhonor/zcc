@@ -776,7 +776,7 @@ static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
 /* }}} */
 
 /* {{{ async_io_read___inner */
-static inline void async_io_read___inner(async_io_t * aio_data, int max_len, async_io_cb_t callback, long timeout)
+static void async_io_read___inner(async_io_t * aio_data, int max_len, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
     char buf[10240 + 10];
@@ -829,7 +829,7 @@ static inline void async_io_read___inner(async_io_t * aio_data, int max_len, asy
 /* }}} */
 
 /* {{{ async_io_read_n___inner */
-static inline void async_io_read_n___inner(async_io_t * aio_data, int strict_len, async_io_cb_t callback, long timeout)
+static void async_io_read_n___inner(async_io_t * aio_data, int strict_len, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
     char buf[10240 + 10];
@@ -911,7 +911,7 @@ over:
     return size;
 }
 
-static inline void async_io_read_size_data___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
+static void async_io_read_size_data___inner(async_io_t * aio_data, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
     char buf[10240 + 10];
@@ -994,7 +994,7 @@ static inline int ___async_io_read_delimiter_check(async_io_t * aio_data, unsign
     return -1;
 }
 
-static inline void async_io_read_delimiter___inner(async_io_t * aio_data, char delimiter, int max_len, async_io_cb_t callback, long timeout)
+static void async_io_read_delimiter___inner(async_io_t * aio_data, char delimiter, int max_len, async_io_cb_t callback, long timeout)
 {
     int magic, rlen;
     char buf[10240 + 10];

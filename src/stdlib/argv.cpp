@@ -51,9 +51,6 @@ void argv::push_back(const char *v, size_t n)
 
 void argv::truncate(size_t n)
 {
-    if (n < 0) {
-        return;
-    }
     for (size_t i = n; i < ___size; i++) {
         free(___data[i]);
     }

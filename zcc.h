@@ -23,6 +23,14 @@
 #include <unistd.h>
 
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#ifdef ___ZCC_INNER___
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wformat-zero-length"
+#endif
 
 #pragma pack(push, 4)
 
@@ -211,7 +219,7 @@ public:
 /* std extend ################################################### */
 extern std::string var_std_string_ignore;
 inline bool is_std_string_ignore(const std::string &s) { return (s.c_str() == var_std_string_ignore.c_str()); }
-std::string &sprintf_1024(std::string &str, const char *fmt, ...);
+std::string & __attribute__((format(printf,2,3))) sprintf_1024(std::string &str, const char *fmt, ...);
 std::string &vsprintf_1024(std::string &str, const char *fmt, va_list ap);
 inline std::string &to_string(std::string &str, int i) {return sprintf_1024(str, "%d", i);}
 inline std::string &to_string(std::string &str, unsigned int i) {return sprintf_1024(str, "%u", i);}
@@ -237,8 +245,8 @@ extern std::string var_masterlog_listen;
 extern bool var_log_fatal_catch;
 extern bool var_log_debug_enable;
 extern void (*log_vprintf) (const char *source_fn, size_t line_number, const char *fmt, va_list ap);
-void log_fatal(const char *source_fn, size_t line_number, const char *fmt, ...);
-void log_info(const char *source_fn, size_t line_number, const char *fmt, ...);
+void __attribute__((format(printf,3,4))) log_fatal(const char *source_fn, size_t line_number, const char *fmt, ...);
+void __attribute__((format(printf,3,4))) log_info(const char *source_fn, size_t line_number, const char *fmt, ...);
 #define zcc_fatal(fmt, args...) { zcc::log_fatal(__FILE__, __LINE__, fmt, ##args); }
 #define zcc_info(fmt, args...) { zcc::log_info(__FILE__, __LINE__, fmt, ##args); }
 
@@ -882,7 +890,7 @@ class master
 {
 public:
     master();
-    ~master();
+    virtual ~master();
     void run(int argc, char **argv);
     void load_server_config_from_dir(const char *config_path, std::list<config *> &cfs);
     virtual void load_server_config(std::list<config *> &cfs);
@@ -896,7 +904,7 @@ class master_event_server
 {
 public:
     master_event_server();
-    ~master_event_server();
+    virtual ~master_event_server();
     virtual void before_service();
     virtual void event_loop();
     virtual void before_exit();
@@ -917,7 +925,7 @@ class master_coroutine_server
 {
 public:
     master_coroutine_server();
-    ~master_coroutine_server();
+    virtual ~master_coroutine_server();
     virtual void before_service();
     virtual void before_exit();
     virtual void service_register(const char *service_name, int fd, int fd_type) = 0;
@@ -1292,7 +1300,7 @@ class httpd
 {
 public:
     httpd();
-    ~httpd();
+    virtual ~httpd();
     void bind(int sock);
     void bind(SSL *ssl);
     bool bind(int sock, SSL_CTX *sslctx, long timeout);

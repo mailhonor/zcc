@@ -349,7 +349,7 @@ bool json::unserialize(const char *jstr, size_t jsize)
     return r;
 }
 
-static inline void ___serialize_string(std::string &result, const char *data, size_t size)
+static void ___serialize_string(std::string &result, const char *data, size_t size)
 {
     result.push_back('"');
     char *ps = (char *)data;
@@ -443,7 +443,7 @@ void json::serialize(std::string &result, int flag)
         if (current_json->is_double()) {
             long l = current_json->get_double_value();
             if ((l > 1000 * 1000 * 1000 * 1000L) || (l < -1000 * 1000 * 1000 * 1000L)){
-                sprintf_1024(result, "%e", l);
+                sprintf_1024(result, "%e", (double)l);
             } else {
                 sprintf_1024(result, "%ld", l);
             }

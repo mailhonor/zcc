@@ -92,11 +92,10 @@ void mime_header_line_get_first_token(const char *line, size_t len, std::string 
     }
 }
 
-size_t mime_header_line_get_first_token(const char *line_, size_t len, char **val)
+size_t mime_header_line_get_first_token(const char *line_, size_t len_raw, char **val)
 {
+    int i, vlen, ch, len = (int)len_raw;
     char *line = const_cast<char *>(line_), *ps, *pend = (char *)line + len;
-    size_t i, vlen;
-    int ch;
 
     *val = line;
     vlen = 0;

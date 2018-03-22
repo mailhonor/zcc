@@ -506,7 +506,8 @@ static int iopipe_base_run(iopipe_base_t * iopb)
         if (part_client->fd == efd) {
             if (!(events & EPOLLOUT)) {
                 uint64_t u;
-                if (syscall_read(efd, &u, sizeof(uint64_t))) ;
+                if (syscall_read(efd, &u, sizeof(uint64_t))) {
+                }
             }
             continue;
         }
@@ -572,7 +573,8 @@ static void iopipe_enter(iopipe_base_t * iopb, int client_fd, SSL *client_ssl, i
     ZIOPIPE_BASE_UNLOCK(iopb);
 
     uint64_t u = 1;
-    if (syscall_write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) ;
+    if (syscall_write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) {
+    }
 }
 
 /* }}} */

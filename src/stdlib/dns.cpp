@@ -12,8 +12,6 @@
 #include <netdb.h>
 #include <sys/types.h>
 
-extern int h_errno;
-
 namespace zcc
 {
 

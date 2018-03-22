@@ -25,6 +25,9 @@
 namespace zcc
 {
 
+extern pthread_mutex_t *var_general_pthread_mutex;
+//pthread_mutex_t *get_var_general_pthread_mutex();
+
 #include <sys/epoll.h>
 
 /* {{{ syscall_* declare */
@@ -50,7 +53,6 @@ int syscall_fcntl(int fildes, int cmd, ...);
 /* }}} */
 
 /* ######################################## */
-extern pthread_mutex_t *var_general_pthread_mutex;
 static bool var_coroutine_mode_flag = false;
 
 typedef struct coroutine_sys_context coroutine_sys_context;
@@ -350,6 +352,7 @@ void coroutine_base_fini()
             free(coroutine_fd_attribute_vec);
             coroutine_fd_attribute_vec = 0;
         }
+        pthread_mutex_unlock(var_general_pthread_mutex);
     }
 }
 
@@ -1162,7 +1165,7 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len)
         }
         return sock;
     }
-	struct pollfd pf = {0};
+	struct pollfd pf;
     memset(&pf,0,sizeof(pf));
     pf.fd = fd;
     pf.events = (POLLIN | POLLERR | POLLHUP);
@@ -1199,7 +1202,7 @@ int connect(int fd, const struct sockaddr *address, socklen_t address_len)
 		return ret;
 	}
 
-	struct pollfd pf = {0};
+	struct pollfd pf;
     memset(&pf,0,sizeof(pf));
     pf.fd = fd;
     pf.events = (POLLOUT | POLLERR | POLLHUP);

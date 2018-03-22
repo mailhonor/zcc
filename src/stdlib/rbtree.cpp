@@ -20,8 +20,8 @@ static inline void rbtree_link_node(rbtree_node_t * node, rbtree_node_t * parent
 
     *rbtree_link = node;
 }
-void __rbtree_insert_augmented(rbtree_t * root, rbtree_node_t * node, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new));
-void __rbtree_detach_color(rbtree_t * root, rbtree_node_t * parent, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new));
+static void __rbtree_insert_augmented(rbtree_t * root, rbtree_node_t * node, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new));
+static void __rbtree_detach_color(rbtree_t * root, rbtree_node_t * parent, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new));
 
 #define ZCC_RB_RED          0
 #define ZCC_RB_BLACK        1
@@ -112,8 +112,6 @@ static inline void __rbtree_change_child(rbtree_node_t * old, rbtree_node_t * _n
     } else
         root->rbtree_node = _new;
 }
-
-void __rbtree_detach_color(rbtree_t * root, rbtree_node_t * parent, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new));
 
 static __always_inline rbtree_node_t *__rbtree_detach_augmented(rbtree_node_t * node, rbtree_t * root, const struct rbtree_augment_callbacks *augment)
 {
@@ -518,7 +516,7 @@ static __always_inline void ____rbtree_detach_color(rbtree_node_t * parent, rbtr
 }
 
 /* Non-inline version for rbtree_detach_augmented() use */
-void __rbtree_detach_color(rbtree_t * root, rbtree_node_t * parent, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new))
+static void __rbtree_detach_color(rbtree_t * root, rbtree_node_t * parent, void (*augment_rotate) (rbtree_node_t * old, rbtree_node_t * _new))
 {
     ____rbtree_detach_color(parent, root, augment_rotate);
 }

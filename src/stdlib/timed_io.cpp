@@ -202,7 +202,7 @@ int timed_wait_writeable(int fd, long timeout)
 
 ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
 {
-    size_t ret;
+    ssize_t ret;
     long critical_time, left_time;
 
     if (timeout < 1) {
@@ -242,7 +242,7 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
 ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
 {
     bool is_closed = false;
-    size_t ret;
+    ssize_t ret;
     size_t left;
     char *ptr;
     long critical_time;

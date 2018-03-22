@@ -215,7 +215,7 @@ void master_event_server::master_register(char *master_url)
         }
         int fd = atoi(typefd+1);
         if (fd < var_master_server_listen_fd) {
-            zcc_fatal("master_event_server: fd is invalid", typefd+1);
+            zcc_fatal("master_event_server: fd(%s) is invalid", typefd+1);
         }
         close_on_exec(fd);
         nonblocking(fd);
