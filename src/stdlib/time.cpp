@@ -20,6 +20,9 @@ long timeout_set(long timeout)
     long r;
     struct timeval tv;
 
+    if (timeout > var_max_timeout) {
+        timeout = var_max_timeout;
+    }
     gettimeofday(&tv, 0);
     r = tv.tv_sec * 1000 + tv.tv_usec / 1000 + timeout;
 

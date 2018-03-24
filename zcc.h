@@ -1620,6 +1620,8 @@ public:
     virtual void service_register(const char *service_name, int fd, int fd_type);
     virtual void before_service();
     virtual void before_exit();
+    void exec_redis_cmd(std::vector<std::string> &cmds);
+    void exec_redis_cmd(const char *cmdline);
 };
 
 }

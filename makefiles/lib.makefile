@@ -17,11 +17,8 @@ CFLAGS= -I./ -std=gnu++11 -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE \
 	-Wsign-promo -Wstrict-null-sentinel -Wsync-nand -Wsynth -Wtrigraphs -Wuninitialized -Wunknown-pragmas \
 	-Wvariadic-macros -Wvla -Wvolatile-register-var -Wwrite-strings
 
-CFLAGS= -I./ -std=gnu++11 -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE 
-
 SRCS_COROUTINE=${shell find src/coroutine/ -type f -name "*.cpp"}
 OBJS_COROUTINE = $(patsubst %.cpp, OBJS_DEST/%.o, $(SRCS_COROUTINE))
-
 
 SRCS_ZCC=${shell find src -type f -name "*.cpp"|grep -v "^src/coroutine/"}
 OBJS_ZCC = $(patsubst %.cpp, OBJS_DEST/%.o, $(SRCS_ZCC))

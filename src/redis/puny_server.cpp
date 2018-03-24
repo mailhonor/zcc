@@ -12,6 +12,7 @@ namespace zcc
 {
 
 /* {{{ structure */
+typedef struct main_db_t main_db_t;
 typedef struct main_node_t main_node_t;
 typedef struct hash_node_t hash_node_t;
 #pragma pack(push, 4)
@@ -22,6 +23,12 @@ enum node_type_t {
     node_type_hash,
 };
 typedef enum  node_type_t node_type_t;
+
+struct main_db_t {
+    rbtree_t key_tree;
+    rbtree_t timeout_tree;
+    int count;
+};
 
 struct main_node_t {
     union {
@@ -42,38 +49,7 @@ struct main_node_t {
     rbtree_node_t rbtimeout;
 };
 
-struct hash_node_t {
-    union {
-        char *ptr;
-        char str[sizeof(char *)];
-    } key;
-    short int key_len:16;
-    char type;
-    union {
-        char *ptr;
-        char str[sizeof(char *)];
-        long num;
-    } val;
-    unsigned int val_len;
-    rbtree_node_t rbkey;
-};
-
-class connection_context
-{
-public:
-    inline connection_context() { quit = false;}
-    inline ~connection_context() {}
-    int fd;
-    stream fp;
-    bool quit;
-};
-#pragma pack(pop)
-/* }}} */
-
-/* {{{ data */
-static rbtree_t main_key_tree, main_timeout_tree;
-static int main_tree_node_count = 0;
-static int main_key_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
+static int main_node_cmp_key(rbtree_node_t * n1, rbtree_node_t * n2)
 {
     main_node_t *t1, *t2;
     char *key1, *key2;
@@ -114,7 +90,7 @@ static int main_key_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
     return 0;
 }
 
-static int main_timeout_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
+static int main_node_cmp_timeout(rbtree_node_t * n1, rbtree_node_t * n2)
 {
     main_node_t *t1, *t2;
     long r;
@@ -126,6 +102,81 @@ static int main_timeout_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
     }
     return r;
 }
+
+struct hash_node_t {
+    union {
+        char *ptr;
+        char str[sizeof(char *)];
+    } key;
+    short int key_len:16;
+    char type;
+    union {
+        char *ptr;
+        char str[sizeof(char *)];
+        long num;
+    } val;
+    unsigned int val_len;
+    rbtree_node_t rbkey;
+};
+
+static int hash_node_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
+{
+    hash_node_t *t1, *t2;
+    char *key1, *key2;
+    int len, i, cmp;
+
+    t1 = zcc_container_of(n1, hash_node_t, rbkey);
+    key1 = t1->key.ptr;
+    if (t1->key_len <= (int)sizeof(char *)) {
+        key1 = t1->key.str;
+    }
+
+    t2 = zcc_container_of(n2, hash_node_t, rbkey);
+    key2 = t2->key.ptr;
+    if (t2->key_len <= (int)sizeof(char *)) {
+        key2 = t2->key.str;
+    }
+    std::string s1, s2;
+    s1.append(key1, t1->key_len);
+    s2.append(key2, t2->key_len);
+    return s1.compare(s2);
+
+    len = t1->key_len;
+    if (t2->key_len < len) {
+        len = t2->key_len;
+    }
+    for(i=0;i<len;i++) {
+        cmp = (int)(key1[i]) - (int)(key2[i]);
+        if (cmp) {
+            return cmp;
+        }
+    }
+    if (t1->key_len <t2->key_len) {
+        return -1;
+    } else if (t1->key_len > t2->key_len) {
+        return 1;
+    }
+
+    return 0;
+}
+
+class connection_context
+{
+public:
+    inline connection_context() { quit = false;}
+    inline ~connection_context() {}
+    int fd;
+    stream fp;
+    main_db_t *current_db;
+    bool quit;
+};
+typedef void (*do_cmd_fn_t)(connection_context &context, std::vector<std::string> &cmd_vector);
+#pragma pack(pop)
+
+/* }}} */
+
+/* {{{ main node */
+main_db_t default_db;
 
 static void main_node_set_key(main_node_t *node, std::string &key)
 {
@@ -212,24 +263,22 @@ static void main_node_get_value(main_node_t *node, std::string &val)
     }
 }
 
-static main_node_t *main_node_create(connection_context &context, std::string *k)
+static main_node_t *main_node_create(main_db_t *db, std::string &key)
 {
-    main_node_t *r = (main_node_t *)calloc(1, sizeof(main_node_t));
-    r->type = node_type_init;
-    if (k) {
-        main_node_set_key(r, *k);
-    }
-    return r;
+    main_node_t *node = (main_node_t *)calloc(1, sizeof(main_node_t));
+    node->type = node_type_init;
+    main_node_set_key(node, key);
+    rbtree_attach(&(db->key_tree), &(node->rbkey));
+    db->count ++;
+    return node;
 }
 
-static main_node_t *main_key_find(rbtree_t *tree, std::string &k)
+static main_node_t *main_node_find(main_db_t *db, std::string &k)
 {
-    rbtree_node_t *rnp;
-    main_node_t vnode;
-
     char *ptr = (char *)k.c_str();
     int klen = k.size();
 
+    main_node_t vnode;
     vnode.key_len = klen;
     if (klen <= (int)sizeof(char *)) {
         for (int i=0;i<klen;i++) {
@@ -238,50 +287,24 @@ static main_node_t *main_key_find(rbtree_t *tree, std::string &k)
     } else {
         vnode.key.ptr = ptr;
     }
-    rnp = rbtree_find(tree, &(vnode.rbkey));
-    if (rnp == 0) {
+
+    rbtree_node_t *rnp = rbtree_find(&(db->key_tree), &(vnode.rbkey));
+    if (!rnp) {
         return 0;
     }
     return zcc_container_of(rnp, main_node_t, rbkey);
 }
 
-static void main_key_free(main_node_t *node)
+static void main_node_free(main_db_t *db, main_node_t *node)
 {
+    rbtree_detach(&(db->key_tree), &(node->rbkey));
+    db->count --;
     if (node->key_len > (int)sizeof(char *)) {
         free(node->key.ptr);
     }
     main_node_clear_value(node);
     free(node);
 }
-
-static hash_node_t *hash_node_create(std::string *k)
-{
-    hash_node_t *r = (hash_node_t *)calloc(1, sizeof(hash_node_t));
-    r->type = node_type_init;
-    if (k) {
-        main_node_set_key((main_node_t *)r, *k);
-    }
-    return r;
-}
-
-static hash_node_t *hash_key_find(rbtree_t *tree, std::string &k)
-{
-    return (hash_node_t *)main_key_find(tree, k);
-}
-
-static void hash_key_free(hash_node_t *node)
-{
-    if (node->key_len > (int)sizeof(char *)) {
-        free(node->key.ptr);
-    }
-    main_node_clear_value((main_node_t *)node);
-    free(node);
-}
-
-/* }}} */
-
-/* {{{ cmd */
-typedef void (*do_cmd_fn_t)(connection_context &context, std::vector<std::string> &cmd_vector);
 
 #define RETURN_WRONG_VALUE_TYPE() \
     context.fp.write("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", 68); return;
@@ -307,12 +330,6 @@ static bool get_check_long_integer(const char *str, long *r)
     return false;
 }
 
-#if 0
-static void do_cmd_logic_error(connection_context &context, std::vector<std::string> &cmd_vector)
-{
-}
-#endif
-
 static void do_cmd_unkonwn(connection_context &context, std::vector<std::string> &cmd_vector)
 {
     context.fp.append("-ERR unknown command '").append(tolower(cmd_vector[0])).append("'\r\n");
@@ -326,7 +343,7 @@ static void do_cmd_quit(connection_context &context, std::vector<std::string> &c
 
 static void do_cmd_dbsize(connection_context &context, std::vector<std::string> &cmd_vector)
 {
-    context.fp.printf_1024(":%d\r\n", main_tree_node_count);
+    context.fp.printf_1024(":%d\r\n", context.current_db->count);
 }
 
 static void do_cmd_del(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -335,20 +352,17 @@ static void do_cmd_del(connection_context &context, std::vector<std::string> &cm
         RETURN_WRONG_NUMBER_ARGUMENTS("del");
     }
     int rnum = 0;
-    main_node_t *node;
-    std::vector<std::string>::iterator cit = cmd_vector.begin() + 1;
+    auto cit = cmd_vector.begin() + 1;
     for (; cit != cmd_vector.end(); cit++) {
-        node = main_key_find(&main_key_tree,  *cit);
+        main_node_t *node = main_node_find(context.current_db, *cit);
         if (!node) {
             continue;
         }
         rnum++;
-        rbtree_detach(&main_key_tree, &(node->rbkey));
         if (node->timeout != -1) {
-            rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+            rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
         }
-        main_key_free(node);
-        main_tree_node_count--;
+        main_node_free(context.current_db, node);
     }
     context.fp.printf_1024(":%d\r\n", rnum);
 }
@@ -358,7 +372,7 @@ static void do_cmd_exists(connection_context &context, std::vector<std::string> 
     if (cmd_vector.size() != 2) {
         RETURN_WRONG_NUMBER_ARGUMENTS("exists");
     }
-    context.fp.printf_1024(":%d\r\n", main_key_find(&main_key_tree, cmd_vector[1])?1:0);
+    context.fp.printf_1024(":%d\r\n", main_node_find(context.current_db, cmd_vector[1])?1:0);
 }
 
 static void do_cmd_expire(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -367,23 +381,50 @@ static void do_cmd_expire(connection_context &context, std::vector<std::string> 
         RETURN_WRONG_NUMBER_ARGUMENTS("expire");
     }
     int rnum = 0;
-    main_node_t *node = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     int expire = atoi(cmd_vector[2].c_str());
     if (!node) {
         rnum = 0;
     } else {
         rnum = 1;
         if (expire < 1) {
-            rbtree_detach(&main_key_tree, &(node->rbkey));
             if (node->timeout != -1) {
-                rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
             }
-            main_key_free(node);
+            main_node_free(context.current_db, node);
         } else {
             if (node->timeout != -1) {
-                rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
-                node->timeout = time(0) + expire;
-                rbtree_attach(&main_timeout_tree, &(node->rbtimeout));
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+                node->timeout = timeout_set(expire * 100);
+                rbtree_attach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+            }
+        }
+    }
+    context.fp.printf_1024(":%d\r\n", rnum);
+}
+
+static void do_cmd_pexpire(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 3) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("pexpire");
+    }
+    int rnum = 0;
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    long expire = atol(cmd_vector[2].c_str());
+    if (!node) {
+        rnum = 0;
+    } else {
+        rnum = 1;
+        if (expire < 1) {
+            if (node->timeout != -1) {
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+            }
+            main_node_free(context.current_db, node);
+        } else {
+            if (node->timeout != -1) {
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+                node->timeout = timeout_set(expire);
+                rbtree_attach(&(context.current_db->timeout_tree), &(node->rbtimeout));
             }
         }
     }
@@ -398,14 +439,10 @@ static void do_cmd_keys(connection_context &context, std::vector<std::string> &c
     /* 返回 全部 */
     int rnum = 0;
     std::string result;
-    for (rbtree_node_t *rbn = rbtree_first(&main_key_tree); rbn; rbn = rbtree_next(rbn)) {
+    for (rbtree_node_t *rbn = rbtree_first(&(context.current_db->key_tree)); rbn; rbn = rbtree_next(rbn)) {
         main_node_t * node = zcc_container_of(rbn, main_node_t, rbkey);
         sprintf_1024(result, "$%d\r\n", node->key_len);
-        if (node->key_len <= (int)(sizeof(char *))) {
-            result.append(node->key.str, node->key_len);
-        } else {
-            result.append(node->key.ptr, node->key_len);
-        }
+        main_node_get_key(node, result);
         result.append("\r\n");
         rnum ++;
     }
@@ -421,19 +458,55 @@ static void do_cmd_ttl(connection_context &context, std::vector<std::string> &cm
         RETURN_WRONG_NUMBER_ARGUMENTS("ttl");
     }
     long r = 0;
-    main_node_t *node = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (!node) {
         r = -2;
     } else {
         if (node->timeout == -1) {
             r = -1;
         }
-        r = node->timeout - time(0);
+        r = timeout_left(node->timeout)/1000;
         if (r < 1) {
             r = 1;
         }
     }
     context.fp.printf_1024(":%d\r\n", r);
+}
+
+static void do_cmd_pttl(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("pttl");
+    }
+    long r = 0;
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        r = -2;
+    } else {
+        if (node->timeout == -1) {
+            r = -1;
+        }
+        r = timeout_left(node->timeout);
+        if (r < 1) {
+            r = 1;
+        }
+    }
+    context.fp.printf_1024(":%ld\r\n", r);
+}
+
+static void do_cmd_persist(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("persist");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if ((!node) || (node->timeout==-1)) {
+        context.fp.write(":0\r\n", 4);
+    } else {
+        context.fp.write(":1\r\n", 4);
+        rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+        node->timeout = -1;
+    }
 }
 
 static void do_cmd_rename(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -445,36 +518,63 @@ static void do_cmd_rename(connection_context &context, std::vector<std::string> 
         context.fp.puts("-ERR source and destination objects are the same\r\n");
         return;
     }
-    main_node_t *fn = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *fn = main_node_find(context.current_db, cmd_vector[1]);
     if (!fn) {
         context.fp.puts("-ERR no such key\r\n");
         return;
     }
 
-    main_node_t *tn = main_key_find(&main_key_tree,  cmd_vector[2]);
+    main_node_t *tn = main_node_find(context.current_db, cmd_vector[2]);
     if (tn) {
-        rbtree_detach(&main_key_tree, &(tn->rbkey));
         if (tn->timeout != -1) {
-            rbtree_detach(&main_timeout_tree, &(tn->rbtimeout));
+            rbtree_detach(&(context.current_db->timeout_tree), &(tn->rbtimeout));
         }
-        main_key_free(tn);
-        main_tree_node_count--;
+        main_node_free(context.current_db, tn);
     }
 
-    rbtree_detach(&main_key_tree, &(fn->rbkey));
+    rbtree_detach(&(context.current_db->key_tree), &(fn->rbkey));
     if (fn->key_len > (int)sizeof(char *)) {
         free(fn->key.ptr);
     }
     main_node_set_key(fn, cmd_vector[2]);
-    rbtree_attach(&main_key_tree, &(fn->rbkey));
+    rbtree_attach(&(context.current_db->key_tree), &(fn->rbkey));
 }
 
+static void do_cmd_renamenx(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 3) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("rename");
+    }
+    if (cmd_vector[1] == cmd_vector[2]) {
+        context.fp.puts("-ERR source and destination objects are the same\r\n");
+        return;
+    }
+    main_node_t *fn = main_node_find(context.current_db, cmd_vector[1]);
+    if (!fn) {
+        context.fp.puts("-ERR no such key\r\n");
+        return;
+    }
+
+    main_node_t *tn = main_node_find(context.current_db, cmd_vector[2]);
+    if (tn) {
+        context.fp.write(":0\r\n", 4);
+        return;
+    }
+
+    rbtree_detach(&(context.current_db->key_tree), &(fn->rbkey));
+    if (fn->key_len > (int)sizeof(char *)) {
+        free(fn->key.ptr);
+    }
+    main_node_set_key(fn, cmd_vector[2]);
+    rbtree_attach(&(context.current_db->key_tree), &(fn->rbkey));
+    context.fp.write(":1\r\n", 4);
+}
 static void do_cmd_type(connection_context &context, std::vector<std::string> &cmd_vector)
 {
     if (cmd_vector.size() != 2) {
         RETURN_WRONG_NUMBER_ARGUMENTS("type");
     }
-    main_node_t *node = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     const char *r = "none";
     if (!node) {
         r = "none";
@@ -490,36 +590,29 @@ static void do_cmd_type(connection_context &context, std::vector<std::string> &c
 
 static void do_cmd_integer_count(connection_context &context, std::string &key, int op, const char *incr)
 {
-    main_node_t *node = main_key_find(&main_key_tree, key);
+    main_node_t *node = main_node_find(context.current_db, key);
     long num;
 
     if (!get_check_long_integer(incr, &num)) {
         RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
     }
     if (!node) {
-        node = main_node_create(context, &key);
+        node = main_node_create(context.current_db, key);
         node->type = node_type_integer;
         node->val.num = 0;
-        rbtree_attach(&main_key_tree, &(node->rbkey));
-        main_tree_node_count++;
     } else {
         if (node->type ==node_type_integer) {
         } else if (node->type == node_type_string) {
             std::string k;
             long num;
-            if (node->val_len > (int)sizeof(char *)) {
-                k.append(node->val.ptr, node->val_len);
-            }else  {
-                k.append(node->val.str, node->val_len);
-            }
+            main_node_get_value(node, k);
             if (!get_check_long_integer(k.c_str(), &num)) {
                 RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
             }
             node->type = node_type_integer;
             node->val.num = num;
         } else {
-            context.fp.puts("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n");
-            return;
+            RETURN_WRONG_VALUE_TYPE();
         }
     }
     if (op == '+') {
@@ -568,7 +661,7 @@ static void do_cmd_get(connection_context &context, std::vector<std::string> &cm
     if (cmd_vector.size() != 2) {
         RETURN_WRONG_NUMBER_ARGUMENTS("get");
     }
-    main_node_t *node = main_key_find(&main_key_tree, cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (node == 0) {
         context.fp.puts("$-1\r\n");
     } else if (node->type == node_type_integer || node->type == node_type_string) {
@@ -590,7 +683,6 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
     long epx = 1, epx_tmp;
     bool syntax_error = false, number_error = false;
     while (pcount > idx) {
-        break;
         char *epnx = (char *)cmd_vector[idx].c_str();
         if ((cmd_vector[idx].size() != 2) || (toupper(epnx[1]) != 'X')) {
             syntax_error = true;
@@ -609,10 +701,10 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
             }
             if (ch1 == 'E') {
                 have_ex = true;
-                epx = epx_tmp;
+                epx = epx_tmp * 1000;
             } else {
                 have_px = true;
-                epx = epx_tmp/1000;
+                epx = epx_tmp;
             }
             idx += 2;
         } else if (ch1 == 'N'){
@@ -637,7 +729,7 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
     }
 
     bool gogogo = false;
-    main_node_t *node = main_key_find(&main_key_tree, cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (have_xx) {
         if (node) {
             gogogo = true;
@@ -653,22 +745,20 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
     if (gogogo) {
         if (node) {
             if (node->timeout != -1) {
-                rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
                 node->timeout = -1;
             }
             main_node_clear_value(node);
         } else {
-            node = main_node_create(context, &(cmd_vector[1]));
-            rbtree_attach(&main_key_tree, &(node->rbkey));
-            main_tree_node_count++;
+            node = main_node_create(context.current_db, (cmd_vector[1]));
         }
     } else if (!gogogo) {
         context.fp.puts("$-1\r\n");
         return;
     }
     if (have_ex || have_px) {
-        node->timeout = time(0) + epx + 1;
-        rbtree_attach(&main_timeout_tree, &(node->rbtimeout));
+        node->timeout = timeout_set(epx);
+        rbtree_attach(&(context.current_db->timeout_tree), &(node->rbtimeout));
     }
     main_node_set_value(node, cmd_vector[2]);
     context.fp.puts("+OK\r\n");
@@ -682,22 +772,20 @@ static void do_cmd_getset(connection_context &context, std::vector<std::string> 
     }
     bool have_old = false;
     std::string old_val;
-    main_node_t *node = main_key_find(&main_key_tree, cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (node) {
         if ((node->type != node_type_integer) && (node->type != node_type_string)) {
             RETURN_WRONG_VALUE_TYPE();
         }
         if (node->timeout != -1) {
-            rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+            rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
             node->timeout = -1;
         }
         main_node_get_value(node, old_val);
         main_node_clear_value(node);
         have_old = true;
     } else {
-        node = main_node_create(context, &(cmd_vector[1]));
-        rbtree_attach(&main_key_tree, &(node->rbkey));
-        main_tree_node_count++;
+        node = main_node_create(context.current_db, cmd_vector[1]);
     }
     main_node_set_value(node, cmd_vector[1]);
     if (have_old) {
@@ -714,13 +802,13 @@ static void do_cmd_mget(connection_context &context, std::vector<std::string> &c
     if (cmd_vector.size() < 2) {
         RETURN_WRONG_NUMBER_ARGUMENTS("mget");
     }
-    std::vector<std::string>::iterator cit = cmd_vector.begin() + 1;
+    auto cit = cmd_vector.begin() + 1;
     std::list<std::string *> result_list;
     int count = 0;
     for (; cit != cmd_vector.end(); cit++) {
         count ++;
         std::string &key = *cit;
-        main_node_t *node = main_key_find(&main_key_tree,  key);
+        main_node_t *node = main_node_find(context.current_db, key);
         if (!node) {
             result_list.push_back(0);
         } else if ((node->type == node_type_integer) || (node->type == node_type_string)) {
@@ -751,22 +839,20 @@ static void do_cmd_mset(connection_context &context, std::vector<std::string> &c
     if ((pcount < 3) || (pcount%2 != 1)) {
         RETURN_WRONG_NUMBER_ARGUMENTS("mset");
     }
-    std::vector<std::string>::iterator cit = cmd_vector.begin() + 1;
+    auto cit = cmd_vector.begin() + 1;
     std::list<std::string *> result_list;
     for (; cit != cmd_vector.end(); cit++) {
         std::string &key = *cit++;
         std::string &val = *cit;
-        main_node_t *node = main_key_find(&main_key_tree,  key);
+        main_node_t *node = main_node_find(context.current_db, key);
         if (node) {
             if (node->timeout != -1) {
-                rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
                 node->timeout = -1;
             }
             main_node_clear_value(node);
         } else {
-            node = main_node_create(context, &(cmd_vector[1]));
-            rbtree_attach(&main_key_tree, &(node->rbkey));
-            main_tree_node_count++;
+            node = main_node_create(context.current_db, cmd_vector[1]);
         }
         main_node_set_value(node, val);
     }
@@ -779,37 +865,139 @@ static void do_cmd_msetnx(connection_context &context, std::vector<std::string> 
     if ((pcount < 3) || (pcount%2 != 1)) {
         RETURN_WRONG_NUMBER_ARGUMENTS("msetnx");
     }
-    std::vector<std::string>::iterator cit;
-    std::list<std::string *> result_list;
     std::list<main_node_t *> old_node_list;
-    for (cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
+    for (auto cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
         std::string &key = *cit++;
-        main_node_t *node = main_key_find(&main_key_tree,  key);
+        main_node_t *node = main_node_find(context.current_db, key);
         old_node_list.push_back(node);
         if (node) {
             context.fp.puts(":0\r\n");
             return;
         }
     }
-    for (cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
+    for (auto cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
         cit++;
         std::string &val = *cit;
         main_node_t *node = old_node_list.front();
         old_node_list.pop_front();
         if (node) {
             if (node->timeout != -1) {
-                rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
+                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
                 node->timeout = -1;
             }
             main_node_clear_value(node);
         } else {
-            node = main_node_create(context, &(cmd_vector[1]));
-            rbtree_attach(&main_key_tree, &(node->rbkey));
-            main_tree_node_count++;
+            node = main_node_create(context.current_db, cmd_vector[1]);
         }
         main_node_set_value(node, val);
     }
     context.fp.puts(":1\r\n");
+}
+
+/* }}} */
+
+/* {{{ hash node */
+static hash_node_t *hash_node_create(main_node_t *node, std::string &key)
+{
+    hash_node_t *hnode = (hash_node_t *)calloc(1, sizeof(hash_node_t));
+    hnode->type = node_type_init;
+    char *ptr = (char *)key.c_str();
+    int klen = (int)key.size();
+    if (klen <= (int)sizeof(char *)) {
+        for (int i=0; i<klen; i++) {
+            hnode->key.str[i] = ptr[i];
+        }
+    } else {
+        hnode->key.ptr = (char *)memdup(ptr, klen);
+    }
+    hnode->key_len = klen;
+    rbtree_attach(node->val.hash_tree, &(hnode->rbkey));
+    return hnode;
+}
+
+static hash_node_t *hash_node_find(main_node_t *node, std::string &k)
+{
+    char *ptr = (char *)k.c_str();
+    int klen = k.size();
+
+    hash_node_t vnode;
+    vnode.key_len = klen;
+    if (klen <= (int)sizeof(char *)) {
+        for (int i=0;i<klen;i++) {
+            vnode.key.str[i]=ptr[i];
+        }
+    } else {
+        vnode.key.ptr = ptr;
+    }
+
+    rbtree_node_t *rnp = rbtree_find(node->val.hash_tree, &(vnode.rbkey));
+    if (!rnp) {
+        return 0;
+    }
+    return zcc_container_of(rnp, hash_node_t, rbkey);
+}
+
+static void hash_node_set_value(hash_node_t *node, std::string &val)
+{
+    char *ptr = (char *)val.c_str();
+    int vlen = (int)val.size();
+    if (vlen <= (int)sizeof(char *)) {
+        for (int i=0; i<vlen; i++) {
+            node->val.str[i] = ptr[i];
+        }
+    } else {
+        node->val.ptr = (char *)memdup(ptr, vlen);
+    }
+    node->val_len = vlen;
+    node->type = node_type_string;
+}
+
+static void hash_node_get_value(hash_node_t *node, std::string &val)
+{
+    if (node->type == node_type_string) {
+        int vlen = node->val_len;
+        if (vlen <= (int)sizeof(char *)) {
+            val.append(node->val.str, vlen);
+        } else {
+            val.append(node->val.ptr, vlen);
+        }
+    } else if (node->type == node_type_integer) {
+        to_string(val, node->val.num);
+    }
+}
+
+static void hash_node_clear_value(hash_node_t *node)
+{
+    if (node->type == node_type_init) {
+    } else if (node->type == node_type_string){
+        if (node->val_len > sizeof(char *)) {
+            free(node->val.ptr);
+        }
+    } else if (node->type == node_type_integer){
+    }
+    node->type = node_type_init;
+    node->val_len = -1;
+    node->val.ptr = 0;
+}
+static void hash_node_free(main_node_t *node, hash_node_t *hnode)
+{
+    rbtree_detach(node->val.hash_tree, &(hnode->rbkey));
+    if (hnode->key_len > (int)sizeof(char *)) {
+        free(hnode->key.ptr);
+    }
+    hash_node_clear_value(hnode);
+    free(hnode);
+}
+
+
+static main_node_t * main_node_create_with_hash_val(connection_context &context, std::string &key)
+{
+    main_node_t * node = main_node_create(context.current_db, key);
+    node->type = node_type_hash;
+    node->val_len = 0;
+    node->val.hash_tree = (rbtree_t *)calloc(1, sizeof(rbtree_t));
+    rbtree_init(node->val.hash_tree, hash_node_cmp);
+    return node;
 }
 
 static void do_cmd_hdel(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -818,7 +1006,7 @@ static void do_cmd_hdel(connection_context &context, std::vector<std::string> &c
     if ((pcount < 3)) {
         RETURN_WRONG_NUMBER_ARGUMENTS("hdel");
     }
-    main_node_t *node = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (!node) {
         context.fp.write(":0\r\n", 4);
         return;
@@ -827,24 +1015,16 @@ static void do_cmd_hdel(connection_context &context, std::vector<std::string> &c
         RETURN_WRONG_VALUE_TYPE();
     }
     int dcount = 0;
-    rbtree_t *htree = node->val.hash_tree;
-    for(std::vector<std::string>::iterator it = cmd_vector.begin()+ 2; it != cmd_vector.end(); it++) {
-        hash_node_t *hnode = hash_key_find(htree, *it);
+    for(auto it = cmd_vector.begin()+ 2; it != cmd_vector.end(); it++) {
+        hash_node_t *hnode = hash_node_find(node, *it);
         if (!hnode) {
             continue;
         }
         dcount++;
-        rbtree_detach(htree, &(hnode->rbkey));
-        hash_key_free(hnode);
-        node->val_len--;
+        hash_node_free(node, hnode);
     }
-    if (node->val_len == 0) {
-        rbtree_detach(&main_key_tree, &(node->rbkey));
-        if (node->timeout != -1) {
-            rbtree_detach(&main_timeout_tree, &(node->rbtimeout));
-            node->timeout = -1;
-        }
-        main_key_free(node);
+    if ( node->val_len == 0) {
+        main_node_free(context.current_db, node);
     }
     context.fp.printf_1024(":%d\r\n", dcount);
 }
@@ -854,7 +1034,7 @@ static void do_cmd_hexists(connection_context &context, std::vector<std::string>
     if (cmd_vector.size() != 3) {
         RETURN_WRONG_NUMBER_ARGUMENTS("hexists");
     }
-    main_node_t *node = main_key_find(&main_key_tree,  cmd_vector[1]);
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (!node) {
         context.fp.write(":0\r\n", 4);
         return;
@@ -862,7 +1042,7 @@ static void do_cmd_hexists(connection_context &context, std::vector<std::string>
     if (node->type != node_type_hash) {
         RETURN_WRONG_VALUE_TYPE();
     }
-    if (hash_key_find(node->val.hash_tree, cmd_vector[2])) {
+    if (hash_node_find(node, cmd_vector[2])) {
         context.fp.write(":1\r\n", 4);
     } else {
         context.fp.write(":0\r\n", 4);
@@ -871,38 +1051,244 @@ static void do_cmd_hexists(connection_context &context, std::vector<std::string>
 
 static void do_cmd_hget(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() != 3) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hget");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write("$-1\r\n", 5);
+        return;
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    hash_node_t *hnode = hash_node_find(node, cmd_vector[2]);
+    if (hnode) {
+        std::string tmpv;
+        hash_node_get_value(hnode, tmpv);
+        context.fp.printf_1024(":%zd\r\n", tmpv.size());
+        context.fp.append(tmpv).append("\r\n");
+    } else {
+        context.fp.write("$-1\r\n", 5);
+    }
 }
 
 static void do_cmd_hset(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() != 4) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hset");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        node = main_node_create_with_hash_val(context, cmd_vector[1]);
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    hash_node_t *hnode = hash_node_find(node, cmd_vector[2]);
+    if (!hnode) {
+        hnode = hash_node_create(node, cmd_vector[2]);
+        context.fp.write(":0\r\n", 4);
+    } else {
+        hash_node_clear_value(hnode);
+        context.fp.write(":1\r\n", 4);
+    }
+    hash_node_set_value(hnode, cmd_vector[3]);
+}
+
+static void do_cmd_hsetnx(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 4) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hsetnx");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        node = main_node_create_with_hash_val(context, cmd_vector[1]);
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    hash_node_t *hnode = hash_node_find(node, cmd_vector[2]);
+    if (!hnode) {
+        hnode = hash_node_create(node, cmd_vector[2]);
+        hash_node_set_value(hnode, cmd_vector[3]);
+        context.fp.write(":1\r\n", 4);
+    } else {
+        context.fp.write(":0\r\n", 4);
+    }
 }
 
 static void do_cmd_hincrby(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() != 4) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hincrby");
+    }
+    long num;
+    if (!get_check_long_integer(cmd_vector[3].c_str(), &num)) {
+        RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        node = main_node_create_with_hash_val(context, cmd_vector[1]);
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    hash_node_t *hnode = hash_node_find(node, cmd_vector[2]);
+    if (!hnode) {
+        hnode = hash_node_create(node, cmd_vector[2]);
+        hnode->type = node_type_integer;
+        hnode->val.num = 0;
+    } else {
+        std::string tmpv;
+        hash_node_get_value(hnode, tmpv);
+        long num2;
+        if (!get_check_long_integer(tmpv.c_str(), &num2)) {
+            context.fp.write("-ERR hash value is not an integerr\r\n", 36);
+            return;
+        }
+        hash_node_clear_value(hnode);
+        hnode->val.num = num2;
+        hnode->type = node_type_integer;
+    }
+    hnode->val.num += num;
+    context.fp.printf_1024(":%d\r\n", hnode->val.num);
 }
 
 static void do_cmd_hkeys(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hkeys");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write("*0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    int rnum = 0;
+    std::string result;
+    for (rbtree_node_t *rbn = rbtree_first(node->val.hash_tree); rbn; rbn = rbtree_next(rbn)) {
+        hash_node_t * hnode = zcc_container_of(rbn, hash_node_t, rbkey);
+        sprintf_1024(result, "$%d\r\n", hnode->key_len);
+        hash_node_get_value(hnode, result);
+        result.append("\r\n");
+        rnum ++;
+    }
+    context.fp.printf_1024("*%d\r\n", rnum);
+    if (!result.empty()) {
+        context.fp.write(result.c_str(), result.size());
+    }
 }
 
 static void do_cmd_hmget(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() < 3) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hmget");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (node && (node->type != node_type_hash)) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+
+    std::string tmpval;
+    std::string result;
+    sprintf_1024(result, "*%d\r\n", (int)(cmd_vector.size()) - 2);
+    for (auto it = cmd_vector.begin() + 2; it != cmd_vector.end(); it++) {
+        if (!node) {
+            result.append("$-1\r\n", 5);
+        } else {
+            hash_node_t *hnode = hash_node_find(node, *it);
+            if (hnode) {
+                tmpval.clear();
+                hash_node_get_value(hnode, tmpval);
+                sprintf_1024(result, "$%d\r\n", (int)tmpval.size());
+                result.append(tmpval).append("\r\n");
+            } else {
+                result.append("$-1\r\n", 5);
+            }
+            sprintf_1024(result, "$%d\r\n", hnode->key_len);
+        }
+    }
+    context.fp.write(result.c_str(), result.size());
+}
+
+static void do_cmd_hmset(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    int pcount = (int)cmd_vector.size();
+    if ((pcount < 4) || (pcount%2 != 0)) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hmset");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        node = main_node_create_with_hash_val(context, cmd_vector[1]);
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    for (auto cit = cmd_vector.begin() + 2; cit != cmd_vector.end(); cit++) {
+        std::string &key = *cit++;
+        std::string &val = *cit;
+        hash_node_t *hnode = hash_node_find(node, key);
+        if (hnode) {
+            main_node_clear_value(node);
+        } else {
+            hnode = hash_node_create(node, key);
+        }
+        hash_node_set_value(hnode, val);
+    }
+    context.fp.puts("+OK\r\n");
 }
 
 static void do_cmd_hgetall(connection_context &context, std::vector<std::string> &cmd_vector)
 {
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hgetall");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write("*0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    int rnum = 0;
+    std::string result, tmpv;
+    for (rbtree_node_t *rbn = rbtree_first(node->val.hash_tree); rbn; rbn = rbtree_next(rbn)) {
+        hash_node_t * hnode = zcc_container_of(rbn, hash_node_t, rbkey);
+        sprintf_1024(result, "$%d\r\n", hnode->key_len);
+        hash_node_get_value(hnode, result);
+        result.append("\r\n");
+        tmpv.clear();
+        hash_node_get_value(hnode, tmpv);
+        sprintf_1024(result, "$%zd\r\n", tmpv.size());
+        result.append(tmpv).append("\r\n");
+        rnum +=2;
+    }
+    context.fp.printf_1024("*%d\r\n", rnum);
+    if (!result.empty()) {
+        context.fp.write(result.c_str(), result.size());
+    }
 }
 
 static std::map<std::string, do_cmd_fn_t> redis_cmd_tree;
-static void redis_cmd_tree_init() {
+static void redis_cmd_tree_init()
+{
     redis_cmd_tree["QUIT"] = do_cmd_quit;
     redis_cmd_tree["DBSIZE"] = do_cmd_dbsize;
     redis_cmd_tree["DEL"] = do_cmd_del;
     redis_cmd_tree["EXISTS"] = do_cmd_exists;
     redis_cmd_tree["EXPIRE"] = do_cmd_expire;
+    redis_cmd_tree["PEXPIRE"] = do_cmd_pexpire;
     redis_cmd_tree["KEYS"] = do_cmd_keys;
     redis_cmd_tree["TTL"] = do_cmd_ttl;
+    redis_cmd_tree["PTTL"] = do_cmd_pttl;
+    redis_cmd_tree["PERSIST"] = do_cmd_persist;
     redis_cmd_tree["RENAME"] = do_cmd_rename;
+    redis_cmd_tree["RENAMENX"] = do_cmd_renamenx;
     redis_cmd_tree["TYPE"] = do_cmd_type;
     redis_cmd_tree["DECR"] = do_cmd_decr;
     redis_cmd_tree["DECRBY"] = do_cmd_decrby;
@@ -918,9 +1304,11 @@ static void redis_cmd_tree_init() {
     redis_cmd_tree["HEXISTS"] = do_cmd_hexists;
     redis_cmd_tree["HGET"] = do_cmd_hget;
     redis_cmd_tree["HSET"] = do_cmd_hset;
+    redis_cmd_tree["HSETNX"] = do_cmd_hsetnx;
     redis_cmd_tree["HINCRBY"] = do_cmd_hincrby;
     redis_cmd_tree["HKEYS"] = do_cmd_hkeys;
     redis_cmd_tree["HMGET"] = do_cmd_hmget;
+    redis_cmd_tree["HMSET"] = do_cmd_hmset;
     redis_cmd_tree["HGETALL"] = do_cmd_hgetall;
 }
 /* }}} */
@@ -1017,7 +1405,7 @@ static int do_one_query(connection_context &context)
         do_cmd_fn_t cmdfn;
         std::string &cmd_name = cmd_vector.front();
         toupper(cmd_name);
-        std::map<std::string, do_cmd_fn_t>::iterator cit = redis_cmd_tree.find(cmd_name);
+        auto cit = redis_cmd_tree.find(cmd_name);
         if (cit == redis_cmd_tree.end()) {
             cmdfn = do_cmd_unkonwn;
         } else {
@@ -1037,6 +1425,7 @@ static void *do_job(void *arg)
     connection_context context;
     context.fd = (int)(long)arg;
     context.fp.open(context.fd);
+    context.current_db = &default_db;
     std::vector<std::string *> cmd_vector;
     while (1) {
         if ((do_one_query(context) < 0) || context.quit) {
@@ -1075,42 +1464,99 @@ void redis_puny_server::service_register(const char *service_name, int fd, int f
     coroutine_go(do_accept, (void *)(long)fd);
 }
 
+static void *do_timeout(void *arg)
+{
+    while(1) {
+        zcc::coroutine_msleep(1000);
+    }
+    return arg;
+}
+
 void redis_puny_server::before_service()
 {
-    rbtree_init(&main_key_tree, main_key_cmp);
-    rbtree_init(&main_timeout_tree, main_timeout_cmp);
+    rbtree_init(&(default_db.key_tree), main_node_cmp_key);
+    rbtree_init(&(default_db.timeout_tree), main_node_cmp_timeout);
     redis_cmd_tree_init();
-    if (1) {
-        std::vector<std::string> cmd_query;
-        connection_context context;
-        
-#define setsetset(k, v) \
-        cmd_query.clear(); \
-        cmd_query.push_back("SET"); \
-        cmd_query.push_back(k); \
-        cmd_query.push_back(v); \
-        do_cmd_set(context, cmd_query); 
-        setsetset("abc", "xxx");
-        setsetset("abd", "xxd");
-        setsetset("abx", "xxd");
-#if 1
-        setsetset("ffff", "sfaf");
-        setsetset("eee", "xxd");
-        for (int i=0; i < 1000; i++) {
-            char buf[99];
-            sprintf(buf, "%d", i);
-            setsetset(buf, "xxd");
-        }
-#endif
-        cmd_query.clear();
-        cmd_query.push_back("KEYS");
-        cmd_query.push_back("*");
-        do_cmd_keys(context, cmd_query); 
+
+    const char *attr;
+    attr = default_config.get_str("redis-server-prepare-cmd", "");
+    if (!empty(attr)) {
+        system(attr);
     }
+
+    attr = default_config.get_str("redis-server-prepare-load", "");
+    do {
+        if (empty(attr)) {
+            break;
+        }
+        connection_context ctx;
+        ctx.current_db = &default_db;
+        FILE *fp = fopen(attr, "r");
+        if (!fp) {
+            zcc_fatal("can not open %s(%m)", attr);
+        }
+        char *linebuf = (char *)malloc(1024*1024 + 1);
+        while(fgets(linebuf, 1024 * 1204, fp)) {
+            std::vector<std::string> cmds;
+            json jss;
+            jss.unserialize(linebuf);
+            if (!jss.is_array()) {
+                continue;
+            }
+            bool exception = false;
+            auto &jsarr = jss.get_array_value();
+            for (auto jit = jsarr.begin(); jit != jsarr.end(); jit++) {
+                json *js = *jit;
+                if (!js->is_string()) {
+                    exception = true;
+                    break;
+                }
+                cmds.push_back(js->get_string_value());
+            }
+            if (exception) {
+                continue;
+            }
+            if (cmds.empty()) {
+                continue;
+            }
+            toupper(cmds[0]);
+            auto cit = redis_cmd_tree.find(cmds[0]);
+            if (cit == redis_cmd_tree.end()) {
+                continue;
+            }
+            cit->second(ctx, cmds);
+        }
+        free(linebuf);
+    } while(0);
+
+    coroutine_go(do_timeout, 0);
 }
 
 void redis_puny_server::before_exit()
 {
+}
+
+void redis_puny_server::exec_redis_cmd(std::vector<std::string> &cmds)
+{
+    if (cmds.empty()){
+        return;
+    }
+    toupper(cmds[0]);
+    auto cit = redis_cmd_tree.find(cmds[0]);
+    if (cit == redis_cmd_tree.end()) {
+        return;
+    }
+    connection_context ctx;
+    ctx.current_db = &default_db;
+    cit->second(ctx, cmds);
+}
+
+void redis_puny_server::exec_redis_cmd(const char *cmdline)
+{
+    std::vector<std::string> cmds;
+    std::string tmp = cmdline;
+    parse_query_logic_line(cmds, tmp);
+    exec_redis_cmd(cmds);
 }
 
 redis_puny_server::redis_puny_server()
