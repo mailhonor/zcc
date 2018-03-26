@@ -335,6 +335,27 @@ static void do_cmd_unkonwn(connection_context &context, std::vector<std::string>
     context.fp.append("-ERR unknown command '").append(tolower(cmd_vector[0])).append("'\r\n");
 }
 
+static void do_cmd_flushdb(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    while(1) {
+        rbtree_node_t *rbn = rbtree_first(&(context.current_db->key_tree));
+        if (!rbn) {
+            break;
+        }
+        main_node_t *node = zcc_container_of(rbn, main_node_t, rbkey);
+        if (node->timeout != -1) {
+            rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
+        }
+        main_node_free(context.current_db, node);
+    }
+    context.fp.write("+OK\r\n", 5);
+}
+
+static void do_cmd_flushall(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    do_cmd_flushdb(context, cmd_vector);
+}
+
 static void do_cmd_quit(connection_context &context, std::vector<std::string> &cmd_vector)
 {
     context.quit = true;
@@ -344,6 +365,11 @@ static void do_cmd_quit(connection_context &context, std::vector<std::string> &c
 static void do_cmd_dbsize(connection_context &context, std::vector<std::string> &cmd_vector)
 {
     context.fp.printf_1024(":%d\r\n", context.current_db->count);
+}
+
+static void do_cmd_ping(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    context.fp.write("+PONG\r\n", 7);
 }
 
 static void do_cmd_del(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -382,7 +408,10 @@ static void do_cmd_expire(connection_context &context, std::vector<std::string> 
     }
     int rnum = 0;
     main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
-    int expire = atoi(cmd_vector[2].c_str());
+    long expire;
+    if (!get_check_long_integer(cmd_vector[2].c_str(), &expire)) {
+        RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
+    }
     if (!node) {
         rnum = 0;
     } else {
@@ -395,7 +424,7 @@ static void do_cmd_expire(connection_context &context, std::vector<std::string> 
         } else {
             if (node->timeout != -1) {
                 rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
-                node->timeout = timeout_set(expire * 100);
+                node->timeout = timeout_set(expire * 1000);
                 rbtree_attach(&(context.current_db->timeout_tree), &(node->rbtimeout));
             }
         }
@@ -410,7 +439,10 @@ static void do_cmd_pexpire(connection_context &context, std::vector<std::string>
     }
     int rnum = 0;
     main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
-    long expire = atol(cmd_vector[2].c_str());
+    long expire;
+    if (!get_check_long_integer(cmd_vector[2].c_str(), &expire)) {
+        RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
+    }
     if (!node) {
         rnum = 0;
     } else {
@@ -681,7 +713,7 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
     int idx = 3;
     int have_ex = false, have_px = false, have_nx = false, have_xx = false;
     long epx = 1, epx_tmp;
-    bool syntax_error = false, number_error = false;
+    bool syntax_error = false, number_ok = true;
     while (pcount > idx) {
         char *epnx = (char *)cmd_vector[idx].c_str();
         if ((cmd_vector[idx].size() != 2) || (toupper(epnx[1]) != 'X')) {
@@ -695,8 +727,8 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
                 syntax_error = true;
                 break;
             }
-            number_error = get_check_long_integer(cmd_vector[idx+1].c_str(), &epx_tmp);
-            if (!number_error) {
+            number_ok = get_check_long_integer(cmd_vector[idx+1].c_str(), &epx_tmp);
+            if (!number_ok) {
                 break;
             }
             if (ch1 == 'E') {
@@ -718,14 +750,14 @@ static void do_cmd_set(connection_context &context, std::vector<std::string> &cm
             break;
         }
     }
-    if (have_nx && have_ex) {
+    if (have_ex && have_px) {
         syntax_error = true;
     }
     if (syntax_error) {
         RETURN_WRONG_NUMBER_ARGUMENTS("set");
     }
-    if (number_error) {
-        RETURN_WRONG_VALUE_TYPE();
+    if (!number_ok) {
+        RETURN_NOT_INTEGER_OUR_OUT_OF_RANGE();
     }
 
     bool gogogo = false;
@@ -1277,8 +1309,11 @@ static void do_cmd_hgetall(connection_context &context, std::vector<std::string>
 static std::map<std::string, do_cmd_fn_t> redis_cmd_tree;
 static void redis_cmd_tree_init()
 {
+    redis_cmd_tree["FLUSHDB"] = do_cmd_flushdb;
+    redis_cmd_tree["FLUSHALL"] = do_cmd_flushall;
     redis_cmd_tree["QUIT"] = do_cmd_quit;
     redis_cmd_tree["DBSIZE"] = do_cmd_dbsize;
+    redis_cmd_tree["PING"] = do_cmd_ping;
     redis_cmd_tree["DEL"] = do_cmd_del;
     redis_cmd_tree["EXISTS"] = do_cmd_exists;
     redis_cmd_tree["EXPIRE"] = do_cmd_expire;
@@ -1468,6 +1503,20 @@ static void *do_timeout(void *arg)
 {
     while(1) {
         zcc::coroutine_msleep(1000);
+        long nowtime = timeout_set(0);
+        while(1) {
+            rbtree_node_t *rbn = rbtree_first(&(default_db.timeout_tree));
+            if (!rbn) {
+                break;
+            }
+            main_node_t *node = zcc_container_of(rbn, main_node_t, rbtimeout);
+            if (node->timeout <= nowtime) {
+                rbtree_detach(&(default_db.timeout_tree), &(node->rbtimeout));
+                main_node_free(&default_db, node);
+            } else {
+                break;
+            }
+        }
     }
     return arg;
 }
