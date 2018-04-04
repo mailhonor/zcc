@@ -137,4 +137,9 @@ bool get_ipstring(int ip, std::string &host)
     return ret;
 }
 
+int get_ipint(const char *ipstr)
+{
+    return inet_addr(ipstr);
+}
+
 }

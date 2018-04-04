@@ -13,7 +13,7 @@ static std::string sval, sval2;
 static std::list<std::string> lval;
 static zcc::json jval;
 
-static void _test_test(zcc::redis_client &rc, const char *cmd, int cmd_ret, size_t line, int test_type)
+static void _test_test(zcc::redis_basic_client &rc, const char *cmd, int cmd_ret, size_t line, int test_type)
 {
     printf("\n%s\n%-8d", cmd, cmd_ret);
     if (cmd_ret < 0) {

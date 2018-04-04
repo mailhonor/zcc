@@ -11,9 +11,16 @@
 int main(int argc, char **argv)
 {
     zcc::main_parameter_run(argc, argv);
-    zcc::redis_client rc(zcc::default_config.get_str("server", "127.0.0.1:6379"));
+    zcc::redis_basic_client *rc_p;
+    if (zcc::default_config.get_bool("cluster", false)) {
+        rc_p = new zcc::redis_cluster_client(zcc::default_config.get_str("server", "127.0.0.1:6379"));
+    } else {
+        rc_p = new zcc::redis_client(zcc::default_config.get_str("server", "127.0.0.1:6379"));
+    }
+    zcc::redis_basic_client &rc = *rc_p;
     if (zcc::main_parameter_argc > 0 ) {
         _test___json(rc.exec_command(jval, "P", zcc::main_parameter_argv));
+        delete rc_p;
         return 0;
     }
 
@@ -29,6 +36,8 @@ int main(int argc, char **argv)
     
     printf("\n");
     printf("%s [ -server 127.0.0.1:6379 ] redis_cmd arg1 arg2 ...\n", argv[0]);
+
+    delete rc_p;
 
     return 0;
 }

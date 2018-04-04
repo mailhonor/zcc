@@ -14,22 +14,22 @@ namespace zcc
 
 std::string var_std_string_ignore("");
 
-std::string &sprintf_1024(std::string &str, const char *fmt, ...)
+std::string &sprintf_1024(std::string &str, const char *format, ...)
 {
     va_list ap;
     char buf[1024+1];
 
-    va_start(ap, fmt);
-    ::vsnprintf(buf, 1024, fmt, ap);
+    va_start(ap, format);
+    ::vsnprintf(buf, 1024, format, ap);
     va_end(ap);
     str.append(buf);
     return str;
 }
 
-std::string &vsprintf_1024(std::string &str, const char *fmt, va_list ap)
+std::string &vsprintf_1024(std::string &str, const char *format, va_list ap)
 {
     char buf[1024+1];
-    ::vsnprintf(buf, 1024, fmt, ap);
+    ::vsnprintf(buf, 1024, format, ap);
     str.append(buf);
     return str;
 }
@@ -83,4 +83,17 @@ std::string &size_data_escape(std::string &str, long i)
     return size_data_escape(str, buf, n);
 }
 
+string &string::printf_1024(const char *format, ...)
+{
+    va_list ap;
+    char buf[1024+1];
+
+    va_start(ap, format);
+    ::vsnprintf(buf, 1024, format, ap);
+    va_end(ap);
+    append(buf);
+    return *this;
 }
+
+}
+

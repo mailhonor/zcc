@@ -245,7 +245,7 @@ static void main_node_clear_value(main_node_t *node)
         free(tree);
     }
     node->type = node_type_init;
-    node->val_len = -1;
+    node->val_len = 0;
     node->val.ptr = 0;
 }
 
@@ -268,6 +268,7 @@ static main_node_t *main_node_create(main_db_t *db, std::string &key)
     main_node_t *node = (main_node_t *)calloc(1, sizeof(main_node_t));
     node->type = node_type_init;
     main_node_set_key(node, key);
+    node->val_len = 0;
     rbtree_attach(&(db->key_tree), &(node->rbkey));
     db->count ++;
     return node;
@@ -944,6 +945,7 @@ static hash_node_t *hash_node_create(main_node_t *node, std::string &key)
     }
     hnode->key_len = klen;
     rbtree_attach(node->val.hash_tree, &(hnode->rbkey));
+    node->val_len++;
     return hnode;
 }
 
@@ -984,6 +986,15 @@ static void hash_node_set_value(hash_node_t *node, std::string &val)
     node->type = node_type_string;
 }
 
+static void hash_node_get_key(hash_node_t *node, std::string &key)
+{
+    if (node->key_len <= (int)sizeof(char *)) {
+        key.append(node->key.str, node->key_len);
+    } else {
+        key.append(node->key.ptr, node->key_len);
+    }
+}
+
 static void hash_node_get_value(hash_node_t *node, std::string &val)
 {
     if (node->type == node_type_string) {
@@ -1013,6 +1024,7 @@ static void hash_node_clear_value(hash_node_t *node)
 }
 static void hash_node_free(main_node_t *node, hash_node_t *hnode)
 {
+    node->val_len--;
     rbtree_detach(node->val.hash_tree, &(hnode->rbkey));
     if (hnode->key_len > (int)sizeof(char *)) {
         free(hnode->key.ptr);
@@ -1079,6 +1091,22 @@ static void do_cmd_hexists(connection_context &context, std::vector<std::string>
     } else {
         context.fp.write(":0\r\n", 4);
     }
+}
+
+static void do_cmd_hlen(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("hlen");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write(":0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_hash) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    context.fp.printf_1024(":%d\r\n", node->val_len);
 }
 
 static void do_cmd_hget(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -1292,7 +1320,7 @@ static void do_cmd_hgetall(connection_context &context, std::vector<std::string>
     for (rbtree_node_t *rbn = rbtree_first(node->val.hash_tree); rbn; rbn = rbtree_next(rbn)) {
         hash_node_t * hnode = zcc_container_of(rbn, hash_node_t, rbkey);
         sprintf_1024(result, "$%d\r\n", hnode->key_len);
-        hash_node_get_value(hnode, result);
+        hash_node_get_key(hnode, result);
         result.append("\r\n");
         tmpv.clear();
         hash_node_get_value(hnode, tmpv);
@@ -1337,6 +1365,7 @@ static void redis_cmd_tree_init()
     redis_cmd_tree["MSETNX"] = do_cmd_msetnx;
     redis_cmd_tree["HDEL"] = do_cmd_hdel;
     redis_cmd_tree["HEXISTS"] = do_cmd_hexists;
+    redis_cmd_tree["HLEN"] = do_cmd_hlen;
     redis_cmd_tree["HGET"] = do_cmd_hget;
     redis_cmd_tree["HSET"] = do_cmd_hset;
     redis_cmd_tree["HSETNX"] = do_cmd_hsetnx;

@@ -58,4 +58,13 @@ char *build_unique_filename_id(char *buf)
     return buf;
 }
 
+std::string &build_unique_filename_id(std::string &path)
+{
+    char buf[64];
+    build_unique_filename_id(buf);
+    path.append(buf);
+    return path;
+}
+
+
 }

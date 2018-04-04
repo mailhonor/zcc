@@ -233,6 +233,7 @@ std::string &size_data_escape(std::string &str, const void *data, size_t n = 0);
 std::string &size_data_escape(std::string &str, int i);
 std::string &size_data_escape(std::string &str, long i);
 
+/* std::map<std::string, std::string> ############################ */
 void dict_debug(std::map<std::string, std::string> &dict);
 bool dict_find(std::map<std::string, std::string> &dict, const std::string &key, char **val);
 bool dict_find(std::map<std::string, std::string> &dict, const char *key, char **val);
@@ -463,6 +464,7 @@ ssize_t get_hostaddr(const char *host, std::list<std::string> &hosts, size_t max
 bool get_peername(int sockfd, int *host, int *port);
 bool get_peername(int sockfd, std::string &host, int *port);
 bool get_ipstring(int ip, std::string &host);
+int get_ipint(const char *ipstr);
 
 /* device ######################################################### */
 ssize_t get_mac_list(std::list<std::string> &mac_list);
@@ -1000,6 +1002,7 @@ void debug_kv_show(const char *k, const char *v);
 void debug_kv_show(const char *k, long v);
 
 char *build_unique_filename_id(char *buf);
+std::string &build_unique_filename_id(std::string &path);
 
 /* cdb ############################################################## */
 class cdb
@@ -1558,40 +1561,12 @@ private:
 #pragma pack(pop)
 
 /* redis client ############################################## */
-class redis_client_query
+#pragma pack(push, 1)
+class redis_basic_client
 {
 public:
-    inline redis_client_query() { memset(this, 0, sizeof(redis_client_query)); }
-    inline ~redis_client_query() { }
-    long *number_ret;
-    std::string *string_ret;
-    std::list<std::string> *list_ret;
-    json *json_ret;
-    long timeout_milliseconds;
-    std::list<std::string> *protocol_tokens;
-    std::string *msg_info;
-};
-typedef struct redis_client_query redis_client_query;
-
-class redis_client_basic_engine
-{
-public:
-    inline redis_client_basic_engine() {}
-    virtual inline ~redis_client_basic_engine() {}
-    int query_protocol_io(redis_client_query &query, stream &fp);
-    virtual int query_protocol(redis_client_query &query);
-    virtual int timed_wait_readable(long timeout);
-    virtual int timed_wait_writeable(long timeout);
-};
-
-class redis_client
-{
-public:
-    class client_info;
-    redis_client();
-    redis_client(const char *destination, const char *password = 0);
-    redis_client(redis_client_basic_engine &engine);
-    ~redis_client();
+    redis_basic_client();
+    virtual ~redis_basic_client();
     const std::string &get_msg();
     void set_timeout(long timeout_milliseconds);
     int exec_command(const char *redis_fmt, ...);
@@ -1599,17 +1574,64 @@ public:
     int exec_command(std::string &string_ret, const char *redis_fmt, ...);
     int exec_command(std::list<std::string> &list_ret, const char *redis_fmt, ...);
     int exec_command(json &json_ret, const char *redis_fmt, ...);
+    int exec_command(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, const char *redis_fmt, va_list ap);
     /* */
     int fetch_channel_message(std::list<std::string> &list_ret);
     /* 如: scan_special(list_ret, cursor_ret, "ssd", "HSCAN", "somekey", 0); */
     int scan_special(std::list<std::string> &list_ret, long &cursor_ret, const char *redis_fmt, ...);
     int info_special(std::map<std::string, std::string> &name_value_dict, std::string &string_ret);
+protected:
+    virtual int query_protocol(std::list<std::string> &tokens);
+    int query_protocol_io(std::list<std::string> &tokens, stream &fp);
+    std::string r_msg;
+    long r_timeout;
 private:
-    int exec_command(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
-            json *json_ret, const char *redis_fmt, va_list ap);
-    client_info *r_info;
-    redis_client_basic_engine *r_engine;
+    long *r_number_ret;
+    std::string *r_string_ret;
+    std::list<std::string> *r_list_ret;
+    json *r_json_ret;
 };
+
+class redis_standalone_client:public redis_basic_client
+{
+public:
+    redis_standalone_client();
+    redis_standalone_client(const char *destination, const char *password = 0);
+    ~redis_standalone_client();
+    void open(const char *destination, const char *password = 0);
+    void close();
+private:
+    void open();
+    int query_protocol(std::list<std::string> &tokens);
+    int r_fd;
+    std::string r_destination;
+    std::string r_password;
+};
+typedef class redis_standalone_client redis_client;
+
+class redis_cluster_client:public redis_basic_client
+{
+public:
+    redis_cluster_client();
+    redis_cluster_client(const char *destinations, const char *password = 0);
+    ~redis_cluster_client();
+    void open(const char *destinations, const char *password = 0);
+    void close();
+private:
+    void open();
+    int query_protocol_try(std::list<std::string> &ptokens, int slot, char *ipbuf, int port);
+    int query_protocol(std::list<std::string> &tokens);
+    std::string r_destinations;
+    std::string r_password;
+    struct cluster_node_t *r_slot_node;
+    short int r_slot_node_size;
+    short int r_slot_node_used;
+    short int r_slot_node_last;
+    short int *r_slot_pair;
+    int r_fd;
+};
+#pragma pack(pop)
 
 /* redis puny server ######################################### */
 class redis_puny_server: public master_coroutine_server
@@ -1624,6 +1646,58 @@ public:
     void exec_redis_cmd(const char *cmdline);
 };
 
-}
+/* std::string extend ######################################### */
+/* 内部使用 */
+class string: public std::string
+{
+public:
+    inline string():std::string(){}
+    inline string(const string& str):std::string(str) {}
+    inline string(const string& str, size_t pos, size_t len = npos):std::string(str, pos, len) {}
+    inline string(const std::string& str):std::string(str) {}
+    inline string(const std::string& str, size_t pos, size_t len = npos):std::string(str, pos, len) {}
+    inline string(const char* s):std::string(s) {}
+    inline string(const char* s, size_t n):std::string(s, n) {}
+    inline string(size_t n, char c):std::string(n, c) {}
+    inline string &append (const std::string& str) {std::string::append(str); return *this; }
+    inline string &append (const std::string& str, size_t subpos, size_t sublen) {
+        std::string::append(str, subpos, sublen); return *this;
+    }
+    inline string &append (const char* s) { std::string::append(s); return *this; }
+    inline string &append (const char* s, size_t n) { std::string::append(s, n); return *this; }
+    inline string &append (size_t n, char c) { std::string::append(n, c); return *this; }
+    string &printf_1024(const char *format, ...);
+    inline string &append(int i) {return printf_1024("%d", i);}
+    inline string &append(unsigned int i) {return printf_1024("%u", i);}
+    inline string &append(long int i) {return printf_1024("%ld", i);}
+    inline string &append(unsigned long i) {return printf_1024("%lu", i);}
+    inline string &append(double i) {return printf_1024("%f", i);}
+    inline string &append(float i) {return printf_1024("%f", i);}
+    inline string &clear() {zcc::string::clear(); return *this; }
+    inline string &push_back(char c) {zcc::string::push_back(c); return *this; }
+    inline string &tolower() {zcc::tolower(this->c_str()); return *this; }
+    inline string &toupper() {zcc::toupper(this->c_str()); return *this; }
+    inline string &size_data_escape(const void *d, size_t n) {zcc::size_data_escape(*this, d, n);return *this; }
+    inline string &size_data_escape(int i) { zcc::size_data_escape(*this, i); return *this; }
+    inline string &size_data_escape(long i) { zcc::size_data_escape(*this, i); return *this; }
+    inline string &sqlite3_escape_append(const void *data, size_t size = var_size_max) {
+        zcc::sqlite3_escape_append(*this, data, size); return *this;
+    }
+    inline string &sqlite3_escape_append(std::string &data) {
+        zcc::sqlite3_escape_append(*this, data.c_str(), data.size()); return *this;
+    }
+    inline string &trim_right_crlf() {
+        char *p = const_cast<char *>(this->c_str()); size_t s = this->size();
+        if (s &&(p[s-1]=='\n')){ s--; } if (s &&(p[s-1]=='\r')){ s--; }
+        this->resize(s); return *this;
+    }
+    inline string &base64_encode(const void *src, size_t src_size, bool mime_flag = false) {
+        zcc::base64_encode(src, src_size, *this, mime_flag); return *this;
+    }
+    inline string &hex_encode(const void *src,  size_t src_size) {
+        zcc::hex_encode(src, src_size, *this); return *this;
+    }
+};
 
+}
 #pragma pack(pop)
