@@ -1646,6 +1646,37 @@ public:
     void exec_redis_cmd(const char *cmdline);
 };
 
+/* memcache client ############################################ */
+class memcache_client
+{
+public:
+    memcache_client();
+    memcache_client(const char *destination);
+    ~memcache_client();
+    void open(const char *destinations);
+    void close();
+    int get(std::string &result, int *flags, const char *key);
+    int set(const char *key, int flags, long timeout_second, const void *data, size_t size); 
+    int add(const char *key, int flags, long timeout_second, const void *data, size_t size); 
+    int replace(const char *key, int flags, long timeout_second, const void *data, size_t size); 
+    int append(const char *key, int flags, long timeout_second, const void *data, size_t size); 
+    int prepend(const char *key, int flags, long timeout_second, const void *data, size_t size); 
+    int incr(long *result, const char *key, size_t n);
+    int decr(long *result, const char *key, size_t n);
+    int del(const char *key);
+    int flush_all(long after_second = 0);
+    int quit();
+    int version(std::string &result);
+private:
+    int op_set(const char *op, const char *key, int flags, long timeout_second, const void *data, size_t size);
+    int op_incr(long *result, const char *op, const char *key, size_t n);
+    void open();
+    long r_timeout;
+    std::string r_msg;
+    std::string r_destination;
+    int r_fd;
+};
+
 /* std::string extend ######################################### */
 /* 内部使用 */
 class string: public std::string
@@ -1683,7 +1714,7 @@ public:
     inline string &sqlite3_escape_append(const void *data, size_t size = var_size_max) {
         zcc::sqlite3_escape_append(*this, data, size); return *this;
     }
-    inline string &sqlite3_escape_append(std::string &data) {
+    inline string &sqlite3_escape_append(const std::string &data) {
         zcc::sqlite3_escape_append(*this, data.c_str(), data.size()); return *this;
     }
     inline string &trim_right_crlf() {
