@@ -5,7 +5,7 @@ include OBJS_DEST/depend
 CC=g++
 
 #-Wcast-qual -Wshadow -Wmissing-declarations
-CFLAGS= -I./ -std=gnu++11 -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE \
+CFLAGS= -I./ -std=gnu++0x -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE \
 	-DLINUX2 -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -D_USE_FAST_MACRO \
 	-Wabi -Waddress -Wall -Wbuiltin-macro-redefined -Wcast-align -Wchar-subscripts -Wclobbered  \
 	-Wcomment -Wcomments -Wctor-dtor-privacy -Wdeprecated -Wdiv-by-zero -Wendif-labels \

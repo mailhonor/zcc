@@ -24,33 +24,33 @@ typedef struct {
 static redis_cmd_info redis_cmd_info_vector[] = 
 {
     {
-        .count = 4,
-        .vector = "DEL" "GET" "SET" "TTL",
-        .info = "bbbb"
+        4,
+        "DEL" "GET" "SET" "TTL",
+        "bbbb"
     },
     {
-        .count = 35,
-        .vector = "AUTH" "DECR" "DUMP" "ECHO" "EVAL"
+        35,
+        "AUTH" "DECR" "DUMP" "ECHO" "EVAL"
             "EXEC" "HDEL" "HGET" "HLEN" "HSET"
             "INCR" "INFO" "KEYS" "LLEN" "LPOP"
             "LREM" "LSET" "MGET" "MOVE" "MSET"
             "PING" "PTTL" "QUIT" "RPOP" "SADD"
             "SAVE" "SCAN" "SORT" "SPOP" "SREM"
             "SYNC" "TIME" "TYPE" "ZADD" "ZREM",
-        .info = "AbbAA" "Abbbb" "bAAbb" "bbbbb" "AbAbb" "AAbbb" "AAbbb"
+        "AbbAA" "Abbbb" "bAAbb" "bbbbb" "AbAbb" "AAbbb" "AAbbb"
     },
     {
-        .count = 24,
-        .vector =  "BITOP" "BLPOP" "BRPOP" "DEBUG" "HKEYS"
+        24,
+         "BITOP" "BLPOP" "BRPOP" "DEBUG" "HKEYS"
             "HMGET" "HMSET" "HSCAN" "HVALS" "LPUSH"
             "LTRIM" "MULTI" "PSYNC" "RPUSH" "SCARD"
             "SDIFF" "SETEX" "SETNX" "SMOVE" "SSCAN"
             "WATCH" "ZCARD" "ZRANK" "ZSCAN",
-        .info = "cbbAb" "bbbbb" "bAAbb" "bbbbb" "bbbb"
+        "cbbAb" "bbbbb" "bAAbb" "bbbbb" "bbbb"
     },
     {
-        .count = 31,
-        .vector = "APPEND" "BGSAVE" "CLIENT" "CONFIG" "DBSIZE"
+        31,
+        "APPEND" "BGSAVE" "CLIENT" "CONFIG" "DBSIZE"
             "DECRBY" "EXISTS" "EXPIRE" "GETBIT" "GETSET"
             "HSETNX" "INCRBY" "LINDEX" "LPUSHX" "LRANGE"
             "MSETNX" "OBJECT" "PSETEX" "PUBSUB" "RENAME"
@@ -58,63 +58,63 @@ static redis_cmd_info redis_cmd_info_vector[] =
             "STRLEN" "SUNION" "ZCOUNT" "ZRANGE" "ZSCORE"
             "DISCARD",
 
-        .info = "bAAAA" "bbbbb"  "bbbbb" "bAbAb" "bABbb" "bbbbb" "B"
+        "bAAAA" "bbbbb"  "bbbbb" "bAbAb" "bABbb" "bbbbb" "B"
     },
     {
-        .count = 16,
-        .vector = "EVALSHA" "FLUSHDB" "HEXISTS" "HGETALL" "HINCRBY"
+        16,
+        "EVALSHA" "FLUSHDB" "HEXISTS" "HGETALL" "HINCRBY"
             "LINSERT" "MIGRATE" "MONITOR" "PERSIST" "PEXPIRE"
             "PUBLISH" "RESTORE" "SLAVEOF" "SLOWLOG" "UNWATCH"
             "ZINCRBY",
-        .info = "AAbbb" "bdbbb" "AbAAB" "b"
+        "AAbbb" "bdbbb" "AbAAB" "b"
     },
     {
-        .count = 10,
-        .vector = "BITCOUNT" "EXPIREAT" "FLUSHALL" "GETRANGE" "LASTSAVE"
+        10,
+        "BITCOUNT" "EXPIREAT" "FLUSHALL" "GETRANGE" "LASTSAVE"
             "RENAMENX" "SETRANGE" "SHUTDOWN" "SMEMBERS" "ZREVRANK",
-        .info = "bbAbA" "bbAbb"
+        "bbAbA" "bbAbb"
     },
     {
-        .count = 6,
-        .vector = "PEXPIREAT" "RANDOMKEY" "RPOPLPUSH" "SISMEMBER" "SUBSCRIBE"
+        6,
+        "PEXPIREAT" "RANDOMKEY" "RPOPLPUSH" "SISMEMBER" "SUBSCRIBE"
             "ZREVRANGE",
-        .info = "bAbbA" "b"
+        "bAbbA" "b"
     },
     {
-        .count = 3,
-        .vector = "BRPOPLPUSH" "PSUBSCRIBE" "SDIFFSTORE",
-        .info = "bAb"
+        3,
+        "BRPOPLPUSH" "PSUBSCRIBE" "SDIFFSTORE",
+        "bAb"
     },
     {
-        .count = 7,
-        .vector = "INCRBYFLOAT" "SINTERSTORE" "SRANDMEMBER" "SUNIONSTORE" "UNSUBSCRIBE"
+        7,
+        "INCRBYFLOAT" "SINTERSTORE" "SRANDMEMBER" "SUNIONSTORE" "UNSUBSCRIBE"
             "ZINTERSTORE" "ZUNIONSTORE",
-        .info = "bbbbA" "bb"
+        "bbbbA" "bb"
     },
     {
-        .count = 3,
-        .vector = "BGREWRITEAOF" "HINCRBYFLOAT" "PUNSUBSCRIBE",
-        .info = "AbA"
+        3,
+        "BGREWRITEAOF" "HINCRBYFLOAT" "PUNSUBSCRIBE",
+        "AbA"
     },
     {
-        .count = 1,
-        .vector = "ZRANGEBYSCORE",
-        .info = "b"
+        1,
+        "ZRANGEBYSCORE",
+        "b"
     },
     {
-        .count = 0,
-        .vector = 0,
-        .info = 0
+        0,
+        0,
+        0
     },
     {
-        .count = 1,
-        .vector = "ZREMRANGEBYRANK",
-        .info = "b"
+        1,
+        "ZREMRANGEBYRANK",
+        "b"
     },
     {
-        .count = 1,
-        .vector = "ZREMRANGEBYSCORE" "ZREVRANGEBYSCORE",
-        .info = "bb"
+        1,
+        "ZREMRANGEBYSCORE" "ZREVRANGEBYSCORE",
+        "bb"
     }
 };
 
