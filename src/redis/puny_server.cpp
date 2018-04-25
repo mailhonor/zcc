@@ -21,6 +21,7 @@ enum node_type_t {
     node_type_string,
     node_type_integer,
     node_type_hash,
+    node_type_set,
 };
 typedef enum  node_type_t node_type_t;
 
@@ -42,6 +43,7 @@ struct main_node_t {
         char str[sizeof(char *)];
         long num;
         rbtree_t *hash_tree;
+        rbtree_t *set_tree;
     } val;
     unsigned int val_len;
     rbtree_node_t rbkey;
@@ -132,6 +134,57 @@ static int hash_node_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
     }
 
     t2 = zcc_container_of(n2, hash_node_t, rbkey);
+    key2 = t2->key.ptr;
+    if (t2->key_len <= (int)sizeof(char *)) {
+        key2 = t2->key.str;
+    }
+    std::string s1, s2;
+    s1.append(key1, t1->key_len);
+    s2.append(key2, t2->key_len);
+    return s1.compare(s2);
+
+    len = t1->key_len;
+    if (t2->key_len < len) {
+        len = t2->key_len;
+    }
+    for(i=0;i<len;i++) {
+        cmp = (int)(key1[i]) - (int)(key2[i]);
+        if (cmp) {
+            return cmp;
+        }
+    }
+    if (t1->key_len <t2->key_len) {
+        return -1;
+    } else if (t1->key_len > t2->key_len) {
+        return 1;
+    }
+
+    return 0;
+}
+
+struct set_node_t {
+    union {
+        char *ptr;
+        char str[sizeof(char *)];
+    } key;
+    short int key_len:16;
+    char type;
+    rbtree_node_t rbkey;
+};
+
+static int set_node_cmp(rbtree_node_t * n1, rbtree_node_t * n2)
+{
+    set_node_t *t1, *t2;
+    char *key1, *key2;
+    int len, i, cmp;
+
+    t1 = zcc_container_of(n1, set_node_t, rbkey);
+    key1 = t1->key.ptr;
+    if (t1->key_len <= (int)sizeof(char *)) {
+        key1 = t1->key.str;
+    }
+
+    t2 = zcc_container_of(n2, set_node_t, rbkey);
     key2 = t2->key.ptr;
     if (t2->key_len <= (int)sizeof(char *)) {
         key2 = t2->key.str;
@@ -571,6 +624,7 @@ static void do_cmd_rename(connection_context &context, std::vector<std::string> 
     }
     main_node_set_key(fn, cmd_vector[2]);
     rbtree_attach(&(context.current_db->key_tree), &(fn->rbkey));
+    context.fp.puts("+OK\r\n");
 }
 
 static void do_cmd_renamenx(connection_context &context, std::vector<std::string> &cmd_vector)
@@ -872,9 +926,9 @@ static void do_cmd_mset(connection_context &context, std::vector<std::string> &c
     if ((pcount < 3) || (pcount%2 != 1)) {
         RETURN_WRONG_NUMBER_ARGUMENTS("mset");
     }
-    auto cit = cmd_vector.begin() + 1;
+
     std::list<std::string *> result_list;
-    for (; cit != cmd_vector.end(); cit++) {
+    for (auto cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
         std::string &key = *cit++;
         std::string &val = *cit;
         main_node_t *node = main_node_find(context.current_db, key);
@@ -885,7 +939,7 @@ static void do_cmd_mset(connection_context &context, std::vector<std::string> &c
             }
             main_node_clear_value(node);
         } else {
-            node = main_node_create(context.current_db, cmd_vector[1]);
+            node = main_node_create(context.current_db, key);
         }
         main_node_set_value(node, val);
     }
@@ -898,30 +952,18 @@ static void do_cmd_msetnx(connection_context &context, std::vector<std::string> 
     if ((pcount < 3) || (pcount%2 != 1)) {
         RETURN_WRONG_NUMBER_ARGUMENTS("msetnx");
     }
-    std::list<main_node_t *> old_node_list;
     for (auto cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
         std::string &key = *cit++;
         main_node_t *node = main_node_find(context.current_db, key);
-        old_node_list.push_back(node);
         if (node) {
             context.fp.puts(":0\r\n");
             return;
         }
     }
     for (auto cit = cmd_vector.begin() + 1; cit != cmd_vector.end(); cit++) {
-        cit++;
+        std::string &key = *cit++;
         std::string &val = *cit;
-        main_node_t *node = old_node_list.front();
-        old_node_list.pop_front();
-        if (node) {
-            if (node->timeout != -1) {
-                rbtree_detach(&(context.current_db->timeout_tree), &(node->rbtimeout));
-                node->timeout = -1;
-            }
-            main_node_clear_value(node);
-        } else {
-            node = main_node_create(context.current_db, cmd_vector[1]);
-        }
+        main_node_t *node = main_node_create(context.current_db, key);
         main_node_set_value(node, val);
     }
     context.fp.puts(":1\r\n");
@@ -1334,6 +1376,203 @@ static void do_cmd_hgetall(connection_context &context, std::vector<std::string>
     }
 }
 
+/* }}} */
+
+/* {{{ set node */
+static set_node_t *set_node_create(main_node_t *node, std::string &key)
+{
+    set_node_t *hnode = (set_node_t *)calloc(1, sizeof(set_node_t));
+    hnode->type = node_type_init;
+    char *ptr = (char *)key.c_str();
+    int klen = (int)key.size();
+    if (klen <= (int)sizeof(char *)) {
+        for (int i=0; i<klen; i++) {
+            hnode->key.str[i] = ptr[i];
+        }
+    } else {
+        hnode->key.ptr = (char *)memdup(ptr, klen);
+    }
+    hnode->key_len = klen;
+    rbtree_attach(node->val.set_tree, &(hnode->rbkey));
+    node->val_len++;
+    return hnode;
+}
+
+static set_node_t *set_node_find(main_node_t *node, std::string &k)
+{
+    char *ptr = (char *)k.c_str();
+    int klen = k.size();
+
+    set_node_t vnode;
+    vnode.key_len = klen;
+    if (klen <= (int)sizeof(char *)) {
+        for (int i=0;i<klen;i++) {
+            vnode.key.str[i]=ptr[i];
+        }
+    } else {
+        vnode.key.ptr = ptr;
+    }
+
+    rbtree_node_t *rnp = rbtree_find(node->val.set_tree, &(vnode.rbkey));
+    if (!rnp) {
+        return 0;
+    }
+    return zcc_container_of(rnp, set_node_t, rbkey);
+}
+
+static void set_node_get_key(set_node_t *node, std::string &key)
+{
+    if (node->key_len <= (int)sizeof(char *)) {
+        key.append(node->key.str, node->key_len);
+    } else {
+        key.append(node->key.ptr, node->key_len);
+    }
+}
+
+static void set_node_free(main_node_t *node, set_node_t *hnode)
+{
+    node->val_len--;
+    rbtree_detach(node->val.set_tree, &(hnode->rbkey));
+    if (hnode->key_len > (int)sizeof(char *)) {
+        free(hnode->key.ptr);
+    }
+    free(hnode);
+}
+
+
+static main_node_t * main_node_create_with_set_val(connection_context &context, std::string &key)
+{
+    main_node_t * node = main_node_create(context.current_db, key);
+    node->type = node_type_set;
+    node->val_len = 0;
+    node->val.set_tree = (rbtree_t *)calloc(1, sizeof(rbtree_t));
+    rbtree_init(node->val.set_tree, set_node_cmp);
+    return node;
+}
+
+static void do_cmd_sadd(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    int pcount = (int)cmd_vector.size();
+    if ((pcount < 3)) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("sadd");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        node = main_node_create_with_set_val(context, cmd_vector[1]);
+    }
+    if (node->type != node_type_set) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    int add_count = 0;
+    for (auto cit = cmd_vector.begin() + 2; cit != cmd_vector.end(); cit++) {
+        std::string &key = *cit;
+        set_node_t *hnode = set_node_find(node, key);
+        if (!hnode) {
+            set_node_create(node, key);
+            add_count++;
+        }
+    }
+    context.fp.printf_1024(":%d\r\n", add_count);
+}
+
+static void do_cmd_scard(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    int pcount = (int)cmd_vector.size();
+    if ((pcount < 2)) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("scard");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.printf_1024(":0\r\n");
+        return;
+    }
+    if (node->type != node_type_set) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    context.fp.printf_1024(":%d\r\n", node->val_len);
+}
+
+static void do_cmd_sismember(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    int pcount = (int)cmd_vector.size();
+    if ((pcount < 3)) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("sismember");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write("*0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_set) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    set_node_t *hnode = set_node_find(node, cmd_vector[2]);
+    if (!hnode) {
+        context.fp.write("*0\r\n", 4);
+    } else {
+        context.fp.write("*1\r\n", 4);
+    }
+}
+
+static void do_cmd_smembers(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    if (cmd_vector.size() != 2) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("smembers");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write("*0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_set) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    int rnum = 0;
+    std::string result, tmpv;
+    for (rbtree_node_t *rbn = rbtree_first(node->val.set_tree); rbn; rbn = rbtree_next(rbn)) {
+        set_node_t * hnode = zcc_container_of(rbn, set_node_t, rbkey);
+        sprintf_1024(result, "$%d\r\n", hnode->key_len);
+        set_node_get_key(hnode, result);
+        result.append("\r\n");
+        rnum +=1;
+    }
+    context.fp.printf_1024("*%d\r\n", rnum);
+    if (!result.empty()) {
+        context.fp.write(result.c_str(), result.size());
+    }
+}
+
+static void do_cmd_srem(connection_context &context, std::vector<std::string> &cmd_vector)
+{
+    int pcount = (int)cmd_vector.size();
+    if ((pcount < 3)) {
+        RETURN_WRONG_NUMBER_ARGUMENTS("srem");
+    }
+    main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
+    if (!node) {
+        context.fp.write(":0\r\n", 4);
+        return;
+    }
+    if (node->type != node_type_set) {
+        RETURN_WRONG_VALUE_TYPE();
+    }
+    int dcount = 0;
+    for(auto it = cmd_vector.begin()+ 2; it != cmd_vector.end(); it++) {
+        set_node_t *hnode = set_node_find(node, *it);
+        if (!hnode) {
+            continue;
+        }
+        dcount++;
+        set_node_free(node, hnode);
+    }
+    if ( node->val_len == 0) {
+        main_node_free(context.current_db, node);
+    }
+    context.fp.printf_1024(":%d\r\n", dcount);
+}
+/* }}} */
+
+/* {{{ cmd tree */
 static std::map<std::string, do_cmd_fn_t> redis_cmd_tree;
 static void redis_cmd_tree_init()
 {
@@ -1374,6 +1613,11 @@ static void redis_cmd_tree_init()
     redis_cmd_tree["HMGET"] = do_cmd_hmget;
     redis_cmd_tree["HMSET"] = do_cmd_hmset;
     redis_cmd_tree["HGETALL"] = do_cmd_hgetall;
+    redis_cmd_tree["SADD"] = do_cmd_sadd;
+    redis_cmd_tree["SCARD"] = do_cmd_scard;
+    redis_cmd_tree["SMEMBERS"] = do_cmd_smembers;
+    redis_cmd_tree["SISMEMBER"] = do_cmd_sismember;
+    redis_cmd_tree["SREM"] = do_cmd_srem;
 }
 /* }}} */
 

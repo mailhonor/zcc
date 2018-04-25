@@ -168,7 +168,7 @@ struct cluster_node_t {
     int port;
 };
 
-redis_cluster_client::redis_cluster_client()
+redis_client_cluster_engine::redis_client_cluster_engine()
 {
     r_slot_node = 0;
     r_slot_node_size = 0;
@@ -177,7 +177,7 @@ redis_cluster_client::redis_cluster_client()
     r_fd = -1;
 }
 
-redis_cluster_client::redis_cluster_client(const char *destination, const char *password)
+redis_client_cluster_engine::redis_client_cluster_engine(const char *destination, const char *password)
 {
     r_slot_node = 0;
     r_slot_node_size = 0;
@@ -187,7 +187,7 @@ redis_cluster_client::redis_cluster_client(const char *destination, const char *
     open(destination, password);
 }
 
-redis_cluster_client::~redis_cluster_client()
+redis_client_cluster_engine::~redis_client_cluster_engine()
 {
     close();
     if (r_slot_node) {
@@ -196,7 +196,7 @@ redis_cluster_client::~redis_cluster_client()
     }
 }
 
-int redis_cluster_client::query_protocol_try(std::list<std::string> &ptokens, int slot, char *ipbuf, int port)
+int redis_client_cluster_engine::query_protocol_try(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret, json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg, int slot, char *ipbuf, int port)
 {
     cluster_node_t *cnode = 0;
     int fd = -1;
@@ -263,11 +263,12 @@ int redis_cluster_client::query_protocol_try(std::list<std::string> &ptokens, in
         return -2;
     }
     stream fp(fd);
-    return query_protocol_io(ptokens, fp);
+    return  query_protocol_io(number_ret, string_ret, list_ret, json_ret, tokens, timeout, info_msg, fp);
 }
 
-int redis_cluster_client::query_protocol(std::list<std::string> &ptokens)
+int redis_client_cluster_engine::query_protocol(long *r_number_ret, std::string *r_string_ret, std::list<std::string> *r_list_ret, json *r_json_ret, std::list<std::string> &ptokens, long timeout, std::string &r_msg)
 {
+    r_msg.clear();
     if (!r_slot_node) {
         r_msg = "need to do redis_client.open()";
         return -1;
@@ -299,7 +300,7 @@ int redis_cluster_client::query_protocol(std::list<std::string> &ptokens)
     int port;
     port = -1;
     for (int retry = 0; retry < 10; retry++) {
-        int ret = query_protocol_try(ptokens, slot_val, ipbuf, port);
+        int ret = query_protocol_try(r_number_ret, r_string_ret, r_list_ret, r_json_ret, ptokens, timeout, r_msg, slot_val, ipbuf, port);
         if (ret < -1) {
             close();
             return -1;
@@ -351,10 +352,10 @@ int redis_cluster_client::query_protocol(std::list<std::string> &ptokens)
     return -1;
 }
 
-void redis_cluster_client::open(const char *destination, const char *password)
+void redis_client_cluster_engine::open(const char *destination, const char *password)
 {
     close();
-    r_destinations = (destination?destination:"");
+    r_destination = (destination?destination:"");
     r_password = (password?password:"");
     if (!r_slot_node) {
         r_slot_node_size = 32;
@@ -371,10 +372,10 @@ void redis_cluster_client::open(const char *destination, const char *password)
     }
 }
 
-void redis_cluster_client::open()
+void redis_client_cluster_engine::open()
 {
     std::list<std::string> netpath_list;
-    netpaths_expand(r_destinations.c_str(), netpath_list);
+    netpaths_expand(r_destination.c_str(), netpath_list);
     std_list_walk_begin(netpath_list, np) {
         while (r_fd == -1) {
             char *npp = (char *)(np.c_str());
@@ -393,7 +394,7 @@ void redis_cluster_client::open()
     } std_list_walk_end;
 }
 
-void redis_cluster_client::close()
+void redis_client_cluster_engine::close()
 {
     if (r_slot_node) {
         for (int i=0; i < var_slot_count; i++) {

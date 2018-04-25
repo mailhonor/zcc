@@ -291,6 +291,7 @@ public:
     int proc_count;
     long stamp_next_start;
     std::map<int, listen_pair *> listens;
+    std::list<std::string> args;
 };
 
 class listen_pair
@@ -470,6 +471,10 @@ static void start_one_child(server_info *server)
             exec_argv.push_back(service_fork.c_str());
         }
 
+        std_list_walk_begin(server->args, a) {
+            exec_argv.push_back(a);
+        } std_list_walk_end;
+
         execvp(server->cmd.c_str(), (char **)(memdup(exec_argv.data(), (exec_argv.size() + 1) * sizeof(char *))));
 
         zcc_fatal("master: start child error: %m");
@@ -517,6 +522,24 @@ static void prepare_server_by_config(config *cf)
     server->cmd = cmd;
     server->proc_limit = cf->get_int("server-proc-count", 1, 1, 1000);
     server->proc_count = 0;
+    if (empty(fn)) {
+        std_map_walk_begin(*cf, k, v) {
+            const char *ps = k.c_str();
+            if (!strcmp(ps, "server-proc-count")) {
+                continue;
+            }
+            if (!strcmp(ps, "server-command")) {
+                continue;
+            }
+            if (!strcmp(ps, "server-service")) {
+                continue;
+            }
+            std::string kk = "-";
+            kk.append(k);
+            server->args.push_back(kk);
+            server->args.push_back(v);
+        } std_map_walk_end;
+    }
 
     /* listens */
     strtok splitor;
@@ -679,6 +702,32 @@ static void set_signal_handler()
     }
 }
 
+static void load_global_config_by_dir(config &cf, const char *config_path)
+{
+    DIR *dir;
+    struct dirent ent, *ent_list;
+    char *fn, *p;
+    char pn[4100];
+
+    dir = opendir(config_path);
+    if (!dir) {
+        return;
+    }
+
+    while ((!readdir_r(dir, &ent, &ent_list)) && (ent_list)) {
+        fn = ent.d_name;
+        if (fn[0] == '.') {
+            continue;
+        }
+        p = strrchr(fn, '.');
+        if ((!p) || (strcasecmp(p + 1, "gcf"))) {
+            continue;
+        }
+        snprintf(pn, 4096, "%s/%s", config_path, fn);
+        cf.load_by_filename(pn);
+    }
+    closedir(dir);
+}
 static bool ___init_flag = false;
 static void init_all(master &ms, int argc, char **argv)
 {
@@ -693,9 +742,16 @@ static void init_all(master &ms, int argc, char **argv)
     main_parameter_run(argc, argv);
 
     try_lock = default_config.get_bool("try-lock", false); 
-    config_path = default_config.get_str("C", "");
     lock_file = default_config.get_str("pid-file", "");
     var_masterlog_service = default_config.get_str("log-service");
+    config_path = default_config.get_str("C", "");
+    if (!config_path.empty()) {
+        config cf;
+        load_global_config_by_dir(cf, config_path.c_str());
+        cf.load_another(default_config);
+        default_config.load_another(cf);
+    }
+    ms.before_service();
 
     if (empty(lock_file)) {
         lock_file = (char *)"master.pid";
@@ -766,7 +822,6 @@ void master::run(int argc, char **argv)
 {
     init_all(*this, argc, argv);
     reload_server(*this);
-    before_service();
     sighup_reload_on = 0;
     while (1) {
         if (sigterm_stop_on) {
@@ -835,6 +890,11 @@ void master::event_loop()
 void master::set_reload_signal(int sig)
 {
     ___reload_sig = sig;
+}
+
+std::string &master::get_config_path()
+{
+    return config_path;
 }
 
 }

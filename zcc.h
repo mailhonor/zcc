@@ -27,7 +27,6 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wcast-qual"
-#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #pragma GCC diagnostic ignored "-Wformat-zero-length"
 #endif
@@ -232,6 +231,7 @@ std::string &toupper(std::string &str);
 std::string &size_data_escape(std::string &str, const void *data, size_t n = 0);
 std::string &size_data_escape(std::string &str, int i);
 std::string &size_data_escape(std::string &str, long i);
+std::vector<std::string> split(const char *s, const char *delims);
 
 /* std::map<std::string, std::string> ############################ */
 void dict_debug(std::map<std::string, std::string> &dict);
@@ -465,6 +465,11 @@ bool get_peername(int sockfd, int *host, int *port);
 bool get_peername(int sockfd, std::string &host, int *port);
 bool get_ipstring(int ip, std::string &host);
 int get_ipint(const char *ipstr);
+int get_network(int ip, int masklen);
+int get_netmask(int masklen);
+int get_broadcast(int ip, int masklen);
+int get_ip_min(int ip, int masklen);
+int get_ip_max(int ip, int masklen);
 
 /* device ######################################################### */
 ssize_t get_mac_list(std::list<std::string> &mac_list);
@@ -899,6 +904,7 @@ public:
     virtual void before_service();
     virtual void event_loop();
     void set_reload_signal(int sig);
+    std::string &get_config_path();
 };
 
 /* master_event_server */
@@ -1562,11 +1568,69 @@ private:
 
 /* redis client ############################################## */
 #pragma pack(push, 1)
-class redis_basic_client
+
+class redis_client_basic_engine
 {
 public:
-    redis_basic_client();
-    virtual ~redis_basic_client();
+    redis_client_basic_engine();
+    virtual ~redis_client_basic_engine();
+    virtual int query_protocol(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg) = 0;
+    int query_protocol_io(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg, stream &fp);
+    std::string r_destination;
+    std::string r_password;
+};
+
+class redis_client_standalone_engine:public redis_client_basic_engine
+{
+public:
+    redis_client_standalone_engine();
+    redis_client_standalone_engine(const char *destinations, const char *password = 0);
+    ~redis_client_standalone_engine();
+    void open(const char *destinations, const char *password = 0);
+    void close();
+private:
+    void open();
+    int query_protocol(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg);
+    int r_fd;
+};
+
+class redis_client_cluster_engine:public redis_client_basic_engine
+{
+public:
+    redis_client_cluster_engine();
+    redis_client_cluster_engine(const char *destinations, const char *password = 0);
+    ~redis_client_cluster_engine();
+    void open(const char *destinations, const char *password = 0);
+    void close();
+private:
+    void open();
+    int query_protocol_try(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg,
+            int slot, char *ipbuf, int port);
+    int query_protocol(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
+            json *json_ret, std::list<std::string> &tokens, long timeout, std::string &info_msg);
+    struct cluster_node_t *r_slot_node;
+    short int r_slot_node_size;
+    short int r_slot_node_used;
+    short int r_slot_node_last;
+    short int *r_slot_pair;
+    int r_fd;
+};
+
+class redis_client
+{
+public:
+    redis_client();
+    redis_client(const redis_client_basic_engine *engine);
+    redis_client(const char *destination, const char *password = 0);
+    virtual ~redis_client();
+    void open(const redis_client_basic_engine *engine);
+    void open(const char *destination, const char *password = 0);
+    void cluster_open(const char *destinations, const char *password =0);
+    void close();
     const std::string &get_msg();
     void set_timeout(long timeout_milliseconds);
     int exec_command(const char *redis_fmt, ...);
@@ -1576,60 +1640,16 @@ public:
     int exec_command(json &json_ret, const char *redis_fmt, ...);
     int exec_command(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
             json *json_ret, const char *redis_fmt, va_list ap);
+    /* 如: scan(list_ret, cursor_ret, "ssd", "HSCAN", "somekey", 0); */
+    int scan(std::list<std::string> &list_ret, long &cursor_ret, const char *redis_fmt, ...);
+    int info(std::map<std::string, std::string> &name_value_dict, std::string &string_ret);
     /* */
     int fetch_channel_message(std::list<std::string> &list_ret);
-    /* 如: scan_special(list_ret, cursor_ret, "ssd", "HSCAN", "somekey", 0); */
-    int scan_special(std::list<std::string> &list_ret, long &cursor_ret, const char *redis_fmt, ...);
-    int info_special(std::map<std::string, std::string> &name_value_dict, std::string &string_ret);
 protected:
-    virtual int query_protocol(std::list<std::string> &tokens);
-    int query_protocol_io(std::list<std::string> &tokens, stream &fp);
     std::string r_msg;
     long r_timeout;
-private:
-    long *r_number_ret;
-    std::string *r_string_ret;
-    std::list<std::string> *r_list_ret;
-    json *r_json_ret;
-};
-
-class redis_standalone_client:public redis_basic_client
-{
-public:
-    redis_standalone_client();
-    redis_standalone_client(const char *destination, const char *password = 0);
-    ~redis_standalone_client();
-    void open(const char *destination, const char *password = 0);
-    void close();
-private:
-    void open();
-    int query_protocol(std::list<std::string> &tokens);
-    int r_fd;
-    std::string r_destination;
-    std::string r_password;
-};
-typedef class redis_standalone_client redis_client;
-
-class redis_cluster_client:public redis_basic_client
-{
-public:
-    redis_cluster_client();
-    redis_cluster_client(const char *destinations, const char *password = 0);
-    ~redis_cluster_client();
-    void open(const char *destinations, const char *password = 0);
-    void close();
-private:
-    void open();
-    int query_protocol_try(std::list<std::string> &ptokens, int slot, char *ipbuf, int port);
-    int query_protocol(std::list<std::string> &tokens);
-    std::string r_destinations;
-    std::string r_password;
-    struct cluster_node_t *r_slot_node;
-    short int r_slot_node_size;
-    short int r_slot_node_used;
-    short int r_slot_node_last;
-    short int *r_slot_pair;
-    int r_fd;
+    redis_client_basic_engine *r_engine;
+    char r_engine_mode;
 };
 #pragma pack(pop)
 
@@ -1661,15 +1681,15 @@ public:
     int replace(const char *key, int flags, long timeout_second, const void *data, size_t size); 
     int append(const char *key, int flags, long timeout_second, const void *data, size_t size); 
     int prepend(const char *key, int flags, long timeout_second, const void *data, size_t size); 
-    int incr(long *result, const char *key, size_t n);
-    int decr(long *result, const char *key, size_t n);
+    long incr(const char *key, size_t n);
+    long decr(const char *key, size_t n);
     int del(const char *key);
     int flush_all(long after_second = 0);
     int quit();
     int version(std::string &result);
 private:
     int op_set(const char *op, const char *key, int flags, long timeout_second, const void *data, size_t size);
-    int op_incr(long *result, const char *op, const char *key, size_t n);
+    long op_incr(const char *op, const char *key, size_t n);
     void open();
     long r_timeout;
     std::string r_msg;
@@ -1704,18 +1724,18 @@ public:
     inline string &append(unsigned long i) {return printf_1024("%lu", i);}
     inline string &append(double i) {return printf_1024("%f", i);}
     inline string &append(float i) {return printf_1024("%f", i);}
-    inline string &clear() {zcc::string::clear(); return *this; }
-    inline string &push_back(char c) {zcc::string::push_back(c); return *this; }
+    inline string &clear() {std::string::clear(); return *this; }
+    inline string &push_back(char c) {std::string::push_back(c); return *this; }
     inline string &tolower() {zcc::tolower(this->c_str()); return *this; }
     inline string &toupper() {zcc::toupper(this->c_str()); return *this; }
     inline string &size_data_escape(const void *d, size_t n) {zcc::size_data_escape(*this, d, n);return *this; }
     inline string &size_data_escape(int i) { zcc::size_data_escape(*this, i); return *this; }
     inline string &size_data_escape(long i) { zcc::size_data_escape(*this, i); return *this; }
-    inline string &sqlite3_escape_append(const void *data, size_t size = var_size_max) {
-        zcc::sqlite3_escape_append(*this, data, size); return *this;
+    inline string &sqlite3_escape_append(const void *d, size_t s = var_size_max) {
+        zcc::sqlite3_escape_append(*this, d, s); return *this;
     }
-    inline string &sqlite3_escape_append(const std::string &data) {
-        zcc::sqlite3_escape_append(*this, data.c_str(), data.size()); return *this;
+    inline string &sqlite3_escape_append(const std::string &d) {
+        zcc::sqlite3_escape_append(*this, d.c_str(), d.size()); return *this;
     }
     inline string &trim_right_crlf() {
         char *p = const_cast<char *>(this->c_str()); size_t s = this->size();

@@ -164,15 +164,15 @@ int memcache_client::prepend(const char *key, int flags, long timeout_second, co
 }
 
 
-int memcache_client::incr(long *result, const char *key, size_t n)
+long memcache_client::incr(const char *key, size_t n)
 {
-    return op_incr(result, "incr", key, n);
+    return op_incr("incr", key, n);
 }
 
 
-int memcache_client::decr(long *result, const char *key, size_t n)
+long memcache_client::decr(const char *key, size_t n)
 {
-    return op_incr(result, "decr", key, n);
+    return op_incr("decr", key, n);
 }
 
 
@@ -292,7 +292,7 @@ int memcache_client::op_set(const char *op, const char *key, int flags, long tim
     return -1;
 }
 
-int memcache_client::op_incr(long *result, const char *op, const char *key, size_t n)
+long memcache_client::op_incr(const char *op, const char *key, size_t n)
 {
     ___check_fd();
     ___check_key();
@@ -308,8 +308,7 @@ int memcache_client::op_incr(long *result, const char *op, const char *key, size
     }
     const char *ps = str.c_str();
     if (isdigit(ps[0])) {
-        *result = atoll(ps);
-        return 1;
+        return atoll(ps);
     }
     r_msg = str;
     return -1;

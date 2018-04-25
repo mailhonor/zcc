@@ -95,5 +95,18 @@ string &string::printf_1024(const char *format, ...)
     return *this;
 }
 
+std::vector<std::string> split(const char *s, const char *delims)
+{
+    std::vector<std::string> r;
+    std::string stmp;
+    strtok splitor(s);
+    while (splitor.tok(delims)) {
+        stmp.clear();
+        stmp.append(splitor.ptr(), splitor.size());
+        r.push_back(stmp);
+    }
+    return r;
+}
+
 }
 

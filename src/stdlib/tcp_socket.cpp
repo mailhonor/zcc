@@ -191,17 +191,7 @@ int listen(const char *netpath, int *type, int backlog)
     p = strchr(_netpath, ':');
     if (p) {
         *p++ = 0;
-        if (!strcmp(_netpath, "inet")) {
-            tp = var_tcp_listen_type_inet;
-            host = p;
-            p = strchr(host, ':');
-            if (!p) {
-                errno = EINVAL;
-                return -1;
-            } else {
-                port = atoi(p+1);
-            }
-        } else if (!strcmp(_netpath, "unix") || !(strcmp(_netpath, "local"))) {
+        if (!strcmp(_netpath, "local")) {
             tp = var_tcp_listen_type_unix;
             path  = p;
         } else if (!strcmp(_netpath, "fifo")) {

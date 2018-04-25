@@ -308,7 +308,7 @@ sqlite3_proxyd::~sqlite3_proxyd()
 void sqlite3_proxyd::before_service()
 {
     do {
-        sqlite3_proxy_filename = zcc::default_config.get_str("sqlite3_proxy_filename", "");
+        sqlite3_proxy_filename = zcc::default_config.get_str("sqlite3-proxy-filename", "");
         if(empty(sqlite3_proxy_filename)) {
             zcc_fatal("FATAL must set sqlite3_proxy_filename'value");
         }

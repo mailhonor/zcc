@@ -11,7 +11,7 @@
 namespace zcc
 {
 
-#define proxy_set_errmsg(fmt, args...)      sprintf_1024(errmsg, fmt, ##args)
+#define proxy_set_errmsg(fmt, args...)      errmsg.clear(); sprintf_1024(errmsg, fmt, ##args)
 
 bool var_sqlite3_proxy_set_errmsg = false;
 

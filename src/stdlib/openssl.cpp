@@ -93,6 +93,9 @@ namespace zcc
 static bool ___openssl_init = false;
 void openssl_init(void)
 {
+    if (___openssl_init) {
+        return;
+    }
     ___openssl_init = true;
     SSL_library_init();
     pthread_safe_setup();

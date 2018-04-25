@@ -1246,6 +1246,17 @@ SSL *async_io::detach_SSL()
 /* {{{ async_io::fetch_rbuf */
 void async_io::fetch_rbuf(char *buf, int len)
 {
+    if (buf == 0) {
+        char cbuf[1024 +1];
+        while(len > 0) {
+            int left = len;
+            if (left > 1024) {
+                left = 1024;
+            }
+            len -= left;
+            ___async_io_cache_shift(aio_data, &(aio_data->read_cache), cbuf, left);
+        }
+    }
     ___async_io_cache_shift(aio_data, &(aio_data->read_cache), buf, len);
 }
 

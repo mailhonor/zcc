@@ -139,7 +139,70 @@ bool get_ipstring(int ip, std::string &host)
 
 int get_ipint(const char *ipstr)
 {
-    return inet_addr(ipstr);
+    int ip = inet_addr(ipstr);
+    if ((unsigned int)ip == INADDR_NONE) {
+        return 0;
+    }
+    return ip;
+}
+
+static int ___ip_switch(int ip)
+{
+    int ip_switch;
+    char *p1 = (char *)&ip;
+    char *p2 = (char *)&ip_switch;
+    p2[0] = p1[3];
+    p2[1] = p1[2];
+    p2[2] = p1[1];
+    p2[3] = p1[0];
+    return ip_switch;
+}
+
+static int ___get_netmask(int masklen)
+{
+    if ((masklen < 1) || (masklen > 32)) {
+        return 0;
+    }
+    int mask = 0;
+    for (int mi = masklen; mi < 32; mi ++) {
+        mask = mask << 1;
+        mask += 1;
+    }
+    mask = ~mask;
+    return mask;
+}
+
+int get_network(int ip, int masklen)
+{
+    int nip = ___ip_switch(ip);
+    int mask = ___get_netmask(masklen);
+    return ___ip_switch(nip & mask);
+}
+
+int get_netmask(int masklen)
+{
+    return ___ip_switch(___get_netmask(masklen));
+}
+
+int get_broadcast(int ip, int masklen)
+{
+    int nip = ___ip_switch(ip);
+    int mask = ___get_netmask(masklen);
+    return ___ip_switch(nip |(~mask));
+}
+
+int get_ip_min(int ip, int masklen)
+{
+    int nip = ___ip_switch(ip);
+    int mask = ___get_netmask(masklen);
+    return ___ip_switch((nip & mask) + 1);
+}
+
+int get_ip_max(int ip, int masklen)
+{
+    int nip = ___ip_switch(ip);
+    int mask = ___get_netmask(masklen);
+    return ___ip_switch((nip |(~mask)) -1);
 }
 
 }

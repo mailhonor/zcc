@@ -11,27 +11,12 @@
 namespace zcc
 {
 
-redis_basic_client::redis_basic_client()
+redis_client_basic_engine::redis_client_basic_engine()
 {
 }
 
-redis_basic_client::~redis_basic_client()
+redis_client_basic_engine::~redis_client_basic_engine()
 {
-}
-
-void redis_basic_client::set_timeout(long timeout)
-{
-    if (timeout> var_max_timeout) {
-        timeout = 10 * 1000;
-    } else if (timeout < 0) {
-        timeout = 10 * 1000;
-    }
-    r_timeout = timeout;
-}
-
-const std::string &redis_basic_client::get_msg()
-{
-    return r_msg;
 }
 
 static void ___exec_command_prepare(std::list<std::string> &ptokens, const char *redis_fmt, va_list ap)
@@ -94,138 +79,6 @@ static void ___exec_command_prepare(std::list<std::string> &ptokens, const char 
             }
         }
     }
-}
-
-int redis_basic_client::exec_command(long *number_ret, std::string *string_ret, std::list<std::string> *list_ret,
-        json *json_ret, const char *redis_fmt, va_list ap)
-{
-    r_number_ret = number_ret;
-    r_string_ret = string_ret;
-    r_list_ret = list_ret;
-    r_json_ret = json_ret;
-
-    std::list<std::string> ptokens;
-    ___exec_command_prepare(ptokens, redis_fmt, ap);
-
-    return query_protocol(ptokens); 
-}
-
-int redis_basic_client::exec_command(const char *redis_fmt, ...)
-{
-#define exec_command_macro(n, s, l, j) \
-    int ret;\
-    va_list ap; \
-    va_start(ap, redis_fmt); \
-    ret = exec_command(n, s, l, j, redis_fmt, ap); \
-    va_end(ap); \
-    return ret; 
-    exec_command_macro(0, 0, 0, 0);
-}
-
-int redis_basic_client::exec_command(long &number_ret, const char *redis_fmt, ...)
-{
-    exec_command_macro(&number_ret, 0, 0, 0);
-}
-
-int redis_basic_client::exec_command(std::string &string_ret, const char *redis_fmt, ...)
-{
-    exec_command_macro(0, &string_ret, 0, 0);
-}
-
-int redis_basic_client::exec_command(std::list<std::string> &list_ret, const char *redis_fmt, ...)
-{
-    exec_command_macro(0, 0, &list_ret, 0);
-}
-
-int redis_basic_client::exec_command(json &json_ret, const char *redis_fmt, ...)
-{
-    exec_command_macro(0, 0, 0, &json_ret);
-#undef exec_command_macro
-}
-
-int redis_basic_client::fetch_channel_message(std::list<std::string> &list_ret)
-{
-    return exec_command(list_ret, 0);
-}
-
-int redis_basic_client::scan_special(std::list<std::string> &list_ret, long &cursor_ret, const char *redis_fmt, ...)
-{
-    int ret;
-    va_list ap;
-    va_start(ap, redis_fmt);
-    ret = exec_command(0, 0, &list_ret, 0, redis_fmt, ap);
-    va_end(ap);
-    if (ret > 0) {
-        if (list_ret.empty()) {
-            return -1;
-        }
-        std::string &cursor_str = list_ret.front();
-        cursor_str = atol(cursor_str.c_str());
-        list_ret.pop_front();
-    }
-    return ret;
-}
-
-int redis_basic_client::info_special(std::map<std::string, std::string> &name_value_dict, std::string &string_ret)
-{
-    name_value_dict.clear();
-    string_ret.clear();
-    int ret =  exec_command(string_ret, "s", "INFO");
-    if (ret < 1) {
-        return ret;
-    }
-    const char *ps, *p = string_ret.c_str();
-    std::string tmpn, tmpv;
-    while(*p) {
-        if ((*p == '#') || (*p == ' ') || (*p == '\r')) {
-            p++;
-            for (;*p;p++) {
-                if (*p == '\n') {
-                    break;
-                }
-            }
-            if (*p == '\n') {
-                p++;
-            }
-            continue;
-        }
-        ps = p;
-        for (;*p;p++) {
-            if (*p == ':') {
-                break;
-            }
-        }
-        if (*p == 0) {
-            break;
-        }
-        tmpn.clear();
-        if (p > ps) {
-            tmpn.append(ps, p - ps);
-        }
-        p++;
-        ps = p;
-
-        for (;*p;p++) {
-            if (*p == '\n') {
-                break;
-            }
-        }
-        if (*p == 0) {
-            break;
-        }
-        tmpv.clear();
-        if (p - ps > 1) {
-            tmpv.append(ps, p - ps - 1);
-        }
-        name_value_dict[tmpn] = tmpv;
-        p++;
-    }
-    return ret;
-}
-
-int redis_basic_client::query_protocol(std::list<std::string> &tokens)
-{
-    return -1;
 }
 
 static int ___query_protocol_io_list_list(std::string &r_msg, int lnum, std::list<std::string> &lval, stream &fp)
@@ -391,14 +244,15 @@ static int ___query_protocol_io_string_json(std::string &r_msg, int length, json
     return 1;
 }
 
-int redis_basic_client::query_protocol_io(std::list<std::string> &ptokens, stream &fp)
+int redis_client_basic_engine::query_protocol_io(long *r_number_ret, std::string *r_string_ret, std::list<std::string> *r_list_ret, json *r_json_ret, std::list<std::string> &ptokens, long r_timeout, std::string &r_msg, stream &fp)
 {
-    std::string rstr;
-    char *rp;
-    int rlen, num, firstch, ret;
     if (ptokens.empty()) {
         return -1;
     }
+
+    std::string rstr;
+    char *rp;
+    int rlen, num, firstch, ret;
     r_msg.clear();
 
     if (r_string_ret) {

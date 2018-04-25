@@ -9,8 +9,8 @@ CFLAGS= -I./ -std=gnu++0x -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE \
 	-DLINUX2 -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -D_USE_FAST_MACRO \
 	-Wabi -Waddress -Wall -Wbuiltin-macro-redefined -Wcast-align -Wchar-subscripts -Wclobbered  \
 	-Wcomment -Wcomments -Wctor-dtor-privacy -Wdeprecated -Wdiv-by-zero -Wendif-labels \
-	-Wenum-compare -Wextra -Wfatal-errors -Wfloat-equal -Wformat -Wignored-qualifiers -Winit-self \
-	-Winline -Winvalid-pch -Wmain -Wmissing-field-initializers -Wmissing-format-attribute \
+	-Wenum-compare -Wextra -Wfatal-errors -Wfloat-equal -Wignored-qualifiers -Winit-self \
+	-Winline -Winvalid-pch -Wmain -Wmissing-field-initializers \
 	-Wmissing-include-dirs -Wmultichar -Wno-long-long -Wnon-template-friend -Wnon-virtual-dtor \
 	-Woverlength-strings -Woverloaded-virtual -Wpacked-bitfield-compat -Wparentheses -Wpmf-conversions \
 	-Wpointer-arith -Wpragmas -Wredundant-decls -Wreorder -Wreturn-type -Wsequence-point -Wsign-compare \
