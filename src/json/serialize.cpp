@@ -90,21 +90,21 @@ static inline bool ___fetch_string(char *&ps, char *str_end, std::string &str)
                 ch3 = '\\';
             } else if (ch2 == '/') {
                 ch3 = '/';
-            } else if (ch2 == '\"') {
-                ch3 = '\"';
+            } else if (ch2 == '"') {
+                ch3 = '"';
             } else if (ch2 == '\'') {
                 ch3 = '\'';
-            } else if (ch2 == '\b') {
+            } else if (ch2 == 'b') {
                 ch3 = '\b';
-            } else if (ch2 == '\f') {
+            } else if (ch2 == 'f') {
                 ch3 = '\f';
-            } else if (ch2 == '\r') {
-                ch2 = '\r';
-            } else if (ch2 == '\n') {
+            } else if (ch2 == 'r') {
+                ch3 = '\r';
+            } else if (ch2 == 'n') {
                 ch3 = '\n';
-            } else if (ch2 == '\t') {
+            } else if (ch2 == 't') {
                 ch3 = '\t';
-            } else if (ch2 == '\0') {
+            } else if (ch2 == '0') {
                 ch3 = '\0';
             } else if (ch2 == 'u') {
                 ch3 = 'u';
@@ -126,6 +126,9 @@ static inline bool ___fetch_string(char *&ps, char *str_end, std::string &str)
             }
             if (ch3) {
                 str.push_back(ch3);
+            } else {
+                str.push_back('\\');
+                str.push_back(ch2);
             }
             continue;
         } else {
