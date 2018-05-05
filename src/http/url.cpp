@@ -216,8 +216,10 @@ void http_url_parse_query(std::map<std::string, std::string> &result, const char
     }
 }
 
+
 char *http_url_build_query(std::string &query, std::map<std::string, std::string> &dict, bool strict)
 {
+    unsigned char dec2hex[18] = "0123456789ABCDEF";
     bool first = true;
     std_map_walk_begin(dict, key, val) {
         if (first) {
@@ -226,7 +228,7 @@ char *http_url_build_query(std::string &query, std::map<std::string, std::string
             query.push_back('&');
         }
         query.append(key);
-        query.push_back('&');
+        query.push_back('=');
         size_t i, len = val.size();
         char *v = (char *)val.c_str();
         for (i = 0; i < len; i++) {
@@ -241,8 +243,8 @@ char *http_url_build_query(std::string &query, std::map<std::string, std::string
             }
             if (strict) {
                 query.push_back('%');
-                query.push_back(ch>>4);
-                query.push_back(ch&0X0F);
+                query.push_back(dec2hex[ch>>4]);
+                query.push_back(dec2hex[ch&0X0F]);
                 continue;
             } 
             if (ch > 127) {
@@ -254,12 +256,11 @@ char *http_url_build_query(std::string &query, std::map<std::string, std::string
                 continue;
             }
             query.push_back('%');
-            query.push_back(ch>>4);
-            query.push_back(ch&0X0F);
+            query.push_back(dec2hex[ch>>4]);
+            query.push_back(dec2hex[ch&0X0F]);
         }
     } std_map_walk_end;
     return (char *)(void *)query.c_str();
 }
-
 
 }

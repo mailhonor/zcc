@@ -321,7 +321,7 @@ public:
 static int sighup_reload_on = 0;
 static int sigterm_stop_on = 0;
 std::string config_path;
-
+bool dev_mode = false;
 static int ___reload_sig = SIGHUP;
 static int master_status_fd[2];
 static std::map<std::string, listen_pair *> listen_pair_map;
@@ -521,6 +521,9 @@ static void prepare_server_by_config(config *cf)
     server->config_fn = fn;
     server->cmd = cmd;
     server->proc_limit = cf->get_int("server-proc-count", 1, 1, 1000);
+    if (dev_mode) {
+        server->proc_limit = 1;
+    }
     server->proc_count = 0;
     if (empty(fn)) {
         std_map_walk_begin(*cf, k, v) {
@@ -740,7 +743,7 @@ static void init_all(master &ms, int argc, char **argv)
     ___init_flag = true;
 
     main_parameter_run(argc, argv);
-
+    dev_mode = default_config.get_bool("dev-mode", dev_mode);
     try_lock = default_config.get_bool("try-lock", false); 
     lock_file = default_config.get_str("pid-file", "");
     var_masterlog_service = default_config.get_str("log-service");
