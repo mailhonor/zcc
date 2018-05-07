@@ -9,9 +9,21 @@
 #include "zcc.h"
 
 
+static void test(const char *src, size_t size)
+{
+    std::string result;
+    zcc::json jo;
+    jo.unserialize(src, size);
+
+    jo.serialize(result);
+    puts(result.c_str());
+}
+
 int main(int argc, char **argv)
 {
     if (argc !=2 ) {
+        std::string s = "{\"errcode\": \"-801\", \"errmsg\": \"Domain Not Exist\"}\r\n";
+        test(s.c_str(), s.size());
         printf("USAGE: %s json_filename\n", argv[0]);
         exit(1);
     }
@@ -20,12 +32,7 @@ int main(int argc, char **argv)
         printf("can not open %s (%m)\n", argv[1]);
     }
 
-    std::string result;
-    zcc::json jo;
-    jo.unserialize(fmap.data(), fmap.size());
-
-    jo.serialize(result);
-    puts(result.c_str());
+    test(fmap.data(), fmap.size());
 
     return 0;
 }

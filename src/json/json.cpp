@@ -73,7 +73,14 @@ json::json(bool val)
 
 json::~json()
 {
-    reset();
+    if ((___type == json_type_array) || (___type == json_type_object)) {
+        reset();
+    } else if (___type == json_type_string) {
+        if (___val.str) {
+            typedef std::string ___std_string;
+            ((___std_string *)(___val.str))->~___std_string();
+        }
+    }
 }
 
 json *json::used_for_bool()
@@ -321,7 +328,7 @@ json * json::object_add_element(const char *key, json *j, bool return_child)
 
 json * json::array_add_element(size_t idx, json *j, json **old, bool return_child)
 {
-    json *d;
+    json *d = 0;
     j->___parent = this;
     if (___type == json_type_null) {
         ___type = json_type_array;
@@ -352,7 +359,7 @@ json * json::array_add_element(size_t idx, json *j, json **old, bool return_chil
 
 json * json::object_add_element(const char *key, json *j, json **old, bool return_child)
 {
-    json *d;
+    json *d = 0;
     j->___parent = this;
     if (___type == json_type_null) {
         ___type = json_type_object;
@@ -552,6 +559,7 @@ json * json::get_top()
 
 json *json::reset()
 {
+#if 0
     if (___type == json_type_string) {
         if (___val.str) {
             typedef std::string ___std_string;
@@ -576,6 +584,49 @@ json *json::reset()
     memset(&___val, 0, sizeof(___val));
     ___type = json_type_null;
     return this;
+#else
+    std::list<json *> for_deteled;
+    for_deteled.push_back(this);
+    while(!for_deteled.empty()) {
+        json *js = for_deteled.front();
+        for_deteled.pop_front();
+        if (js->___type == json_type_string) {
+            if (js->___val.str) {
+                typedef std::string ___std_string;
+                ((___std_string *)(js->___val.str))->~___std_string();
+            }
+        } else if (js->___type == json_type_array) {
+            if (js->___val.v) {
+                std_vector_walk_begin(*(js->___val.v), jn) {
+                    if ((jn->___type == json_type_array) || (jn->___type == json_type_object)) {
+                        for_deteled.push_back(jn);
+                    } else {
+                        delete jn;
+                    }
+                } std_vector_walk_end;
+                delete js->___val.v;
+            }
+        } else if (js->___type == json_type_object) {
+            if (js->___val.m) {
+                std_map_walk_begin(*(js->___val.m), key, jn) {
+                    if ((jn->___type == json_type_array) || (jn->___type == json_type_object)) {
+                        for_deteled.push_back(jn);
+                    } else {
+                        delete jn;
+                    }
+                } std_map_walk_end;
+                delete js->___val.m;
+            }
+        }
+        js->___type = json_type_null;
+        if (this != js) {
+            delete js;
+        }
+    }
+    memset(&___val, 0, sizeof(___val));
+    ___type = json_type_null;
+    return this;
+#endif
 }
 
 }

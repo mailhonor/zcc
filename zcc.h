@@ -447,6 +447,7 @@ extern char hex_to_dec_table[];
 ssize_t hex_encode(const void *src, size_t src_size, std::string &dest);
 ssize_t hex_decode(const void *src, size_t src_size, std::string &dest);
 ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str);
+void url_hex_encode(const void *src, size_t src_size, std::string &str, bool strict);
 
 size_t ncr_decode(size_t ins, char *wchar);
 
@@ -1287,7 +1288,7 @@ private:
     void clear();
 };
 void http_url_parse_query(std::map<std::string, std::string> &result, const char *query);
-char *http_url_build_query(std::string &query, std::map<std::string, std::string> &dict, bool strict);
+char *http_url_build_query(std::string &query, const std::map<std::string, std::string> &dict, bool strict);
 
 void http_cookie_parse_request(std::map<std::string, std::string> &result, const char *raw_cookie);
 void http_cookie_build(std::string &result, const char *name, const char *value, long expires = 0, const char *path = 0, const char *domain = 0, bool secure = false, bool httponly = false);

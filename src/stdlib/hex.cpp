@@ -73,7 +73,7 @@ ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str)
     char *p = (char *)src;
     for (size_t i = 0; i < src_size; i++) {
         if (p[i] == '+') {
-            str.push_back('=');
+            str.push_back(' ');
         } else if (p[i] == '%') {
             if (i + 3 > src_size) {
                 break;
@@ -89,6 +89,40 @@ ssize_t url_hex_decode(const void *src, size_t src_size, std::string &str)
         }
     }
     return str.size();
+}
+
+void url_hex_encode(const void *src, size_t src_size, std::string &str, bool strict)
+{
+    unsigned char dec2hex[18] = "0123456789ABCDEF";
+    const char *ps = (const char *)src;
+    for (size_t i = 0; i < src_size; i++) {
+        unsigned char ch = ps[i];
+        if (ch == ' ') {
+            str.push_back('+');
+            continue;
+        }
+        if (isalnum(ch)) {
+            str.push_back(ch);
+            continue;
+        }
+        if (strict) {
+            str.push_back('%');
+            str.push_back(dec2hex[ch>>4]);
+            str.push_back(dec2hex[ch&0X0F]);
+            continue;
+        } 
+        if (ch > 127) {
+            str.push_back(ch);
+            continue;
+        }
+        if (strchr("._-", ch)) {
+            str.push_back(ch);
+            continue;
+        }
+        str.push_back('%');
+        str.push_back(dec2hex[ch>>4]);
+        str.push_back(dec2hex[ch&0X0F]);
+    }
 }
 
 }

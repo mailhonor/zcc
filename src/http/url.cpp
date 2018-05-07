@@ -217,9 +217,8 @@ void http_url_parse_query(std::map<std::string, std::string> &result, const char
 }
 
 
-char *http_url_build_query(std::string &query, std::map<std::string, std::string> &dict, bool strict)
+char *http_url_build_query(std::string &query, const std::map<std::string, std::string> &dict, bool strict)
 {
-    unsigned char dec2hex[18] = "0123456789ABCDEF";
     bool first = true;
     std_map_walk_begin(dict, key, val) {
         if (first) {
@@ -227,38 +226,10 @@ char *http_url_build_query(std::string &query, std::map<std::string, std::string
         } else {
             query.push_back('&');
         }
-        query.append(key);
+
+        url_hex_encode(key.c_str(), key.size(), query, strict);
         query.push_back('=');
-        size_t i, len = val.size();
-        char *v = (char *)val.c_str();
-        for (i = 0; i < len; i++) {
-            unsigned char ch = v[i];
-            if (ch == ' ') {
-                query.push_back('+');
-                continue;
-            }
-            if (isalnum(ch)) {
-                query.push_back(ch);
-                continue;
-            }
-            if (strict) {
-                query.push_back('%');
-                query.push_back(dec2hex[ch>>4]);
-                query.push_back(dec2hex[ch&0X0F]);
-                continue;
-            } 
-            if (ch > 127) {
-                query.push_back(ch);
-                continue;
-            }
-            if (strchr("._-", ch)) {
-                query.push_back(ch);
-                continue;
-            }
-            query.push_back('%');
-            query.push_back(dec2hex[ch>>4]);
-            query.push_back(dec2hex[ch&0X0F]);
-        }
+        url_hex_encode(val.c_str(), val.size(), query, strict);
     } std_map_walk_end;
     return (char *)(void *)query.c_str();
 }
