@@ -671,6 +671,8 @@ static void do_cmd_type(connection_context &context, std::vector<std::string> &c
         r = "string";
     } else if (node->type == node_type_hash) {
         r = "hash";
+    } else if (node->type == node_type_set) {
+        r = "set";
     }
     context.fp.printf_1024("+%s\r\n", r);
 }
@@ -1168,7 +1170,7 @@ static void do_cmd_hget(connection_context &context, std::vector<std::string> &c
     if (hnode) {
         std::string tmpv;
         hash_node_get_value(hnode, tmpv);
-        context.fp.printf_1024(":%zd\r\n", tmpv.size());
+        context.fp.printf_1024("$%zd\r\n", tmpv.size());
         context.fp.append(tmpv).append("\r\n");
     } else {
         context.fp.write("$-1\r\n", 5);
@@ -1311,7 +1313,6 @@ static void do_cmd_hmget(connection_context &context, std::vector<std::string> &
             } else {
                 result.append("$-1\r\n", 5);
             }
-            sprintf_1024(result, "$%d\r\n", hnode->key_len);
         }
     }
     context.fp.write(result.c_str(), result.size());
@@ -1500,7 +1501,7 @@ static void do_cmd_sismember(connection_context &context, std::vector<std::strin
     }
     main_node_t *node = main_node_find(context.current_db, cmd_vector[1]);
     if (!node) {
-        context.fp.write("*0\r\n", 4);
+        context.fp.write(":0\r\n", 4);
         return;
     }
     if (node->type != node_type_set) {
@@ -1508,9 +1509,9 @@ static void do_cmd_sismember(connection_context &context, std::vector<std::strin
     }
     set_node_t *hnode = set_node_find(node, cmd_vector[2]);
     if (!hnode) {
-        context.fp.write("*0\r\n", 4);
+        context.fp.write(":0\r\n", 4);
     } else {
-        context.fp.write("*1\r\n", 4);
+        context.fp.write(":1\r\n", 4);
     }
 }
 

@@ -477,7 +477,7 @@ static void start_one_child(server_info *server)
 
         execvp(server->cmd.c_str(), (char **)(memdup(exec_argv.data(), (exec_argv.size() + 1) * sizeof(char *))));
 
-        zcc_fatal("master: start child error: %m");
+        zcc_fatal("master: start child(%s) error: %m", server->cmd.c_str());
     }
 }
 

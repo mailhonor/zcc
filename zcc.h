@@ -678,6 +678,7 @@ public:
     inline bool is_error() { return ___error; }
     inline bool is_eof() { return ___eof; }
     inline bool is_exception() { return ___error || ___eof; }
+    inline bool is_opened() { return ___opened; }
     int get_fd();
     SSL *get_SSL();
     bool tls_connect(SSL_CTX *ctx);

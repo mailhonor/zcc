@@ -1148,6 +1148,7 @@ async_io::async_io()
     aio_data = (async_io_t *)calloc(1, sizeof(async_io_t));
     aio_data->aio = this;
     aio_data->fd = -1;
+    aio_data->ret = 1;
 }
 
 async_io::~async_io()

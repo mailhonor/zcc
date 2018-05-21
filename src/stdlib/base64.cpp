@@ -198,7 +198,7 @@ ssize_t base64_decode_get_valid_len(const void *src, size_t src_size)
 
     for (i = 0; i < src_size; i++) {
         ch = src_c[i];
-        if ((ch == '\r') || (ch == '\n')) {
+        if ((ch == '\r') || (ch == '\n') || (ch == '=')) {
             continue;
         }
         if (b64dec[ch] == 0xff) {

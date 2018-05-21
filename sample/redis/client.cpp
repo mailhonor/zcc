@@ -24,8 +24,12 @@ int main(int argc, char **argv)
 
     _test_return(rc.exec_command("sss", "SET", 0, "ssssss"));
     _test_string(rc.exec_command(sval, "ss", "GET", "abc"));
+    _test_string(rc.exec_command(sval, "sss", "HGET", "xxx.com_u", "ac.tai"));
+
     _test_return(rc.exec_command("ss", "STRLEN", "abc"));
     _test_number(rc.exec_command(nval, "ss", "STRLEN", "abc"));
+
+    _test___list(rc.exec_command(lval, "sss", "mget", "abc", "fasdfdsaf"));
 
     _test___json(rc.exec_command(jval, "sss", "MGET", "abc", "sss"));
     _test___json(rc.exec_command(jval, "sd", "SCAN", 0));
