@@ -1336,7 +1336,7 @@ static void do_cmd_hmset(connection_context &context, std::vector<std::string> &
         std::string &val = *cit;
         hash_node_t *hnode = hash_node_find(node, key);
         if (hnode) {
-            main_node_clear_value(node);
+            hash_node_clear_value(hnode);
         } else {
             hnode = hash_node_create(node, key);
         }

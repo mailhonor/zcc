@@ -240,6 +240,28 @@ bool dict_find(std::map<std::string, std::string> &dict, const char *key, char *
 char *dict_get_str(std::map<std::string, std::string> &dict,const std::string &key,const char *def = blank_buffer);
 char *dict_get_str(std::map<std::string, std::string> &dict, const char *key, const char *def = blank_buffer);
 
+/* ################################################################# */
+class mgrep
+{
+public:
+    mgrep();
+    ~mgrep();
+    mgrep &add_token(std::string &token);
+    mgrep &add_token(const void *token, size_t size);
+    mgrep &add_token(const char *token);
+    mgrep &add_token_over();
+    /* -1: not found, >0: position of found */
+    int match(const void *data, size_t size);
+    int match(std::string &mathed_token, const void *data, size_t size);
+private:
+    unsigned char *m_ascii;
+    char *m_data;
+    char *m_index;
+    char *m_hash;
+    unsigned short int m_hash_size;
+    unsigned short int m_count;
+};
+
 /* ################################################################## */
 /* log, 通用 */
 extern std::string var_masterlog_listen;
@@ -471,6 +493,7 @@ int get_netmask(int masklen);
 int get_broadcast(int ip, int masklen);
 int get_ip_min(int ip, int masklen);
 int get_ip_max(int ip, int masklen);
+bool ip_is_intranet(const char *ip);
 
 /* device ######################################################### */
 ssize_t get_mac_list(std::list<std::string> &mac_list);
@@ -703,6 +726,7 @@ public:
     stream &puts(const char *str);
     stream &printf_1024(const char *format, ...);
     inline stream &append(std::string &str) { return write(str.c_str(), str.size()); }
+    inline stream &append(const char *str, size_t s) { return write(str, s); }
     inline stream &append(const char *str) { return puts(str); }
     inline stream &append(int i) {return printf_1024("%d", i);}
     inline stream &append(unsigned int i) {return printf_1024("%u", i);}

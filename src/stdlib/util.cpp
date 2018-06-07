@@ -34,7 +34,7 @@ static long build_unique_id_plus = 0;
 static pid_t build_unique_id_tid = 0;
 char *build_unique_filename_id(char *buf)
 {
-    long plus;
+    unsigned long plus;
 #if defined(PTHREAD_SPINLOCK_INITIALIZER)
     pthread_spin_lock(&build_unique_id_lock);
 #else
@@ -42,8 +42,8 @@ char *build_unique_filename_id(char *buf)
 #endif
     plus = build_unique_id_plus++;
     if (build_unique_id_tid == 0) {
-        pid_t gettid(void);
-        build_unique_id_tid = gettid();
+        pid_t getpid(void);
+        build_unique_id_tid = ::getpid();
     }
 #if defined(PTHREAD_SPINLOCK_INITIALIZER)
     pthread_spin_unlock(&build_unique_id_lock);
@@ -53,7 +53,11 @@ char *build_unique_filename_id(char *buf)
 
     struct timeval tv;
     gettimeofday(&tv, 0);
-    sprintf(buf, "%lx_%ld_%lx_%lx", (long)tv.tv_usec, (long)tv.tv_sec, (unsigned long)build_unique_id_tid, plus);
+    unsigned plus2 = plus&0XFFF;
+
+    sprintf(buf, "%05x%c%lx%c%05x%c", (unsigned int)tv.tv_usec, (plus2>>8) + '0',
+            (long)tv.tv_sec, ((plus2>>4)&0XF) + '0', 
+            ((unsigned int)build_unique_id_tid)&0XFFFFF, (plus2&0XF) + '0');
 
     return buf;
 }

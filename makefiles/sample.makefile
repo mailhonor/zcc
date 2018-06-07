@@ -5,7 +5,7 @@ all: target
 LIBCOROUTINE= ../../libzcc_coroutine.a
 
 CC=g++
-CFLAGS= -ggdb -Wall -I../../ -O3
+CFLAGS= -std=gnu++0x -ggdb -Wall -I../../ -O3
 GLOBAL_LIBS= -pthread
 SRCS=${shell find -type f -name "*.cpp"}
 DEST := $(SRCS:.cpp=)

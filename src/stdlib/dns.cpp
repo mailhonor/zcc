@@ -205,4 +205,39 @@ int get_ip_max(int ip, int masklen)
     return ___ip_switch((nip |(~mask)) -1);
 }
 
+bool ip_is_intranet(const char *ip)
+{
+    if (!ip) {
+        return false;
+    }
+    if ((!strncmp(ip, "127.", 4))||(!strncmp(ip, "10.", 3))||(!strncmp(ip, "192.168.", 8))) {
+        return true;
+    }
+    if ((!strncmp(ip, "172.",4)) && ip[4] && ip[5] && (ip[6]=='.')) {
+        int a = (ip[4] - '0') * 10 + (ip[5] - '0');
+        if ((a>15) && (a<32)){
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ip_is_intranet(int ip)
+{
+    int a = ((unsigned char *)&ip)[0];
+    int b = ((unsigned char *)&ip)[1];
+
+    if ((a==127)||(a==10)) {
+        return true;
+    }
+    if ((a==192) && (b==168)) {
+        return true;
+    }
+    if ((a==172) && (15<b) && (b<32)) {
+        return true;
+    }
+
+    return false;
+}
+
 }
