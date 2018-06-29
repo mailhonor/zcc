@@ -1277,7 +1277,7 @@ static void do_cmd_hkeys(connection_context &context, std::vector<std::string> &
     for (rbtree_node_t *rbn = rbtree_first(node->val.hash_tree); rbn; rbn = rbtree_next(rbn)) {
         hash_node_t * hnode = zcc_container_of(rbn, hash_node_t, rbkey);
         sprintf_1024(result, "$%d\r\n", hnode->key_len);
-        hash_node_get_value(hnode, result);
+        hash_node_get_key(hnode, result);
         result.append("\r\n");
         rnum ++;
     }

@@ -70,5 +70,14 @@ std::string &build_unique_filename_id(std::string &path)
     return path;
 }
 
+long get_time_from_unique_filename_id(char *buf)
+{
+    long r = 0;
+    for (int i = 6; i < 14; i++) {
+        r = (r<<4) + buf[i] - '0';
+    }
+    return r;
+}
+
 
 }

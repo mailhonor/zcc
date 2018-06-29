@@ -1565,12 +1565,12 @@ void async_io_list_append(async_io **list_head, async_io **list_tail, async_io *
     if (h == 0) {
         *list_head = 0;
     } else {
-        *list_head = (async_io *) zcc_container_of(h, async_io_t, rbnode_time);
+        *list_head = (zcc_container_of(h, async_io_t, rbnode_time))->aio;
     }
     if (t == 0) {
         *list_tail = 0;
     } else {
-        *list_tail = (async_io *) zcc_container_of(t, async_io_t, rbnode_time);
+        *list_tail = (zcc_container_of(t, async_io_t, rbnode_time))->aio;
     }
 }
 
@@ -1588,12 +1588,12 @@ void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *
     if (h == 0) {
         *list_head = 0;
     } else {
-        *list_head = (async_io *) zcc_container_of(h, async_io_t, rbnode_time);
+        *list_head = (zcc_container_of(h, async_io_t, rbnode_time))->aio;
     }
     if (t == 0) {
         *list_tail = 0;
     } else {
-        *list_tail = (async_io *) zcc_container_of(t, async_io_t, rbnode_time);
+        *list_tail = (zcc_container_of(t, async_io_t, rbnode_time))->aio;
     }
 }
 /* }}} */

@@ -110,6 +110,18 @@ static void ___unix_server_accept(event_io &ev)
     }
 }
 
+static void ___fifo_server_accept(event_io &ev)
+{
+    int listen_fd = ev.get_fd();
+    void (*cb)(int) = (void(*)(int))ev.get_context();
+
+    if (cb) {
+        cb(listen_fd);
+    } else {
+        ___instance->simple_service(listen_fd);
+    }
+}
+
 master_event_server::master_event_server()
 {
     if (!flag_init) {
@@ -252,6 +264,7 @@ event_io *master_event_server::general_service_register(int fd, int fd_type
     } else if (fd_type == var_tcp_listen_type_unix) {
         ev->enable_read(___unix_server_accept);
     } else if (fd_type == var_tcp_listen_type_fifo) {
+        ev->enable_read(___fifo_server_accept);
     }
     event_ios.push_back(ev);
     return ev;

@@ -42,6 +42,9 @@ int main(int argc, char **argv)
 
 
     attr = zcc::default_config.get_str("f");
+    if (zcc::empty(attr)) {
+        ___usage();
+    }
     zcc::file_get_contents_sample(attr, dcon);
 
 

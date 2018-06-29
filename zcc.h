@@ -653,9 +653,9 @@ const int var_tcp_listen_type_fifo = 'f';
 int unix_accept(int fd);
 int inet_accept(int fd);
 int accept(int sock, int type = var_tcp_listen_type_inet);
-int unix_listen(char *addr, int backlog = 5);
-int inet_listen(const char *sip, int port, int backlog = 5);
-int listen(const char *netpath, int *type = 0, int backlog = 5);
+int unix_listen(char *addr, int backlog = 1024);
+int inet_listen(const char *sip, int port, int backlog = 1024);
+int listen(const char *netpath, int *type = 0, int backlog = 1024);
 int fifo_listen(const char *path);
 int unix_connect(const char *addr);
 int inet_connect(const char *dip, int port);
@@ -1035,6 +1035,7 @@ void debug_kv_show(const char *k, long v);
 
 char *build_unique_filename_id(char *buf);
 std::string &build_unique_filename_id(std::string &path);
+long get_time_from_unique_filename_id(char *buf);
 
 /* cdb ############################################################## */
 class cdb
