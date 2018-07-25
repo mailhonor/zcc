@@ -10,9 +10,10 @@ GLOBAL_LIBS= -pthread
 SRCS=${shell find -type f -name "*.cpp"}
 DEST := $(SRCS:.cpp=)
 
-$(DEST): ../../libzcc.a
+$(DEST): ../../libzcc.a ../../libzcc_coroutine.a
 .cpp:
-	$(CC) $*.cpp -o $* $(CFLAGS) -Xlinker "-(" ../../libzcc.a $(GLOBAL_LIBS) $($*_LIB) $(LIBS)
+	$(CC) $*.cpp -o $* $(CFLAGS) $($*_LIB) $(LIBS) $(LIB_$*) ../../libzcc.a $(GLOBAL_LIBS)
+	#$(CC) $*.cpp -o $* $(CFLAGS) -Xlinker "-(" ../../libzcc.a $(GLOBAL_LIBS) $($*_LIB) $(LIBS)
 
 target: libzcc $(DEST)
 

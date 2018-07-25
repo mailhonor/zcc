@@ -130,12 +130,12 @@ void openssl_phtread_fini(void)
     ERR_remove_state(0);
 }
 
-SSL_CTX *openssl_create_SSL_CTX_server(void)
+SSL_CTX *openssl_SSL_CTX_create_server(void)
 {
      return SSL_CTX_new(SSLv23_server_method());
 }
 
-SSL_CTX *openssl_create_SSL_CTX_client(void)
+SSL_CTX *openssl_SSL_CTX_create_client(void)
 {
      return SSL_CTX_new(SSLv23_client_method());
 }
@@ -174,7 +174,7 @@ void openssl_get_error(unsigned long *ecode, char *buf, int buf_len)
     }
 }
 
-SSL *openssl_create_SSL(SSL_CTX * ctx, int fd)
+SSL *openssl_SSL_create(SSL_CTX * ctx, int fd)
 {
     SSL *ssl;
     ssl = SSL_new(ctx);

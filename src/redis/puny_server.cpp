@@ -1814,12 +1814,14 @@ void redis_puny_server::before_service()
         }
         connection_context ctx;
         ctx.current_db = &default_db;
-        FILE *fp = fopen(attr, "r");
-        if (!fp) {
+        fstream fp;
+        if (!fp.open(attr, "r")) {
             zcc_fatal("can not open %s(%m)", attr);
         }
         char *linebuf = (char *)malloc(1024*1024 + 1);
-        while(fgets(linebuf, 1024 * 1204, fp)) {
+        int linelen;
+        while((linelen = fp.gets(linebuf, 1024 * 1204)) > 0) {
+            linebuf[linelen] = 0;
             std::vector<std::string> cmds;
             json jss;
             jss.unserialize(linebuf);

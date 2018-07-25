@@ -16,9 +16,6 @@ namespace zcc
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 
-ssize_t syscall_read(int fd, void *buf, size_t count);
-ssize_t syscall_write(int fd, const void *buf, size_t count);
-
 #pragma pack(push, 1)
 
 /* {{{ declare, macro */
@@ -228,7 +225,7 @@ static inline ssize_t iopipe_sys_write(iopipe_part_t * part, const void *buf, si
     }
     while(1) {
         errno = 0;
-        wlen = syscall_write(part->fd, buf, count);
+        wlen = write(part->fd, buf, count);
         if (wlen > 0) {
             break;
         }
@@ -258,7 +255,7 @@ static inline ssize_t iopipe_sys_read(iopipe_part_t * part, void *buf, size_t co
     }
     while(1) {
         errno = 0;
-        rlen = syscall_read(part->fd, buf, count);
+        rlen = read(part->fd, buf, count);
         if (rlen == 0) {
             part->error_or_closed = 1;
         }
@@ -506,7 +503,7 @@ static int iopipe_base_run(iopipe_base_t * iopb)
         if (part_client->fd == efd) {
             if (!(events & EPOLLOUT)) {
                 uint64_t u;
-                if (syscall_read(efd, &u, sizeof(uint64_t))) {
+                if (read(efd, &u, sizeof(uint64_t))) {
                 }
             }
             continue;
@@ -573,7 +570,7 @@ static void iopipe_enter(iopipe_base_t * iopb, int client_fd, SSL *client_ssl, i
     ZIOPIPE_BASE_UNLOCK(iopb);
 
     uint64_t u = 1;
-    if (syscall_write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) {
+    if (write(iopb->eventfd_iop.client.fd, &u, sizeof(uint64_t))) {
     }
 }
 

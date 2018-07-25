@@ -320,8 +320,7 @@ void httpd::response_file(const char *filename, const char *content_type)
         if (rlen > 4096) {
             rlen = 4096;
         }
-        ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
-        rlen = syscall_read(fd, rwline, rlen);
+        rlen = read(fd, rwline, rlen);
         if (rlen > 0) {
             rlen_sum += rlen;
             h_engine->http_fp.write(rwline, rlen);
@@ -682,8 +681,8 @@ void httpd::request_data_do_true()
     data_filename_auto.data = data_filename;
 
     /* save to tmp file */
-    FILE *fp = fopen(data_filename, "w+");
-    if (!fp) {
+    fstream fp;
+    if (!fp.open(data_filename, "w+")) {
         zcc_info("error open tmp file %s(%m)", data_filename);
         h_engine->exception = true;
         return;
@@ -696,21 +695,18 @@ void httpd::request_data_do_true()
         }
         rlen = h_engine->http_fp.readn(linebuf, rlen);
         if (rlen < 1) {
-            fclose(fp);
             unlink(data_filename);
             h_engine->exception = true;
             return;
         }
         left -= rlen;
     }
-    fflush(fp);
-    if (ferror(fp)) {
-        fclose(fp);
+    fp.flush();
+    if (fp.is_error()) {
         unlink(data_filename);
         h_engine->exception = true;
         return;
     }
-    fclose(fp);
 }
 
 

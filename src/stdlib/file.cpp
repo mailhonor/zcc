@@ -15,9 +15,6 @@
 namespace zcc
 {
 
-ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
-ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
-
 ssize_t file_get_size(const char *filename)
 {
     struct stat st;
@@ -46,7 +43,7 @@ bool file_put_contents(const char *filename, const void *data, size_t len)
     }
 
     while (len > wlen) {
-        ret = syscall_write(fd, (const char *)data + wlen, len - wlen);
+        ret = write(fd, (const char *)data + wlen, len - wlen);
         if (ret > -1) {
             wlen += ret;
             continue;
@@ -88,7 +85,7 @@ ssize_t file_get_contents(const char *filename, std::string &str)
     str.reserve(st.st_size);
 
     while(1) {
-        ret = syscall_read(fd, buf, 4096);
+        ret = read(fd, buf, 4096);
         if (ret < 0) {
             errno2 = errno;
             if (errno == EINTR) {
@@ -130,7 +127,7 @@ ssize_t stdin_get_contents(std::string &str)
     str.clear();
 
     while(1) {
-        ret = syscall_read(fd, buf, 4096);
+        ret = read(fd, buf, 4096);
         if (ret < 0) {
             errno2 = errno;
             if (errno == EINTR) {

@@ -53,11 +53,12 @@ char *build_unique_filename_id(char *buf)
 
     struct timeval tv;
     gettimeofday(&tv, 0);
-    unsigned plus2 = plus&0XFFF;
+    unsigned int plus2 = plus&0XFFF;
+    unsigned char dec2hex[18] = "0123456789abcdef";
 
-    sprintf(buf, "%05x%c%lx%c%05x%c", (unsigned int)tv.tv_usec, (plus2>>8) + '0',
-            (long)tv.tv_sec, ((plus2>>4)&0XF) + '0', 
-            ((unsigned int)build_unique_id_tid)&0XFFFFF, (plus2&0XF) + '0');
+    sprintf(buf, "%05x%c%lx%c%05x%c", (unsigned int)tv.tv_usec, dec2hex[(plus2>>8)],
+            (long)tv.tv_sec, dec2hex[((plus2>>4)&0XF)], 
+            ((unsigned int)build_unique_id_tid)&0XFFFFF, dec2hex[(plus2&0XF)]);
 
     return buf;
 }

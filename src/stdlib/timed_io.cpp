@@ -12,9 +12,6 @@
 namespace zcc
 {
 
-ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
-ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
-
 /* read */
 /* readable means: 1, have readable data.
  *                 2, peer closed.
@@ -87,7 +84,7 @@ ssize_t timed_read(int fd, void *buf, size_t size, long timeout)
         if (timed_wait_readable(fd, left_time) < 1) {
             return (-1);
         }
-        if ((ret = syscall_read(fd, buf, size)) < 0) {
+        if ((ret = read(fd, buf, size)) < 0) {
             int ec = errno;
             if (ec == EINTR) {
                 continue;
@@ -127,7 +124,7 @@ ssize_t timed_readn(int fd, void *buf, size_t size, long timeout)
         if (timed_wait_readable(fd, left_time) < 1) {
             break;
         }
-        ret = syscall_read(fd, ptr, left);
+        ret = read(fd, ptr, left);
         if (ret < 0) {
             int ec = errno;
             if (ec == EINTR) {
@@ -218,7 +215,7 @@ ssize_t timed_write(int fd, const void *buf, size_t size, long timeout)
         if (timed_wait_writeable(fd, left_time) < 1) {
             return -1;
         }
-        if ((ret = syscall_write(fd, buf, size)) < 0) {
+        if ((ret = write(fd, buf, size)) < 0) {
             int ec = errno;
             if (ec == EINTR) {
                 continue;
@@ -264,7 +261,7 @@ ssize_t timed_writen(int fd, const void *buf, size_t size, long timeout)
         if (timed_wait_writeable(fd, left_time) < 1) {
             break;
         }
-        ret = syscall_write(fd, ptr, left);
+        ret = write(fd, ptr, left);
         if (ret < 0) {
             int ec = errno;
             if (ec == EINTR) {

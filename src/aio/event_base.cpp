@@ -27,8 +27,6 @@ event_base default_evbase;
 #define unlock_evbase(eb)   {if(((event_base_t *)(eb))->plocker_flag){ \
     zcc_pthread_unlock(&(((event_base_t *)(eb))->plocker));}}
 
-ssize_t syscall_read(int fd, void *buf, size_t count);
-ssize_t syscall_write(int fd, const void *buf, size_t count);
 static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout);
 static void async_io_ready_do(async_io_t * aio_data);
 
@@ -651,7 +649,7 @@ static void async_io_ssl_init(async_io_t *aio_data, SSL_CTX * ctx, async_io_cb_t
     event_base *eb = aio_data->evbase;
     event_base_t *eb_data = eb->eb_data;
 
-    aio_data->ssl = openssl_create_SSL(ctx, aio_data->fd);
+    aio_data->ssl = openssl_SSL_create(ctx, aio_data->fd);
     aio_data->ssl_server_or_client = (server_or_client?1:0);
 
     aio_data->action_type = var_async_io_type_ssl_init;
@@ -808,7 +806,7 @@ static void async_io_read___inner(async_io_t * aio_data, int max_len, async_io_c
             return;
         }
         if (!(aio_data->ssl)) {
-            rlen = syscall_read(aio_data->fd, buf, 10240);
+            rlen = read(aio_data->fd, buf, 10240);
         } else {
             rlen = async_io_ssl_read(aio_data, buf, 10240);
         }
@@ -857,7 +855,7 @@ static void async_io_read_n___inner(async_io_t * aio_data, int strict_len, async
             return;
         }
         if (!(aio_data->ssl)) {
-            rlen = syscall_read(aio_data->fd, buf, 10240);
+            rlen = read(aio_data->fd, buf, 10240);
         } else {
             rlen = async_io_ssl_read(aio_data, buf, 10240);
         }
@@ -945,7 +943,7 @@ static void async_io_read_size_data___inner(async_io_t * aio_data, async_io_cb_t
             }
         }
         if (!(aio_data->ssl)) {
-            rlen = syscall_read(aio_data->fd, buf, 10240);
+            rlen = read(aio_data->fd, buf, 10240);
         } else {
             rlen = async_io_ssl_read(aio_data, buf, 10240);
         }
@@ -1020,7 +1018,7 @@ static void async_io_read_delimiter___inner(async_io_t * aio_data, char delimite
             return;
         }
         if (!(aio_data->ssl)) {
-            rlen = syscall_read(aio_data->fd, buf, 10240);
+            rlen = read(aio_data->fd, buf, 10240);
         } else {
             rlen = async_io_ssl_read(aio_data, buf, 10240);
         }
@@ -1073,7 +1071,7 @@ static inline void async_io_write_cache_flush___inner(async_io_t * aio_data, asy
         }
         wlen = len;
         if (!(aio_data->ssl)) {
-            retlen = syscall_write(aio_data->fd, data, wlen);
+            retlen = write(aio_data->fd, data, wlen);
             if (retlen < 0) {
                 if (errno == EPIPE) {
                     aio_data->ret = -1;
@@ -1602,7 +1600,7 @@ void async_io_list_detach(async_io **list_head, async_io **list_tail, async_io *
 static void evbase_notify_reader(event_io &eio)
 {
     uint64_t u;
-    syscall_read(eio.get_fd(), &u, sizeof(uint64_t));
+    read(eio.get_fd(), &u, sizeof(uint64_t));
 }
 
 event_base::event_base()
@@ -1644,7 +1642,7 @@ event_base::~event_base()
 void event_base::notify()
 {
     uint64_t u = 1;
-    syscall_write(eb_data->eventfd_event->get_fd(), &u, sizeof(uint64_t));
+    write(eb_data->eventfd_event->get_fd(), &u, sizeof(uint64_t));
 }
 
 void event_base::set_local()

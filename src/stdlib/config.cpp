@@ -15,16 +15,16 @@ config default_config;
 
 bool config::load_by_filename(const char *filename)
 {
-    FILE *fp;
-    char buf[10240 + 1];
     char *key, *val;
 
-    fp = fopen(filename, "r");
-    if (!fp) {
+    fstream fp;
+    if (!fp.open(filename, "r")) {
         return false;
     }
-
-    while(fgets(buf, 10240, fp)) {
+    char *buf = (char *)malloc(10240 + 1);
+    int len;
+    while((len=fp.gets(buf, 10240)) > 0) {
+        buf[len] = 0;
         key = trim_left(buf);
         if ((!*key) || (*key == '#')) {
             continue;
@@ -59,8 +59,7 @@ bool config::load_by_filename(const char *filename)
             }
         }
     }
-
-    fclose(fp);
+    free(buf);
 
     return true;
 }

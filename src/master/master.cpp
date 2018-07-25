@@ -474,7 +474,10 @@ static void start_one_child(server_info *server)
         std_list_walk_begin(server->args, a) {
             exec_argv.push_back(a);
         } std_list_walk_end;
-
+        
+        if (dev_mode) {
+            exec_argv.push_back("--dev-mode");
+        }
         execvp(server->cmd.c_str(), (char **)(memdup(exec_argv.data(), (exec_argv.size() + 1) * sizeof(char *))));
 
         zcc_fatal("master: start child(%s) error: %m", server->cmd.c_str());

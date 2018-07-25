@@ -88,6 +88,23 @@ int accept(int sock, int type)
     return fd;
 }
 
+int easy_accept(int sock, int type)
+{
+    if (zcc::timed_wait_readable(sock, var_max_timeout) < 0) {
+        return -1;
+    }
+    int fd = -1;
+    if (type == var_tcp_listen_type_inet) {
+        fd = inet_accept(sock);
+    } else if (type == var_tcp_listen_type_unix) {
+        fd = unix_accept(sock);
+    } else  {
+        zcc_fatal("accept only support inet/unix");
+    }
+
+    return fd;
+}
+
 /* listen */
 int unix_listen(char *addr, int backlog)
 {

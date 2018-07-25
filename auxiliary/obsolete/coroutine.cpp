@@ -29,72 +29,233 @@
 #include <unistd.h>
 #include <utime.h>
 
-extern "C"
+namespace zcc
 {
+pid_t syscall_gettid(void);
 }
+
+extern "C" {
+typedef int (*pipe_sys_t)(int pipefd[2]);
+typedef int (*pipe2_sys_t)(int pipefd[2], int flags);
+typedef int (*dup_sys_t)(int oldfd);
+typedef int (*dup2_sys_t)(int oldfd, int newfd);
+typedef int (*dup3_sys_t)(int oldfd, int newfd, int flags);
+typedef int (*socketpair_sys_t)(int domain, int type, int protocol, int sv[2]);
+typedef int (*socket_sys_t)(int domain, int type, int protocol);
+typedef int (*accept_sys_t)(int fd, struct sockaddr *addr, socklen_t *len);
+typedef int (*connect_sys_t)(int socket, const struct sockaddr *address, socklen_t address_len);
+typedef int (*close_sys_t)(int fd);
+typedef ssize_t (*read_sys_t)(int fildes, void *buf, size_t nbyte);
+typedef ssize_t (*write_sys_t)(int fildes, const void *buf, size_t nbyte);
+typedef ssize_t (*sendto_sys_t)(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+typedef ssize_t (*recvfrom_sys_t)(int socket, void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+typedef size_t (*send_sys_t)(int socket, const void *buffer, size_t length, int flags);
+typedef ssize_t (*recv_sys_t)(int socket, void *buffer, size_t length, int flags);
+typedef int (*poll_sys_t)(struct pollfd fds[], nfds_t nfds, int timeout);
+typedef int (*setsockopt_sys_t)(int socket, int level, int option_name, const void *option_value, socklen_t option_len);
+typedef int (*fcntl_sys_t)(int fildes, int cmd, ...);
+typedef pid_t (*gettid_sys_t)(void);
+typedef int (*open_sys_t)(const char *pathname, int flags, ...);
+typedef int (*openat_sys_t)(int dirfd, const char *pathname, int flags, ...);
+typedef int (*creat_sys_t)(const char *pathname, mode_t mode);
+typedef off_t (*lseek_sys_t)(int fd, off_t offset, int whence);
+typedef int (*fdatasync_sys_t)(int fd);
+typedef int (*fsync_sys_t)(int fd);
+typedef int (*rename_sys_t)(const char *oldpath, const char *newpath);
+typedef int (*truncate_sys_t)(const char *path, off_t length);
+typedef int (*ftruncate_sys_t)(int fd, off_t length);
+typedef int (*rmdir_sys_t)(const char *pathname);
+typedef int (*mkdir_sys_t)(const char *pathname, mode_t mode);
+typedef int (*getdents_sys_t)(unsigned int fd, void *dirp, unsigned int count);
+typedef int (*stat_sys_t)(const char *pathname, struct stat *buf);
+typedef int (*fstat_sys_t)(int fd, struct stat *buf);
+typedef int (*lstat_sys_t)(const char *pathname, struct stat *buf);
+typedef int (*link_sys_t)(const char *oldpath, const char *newpath);
+typedef int (*symlink_sys_t)(const char *target, const char *linkpath);
+typedef ssize_t (*readlink_sys_t)(const char *pathname, char *buf, size_t bufsiz);
+typedef int (*unlink_sys_t)(const char *pathname);
+typedef int (*chmod_sys_t)(const char *pathname, mode_t mode);
+typedef int (*fchmod_sys_t)(int fd, mode_t mode);
+typedef int (*chown_sys_t)(const char *pathname, uid_t owner, gid_t group);
+typedef int (*fchown_sys_t)(int fd, uid_t owner, gid_t group);
+typedef int (*lchown_sys_t)(const char *pathname, uid_t owner, gid_t group);
+typedef int (*utime_sys_t)(const char *filename, const struct utimbuf *times);
+typedef int (*utimes_sys_t)(const char *filename, const struct timeval times[2]);
+typedef struct hostent * (*gethostbyname_sys_t)(const char* name);
+typedef struct hostent * (*gethostbyname2_sys_t)(const char *name, int af);
+typedef int (*gethostbyname_r_sys_t) (const char *__restrict __name, struct hostent *__restrict __result_buf, char *__restrict __buf, size_t __buflen, struct hostent **__restrict __result, int *__restrict __h_errnop);
+typedef int (*gethostbyname2_r_sys_t) (const char *name, int af, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+typedef struct hostent * (*gethostbyaddr_sys_t)(const void *addr, socklen_t len, int type);
+typedef int (*gethostbyaddr_r_sys_t) (const void *addr, socklen_t len, int type, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+
+#ifndef ZCC_CO_STATIC
+static pipe_sys_t pipe_co = (pipe_sys_t)dlsym(RTLD_NEXT, "pipe");
+static pipe2_sys_t pipe2_co = (pipe2_sys_t)dlsym(RTLD_NEXT, "pipe2");
+static dup_sys_t dup_co = (dup_sys_t)dlsym(RTLD_NEXT, "dup");
+static dup2_sys_t dup2_co = (dup2_sys_t)dlsym(RTLD_NEXT, "dup2");
+static dup3_sys_t dup3_co = (dup3_sys_t)dlsym(RTLD_NEXT, "dup3");
+static socketpair_sys_t socketpair_co = (socketpair_sys_t)dlsym(RTLD_NEXT, "socketpair");
+static socket_sys_t socket_co = (socket_sys_t)dlsym(RTLD_NEXT, "socket");
+static accept_sys_t accept_co = (accept_sys_t)dlsym(RTLD_NEXT, "accept");
+static connect_sys_t connect_co = (connect_sys_t)dlsym(RTLD_NEXT, "connect");
+static close_sys_t close_co = (close_sys_t)dlsym(RTLD_NEXT, "close");
+static read_sys_t read_co = (read_sys_t)dlsym(RTLD_NEXT, "read");
+static write_sys_t write_co = (write_sys_t)dlsym(RTLD_NEXT, "write");
+static sendto_sys_t sendto_co = (sendto_sys_t)dlsym(RTLD_NEXT, "sendto");
+static recvfrom_sys_t recvfrom_co = (recvfrom_sys_t)dlsym(RTLD_NEXT, "recvfrom");
+static send_sys_t send_co = (send_sys_t)dlsym(RTLD_NEXT, "send");
+static recv_sys_t recv_co = (recv_sys_t)dlsym(RTLD_NEXT, "recv");
+static setsockopt_sys_t setsockopt_co = (setsockopt_sys_t)dlsym(RTLD_NEXT, "setsockopt");
+static fcntl_sys_t fcntl_co = (fcntl_sys_t)dlsym(RTLD_NEXT, "fcntl");
+static gettid_sys_t gettid_co = (gettid_sys_t)dlsym(RTLD_NEXT, "gettid");
+static open_sys_t open_co = (open_sys_t)dlsym(RTLD_NEXT, "open");
+static openat_sys_t openat_co = (openat_sys_t)dlsym(RTLD_NEXT, "openat");
+static lseek_sys_t lseek_co = (lseek_sys_t)dlsym(RTLD_NEXT, "lseek");
+static fdatasync_sys_t fdatasync_co = (fdatasync_sys_t)dlsym(RTLD_NEXT, "fdatasync");
+static fsync_sys_t fsync_co = (fsync_sys_t)dlsym(RTLD_NEXT, "fsync");
+static rename_sys_t rename_co = (rename_sys_t)dlsym(RTLD_NEXT, "rename");
+static truncate_sys_t truncate_co = (truncate_sys_t)dlsym(RTLD_NEXT, "truncate");
+static ftruncate_sys_t ftruncate_co = (ftruncate_sys_t)dlsym(RTLD_NEXT, "ftruncate");
+static rmdir_sys_t rmdir_co = (rmdir_sys_t)dlsym(RTLD_NEXT, "rmdir");
+static mkdir_sys_t mkdir_co = (mkdir_sys_t)dlsym(RTLD_NEXT, "mkdir");
+static getdents_sys_t getdents_co = (getdents_sys_t)dlsym(RTLD_NEXT, "getdents");
+static stat_sys_t stat_co = (stat_sys_t)dlsym(RTLD_NEXT, "stat");
+static fstat_sys_t fstat_co = (fstat_sys_t)dlsym(RTLD_NEXT, "fstat");
+static lstat_sys_t lstat_co = (lstat_sys_t)dlsym(RTLD_NEXT, "lstat");
+static link_sys_t link_co = (link_sys_t)dlsym(RTLD_NEXT, "link");
+static symlink_sys_t symlink_co = (symlink_sys_t)dlsym(RTLD_NEXT, "symlink");
+static readlink_sys_t readlink_co = (readlink_sys_t)dlsym(RTLD_NEXT, "readlink");
+static unlink_sys_t unlink_co = (unlink_sys_t)dlsym(RTLD_NEXT, "unlink");
+static chmod_sys_t chmod_co = (chmod_sys_t)dlsym(RTLD_NEXT, "chmod");
+static fchmod_sys_t fchmod_co = (fchmod_sys_t)dlsym(RTLD_NEXT, "fchmod");
+static chown_sys_t chown_co = (chown_sys_t)dlsym(RTLD_NEXT, "chown");
+static fchown_sys_t fchown_co = (fchown_sys_t)dlsym(RTLD_NEXT, "fchown");
+static lchown_sys_t lchown_co = (lchown_sys_t)dlsym(RTLD_NEXT, "lchown");
+static utime_sys_t utime_co = (utime_sys_t)dlsym(RTLD_NEXT, "utime");
+static utimes_sys_t utimes_co = (utimes_sys_t)dlsym(RTLD_NEXT, "utimes");
+static gethostbyname_sys_t gethostbyname_co = (gethostbyname_sys_t)dlsym(RTLD_NEXT, "gethostbyname");
+static gethostbyname_r_sys_t gethostbyname_r_co = (gethostbyname_r_sys_t)dlsym(RTLD_NEXT, "gethostbyname_r");
+static gethostbyname2_sys_t gethostbyname2_co = (gethostbyname2_sys_t)dlsym(RTLD_NEXT, "gethostbyname2");
+static gethostbyname2_r_sys_t gethostbyname2_r_co = (gethostbyname2_r_sys_t)dlsym(RTLD_NEXT, "gethostbyname2_r");
+static gethostbyaddr_sys_t gethostbyaddr_co = (gethostbyaddr_sys_t)dlsym(RTLD_NEXT, "gethostbyaddr");
+static gethostbyaddr_r_sys_t gethostbyaddr_r_co = (gethostbyaddr_r_sys_t)dlsym(RTLD_NEXT, "gethostbyaddr_r");
+#else
+extern pipe_sys_t __pipe;
+extern pipe2_sys_t __pipe2;
+extern dup_sys_t __dup;
+extern dup2_sys_t __dup2;
+extern dup3_sys_t __dup3;
+extern socketpair_sys_t __socketpair;
+extern socket_sys_t __socket;
+extern accept_sys_t __accept;
+extern connect_sys_t __connect;
+extern close_sys_t __close;
+extern read_sys_t __read;
+extern write_sys_t __write;
+extern sendto_sys_t __sendto;
+extern recvfrom_sys_t __recvfrom;
+extern send_sys_t __send;
+extern recv_sys_t __recv;
+extern setsockopt_sys_t __setsockopt;
+extern fcntl_sys_t __fcntl;
+extern open_sys_t __open;
+extern openat_sys_t __openat;
+extern lseek_sys_t __lseek;
+extern fdatasync_sys_t __fdatasync;
+extern fsync_sys_t __fsync;
+extern rename_sys_t __rename;
+extern truncate_sys_t __truncate;
+extern ftruncate_sys_t __ftruncate;
+extern rmdir_sys_t __rmdir;
+extern mkdir_sys_t __mkdir;
+extern getdents_sys_t __getdents;
+extern stat_sys_t __stat;
+extern fstat_sys_t __fstat;
+extern lstat_sys_t __lstat;
+extern link_sys_t __link;
+extern symlink_sys_t __symlink;
+extern readlink_sys_t __readlink;
+extern unlink_sys_t __unlink;
+extern chmod_sys_t __chmod;
+extern fchmod_sys_t __fchmod;
+extern chown_sys_t __chown;
+extern fchown_sys_t __fchown;
+extern lchown_sys_t __lchown;
+extern utime_sys_t __utime;
+extern utimes_sys_t __utimes;
+extern gethostbyname_sys_t __gethostbyname;
+extern gethostbyname_r_sys_t __gethostbyname_r;
+extern gethostbyname2_sys_t __gethostbyname2;
+extern gethostbyname2_r_sys_t __gethostbyname2_r;
+extern gethostbyaddr_sys_t __gethostbyaddr;
+extern gethostbyaddr_r_sys_t __gethostbyaddr_r;
+
+static pipe_sys_t pipe_co = __pipe;
+static pipe2_sys_t pipe2_co = __pipe2;
+static dup_sys_t dup_co = __dup;
+static dup2_sys_t dup2_co = __dup2;
+static dup3_sys_t dup3_co = __dup3;
+static socketpair_sys_t socketpair_co = __socketpair;
+static socket_sys_t socket_co = __socket;
+static accept_sys_t accept_co = __accept;
+static connect_sys_t connect_co = __connect;
+static close_sys_t close_co = __close;
+static read_sys_t read_co = __read;
+static write_sys_t write_co = __write;
+static sendto_sys_t sendto_co = __sendto;
+static recvfrom_sys_t recvfrom_co = __recvfrom;
+static send_sys_t send_co = __send;
+static recv_sys_t recv_co = __recv;
+static setsockopt_sys_t setsockopt_co = __setsockopt;
+static fcntl_sys_t fcntl_co = __fcntl;
+static gettid_sys_t gettid_co = zcc::syscall_gettid;
+static open_sys_t open_co = __open;
+static openat_sys_t openat_co = __openat;
+static lseek_sys_t lseek_co = __lseek;
+static fdatasync_sys_t fdatasync_co = zcc::syscall_fdatasync;
+static fsync_sys_t fsync_co = __fsync;
+static rename_sys_t rename_co = __rename;
+static truncate_sys_t truncate_co = __truncate;
+static ftruncate_sys_t ftruncate_co = __ftruncate;
+static rmdir_sys_t rmdir_co = __rmdir;
+static mkdir_sys_t mkdir_co = __mkdir;
+static getdents_sys_t getdents_co = __getdents;
+static stat_sys_t stat_co = __stat;
+static fstat_sys_t fstat_co = __fstat;
+static lstat_sys_t lstat_co = __lstat;
+static link_sys_t link_co = __link;
+static symlink_sys_t symlink_co = __symlink;
+static readlink_sys_t readlink_co = __readlink;
+static unlink_sys_t unlink_co = __unlink;
+static chmod_sys_t chmod_co = __chmod;
+static fchmod_sys_t fchmod_co = __fchmod;
+static chown_sys_t chown_co = __chown;
+static fchown_sys_t fchown_co = __fchown;
+static lchown_sys_t lchown_co = __lchown;
+static utime_sys_t utime_co = __utime;
+static utimes_sys_t utimes_co = __utimes;
+static gethostbyname_sys_t gethostbyname_co = __gethostbyname;
+static gethostbyname_r_sys_t gethostbyname_r_co = __gethostbyname_r;
+static gethostbyname2_sys_t gethostbyname2_co = __gethostbyname2;
+static gethostbyname2_r_sys_t gethostbyname2_r_co = __gethostbyname2_r;
+static gethostbyaddr_sys_t gethostbyaddr_co = __gethostbyaddr;
+static gethostbyaddr_r_sys_t gethostbyaddr_r_co = __gethostbyaddr_r;
+#endif
+} /* extern "C" */
 
 namespace zcc
 {
-/* {{{ syscall */
-int syscall_pipe(int pipefd[2]);
-int syscall_pipe2(int pipefd[2], int flags);
-int syscall_dup(int oldfd);
-int syscall_dup2(int oldfd, int newfd);
-int syscall_dup3(int oldfd, int newfd, int flags);
-int syscall_socketpair(int domain, int type, int protocol, int sv[2]);
-int syscall_socket(int domain, int type, int protocol);
-int syscall_accept(int fd, struct sockaddr *addr, socklen_t *len);
-int syscall_connect(int socket, const struct sockaddr *address, socklen_t address_len);
-int syscall_close(int fd);
-ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
-ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
-ssize_t syscall_sendto(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
-ssize_t syscall_recvfrom(int socket, void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
-size_t syscall_send(int socket, const void *buffer, size_t length, int flags);
-ssize_t syscall_recv(int socket, void *buffer, size_t length, int flags);
-int syscall_poll(struct pollfd fds[], nfds_t nfds, int timeout);
-int syscall_setsockopt(int socket, int level, int option_name, const void *option_value, socklen_t option_len);
-int syscall_fcntl(int fildes, int cmd, ...);
-pid_t syscall_gettid(void);
-int syscall_open(const char *pathname, int flags, ...);
-int syscall_openat(int dirfd, const char *pathname, int flags, ...);
-int syscall_creat(const char *pathname, mode_t mode);
-off_t syscall_lseek(int fd, off_t offset, int whence);
-int syscall_fdatasync(int fd);
-int syscall_fsync(int fd);
-int syscall_rename(const char *oldpath, const char *newpath);
-int syscall_truncate(const char *path, off_t length);
-int syscall_ftruncate(int fd, off_t length);
-int syscall_rmdir(const char *pathname);
-int syscall_mkdir(const char *pathname, mode_t mode);
-int syscall_getdents(unsigned int fd, void *dirp, unsigned int count);
-int syscall_stat(const char *pathname, struct stat *buf);
-int syscall_fstat(int fd, struct stat *buf);
-int syscall_lstat(const char *pathname, struct stat *buf);
-int syscall_link(const char *oldpath, const char *newpath);
-int syscall_symlink(const char *target, const char *linkpath);
-ssize_t syscall_readlink(const char *pathname, char *buf, size_t bufsiz);
-int syscall_unlink(const char *pathname);
-int syscall_chmod(const char *pathname, mode_t mode);
-int syscall_fchmod(int fd, mode_t mode);
-int syscall_chown(const char *pathname, uid_t owner, gid_t group);
-int syscall_fchown(int fd, uid_t owner, gid_t group);
-int syscall_lchown(const char *pathname, uid_t owner, gid_t group);
-int syscall_utime(const char *filename, const struct utimbuf *times);
-int syscall_utimes(const char *filename, const struct timeval times[2]);
-int syscall_futimes(int fd, const struct timeval tv[2]);
-int syscall_lutimes(const char *filename, const struct timeval tv[2]);
-/* }}} */
+
 extern pthread_mutex_t *var_general_pthread_mutex;
 
-static int var_coroutine_block_pthread_count_limit = 0;
-void coroutine_set_block_pthread_limit(int limit) 
-{
-    var_coroutine_block_pthread_count_limit = limit;
-}
+int var_coroutine_block_pthread_count_limit = 4;
 static int var_coroutine_block_pthread_count_current = 0;
 
 static void *coroutine_hook_fileio_worker(void *arg);
+
+#if 0
+pthread_mutex_t *get_var_general_pthread_mutex();
+#endif
 
 int syscall_poll(struct pollfd fds[], nfds_t nfds, int timeout);
 
@@ -127,7 +288,6 @@ union coroutine_hook_arg_t {
     off_t off_off_t;
     uid_t uid_uid_t;
     gid_t gid_gid_t;
-    void *(*block_func)(void *);
 };
 struct coroutine_hook_fileio_t {
     coroutine *current_coroutine;
@@ -138,7 +298,6 @@ struct coroutine_hook_fileio_t {
     int co_errno;
     int cmdcode;
     unsigned int is_regular_file:1;
-    unsigned int is_block_func:1;
 };
 
 static pthread_mutex_t var_coroutine_hook_fileio_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -181,13 +340,9 @@ enum coroutine_hook_fileio_cmd_t {
 };
 typedef enum coroutine_hook_fileio_cmd_t coroutine_hook_fileio_cmd_t;
 
-#define coroutine_hook_fileio_run_part0() \
-    zcc::coroutine_base *cobs = 0; \
-    if ((cobs = zcc::coroutine_base_get_current())==0)
-
 #define coroutine_hook_fileio_run_part1() \
     zcc::coroutine_base *cobs = 0; \
-    if ((zcc::var_coroutine_block_pthread_count_limit<1) || ((cobs = zcc::coroutine_base_get_current())==0))
+    if ((cobs = zcc::coroutine_base_get_current())==0)
 
 #define coroutine_hook_fileio_run_part2(func)  \
     zcc::coroutine *current_coroutine = cobs->current_coroutine; \
@@ -200,7 +355,7 @@ typedef enum coroutine_hook_fileio_cmd_t coroutine_hook_fileio_cmd_t;
     zcc_pthread_lock(&zcc::var_coroutine_hook_fileio_lock); \
     zcc_mlink_append(zcc::var_coroutine_hook_fileio_head, zcc::var_coroutine_hook_fileio_tail, &fileio, prev, next); \
     zcc::var_coroutine_hook_fileio_count++; \
-    if (zcc::var_coroutine_block_pthread_count_current < zcc::var_coroutine_block_pthread_count_limit) { \
+    if ((zcc::var_coroutine_block_pthread_count_limit > 0) && (zcc::var_coroutine_block_pthread_count_current < zcc::var_coroutine_block_pthread_count_limit)) { \
         if ((zcc::var_coroutine_block_pthread_count_current == 0)||(zcc::var_coroutine_hook_fileio_count > (zcc::var_coroutine_block_pthread_count_current))) { \
             pthread_t pth; \
             if (pthread_create(&pth, 0, zcc::coroutine_hook_fileio_worker, 0)) { \
@@ -228,7 +383,7 @@ struct coroutine_sys_context {
 class coroutine
 {
 public:
-    coroutine(coroutine_base *base, size_t stack_size = 128 * 1024);
+    coroutine(coroutine_base *base);
     ~coroutine();
     void *(*___start_job)(void *ctx);
     void *___context;
@@ -395,7 +550,8 @@ static inline void coroutine_fd_attribute_free(int fd)
 /* }}} */
 
 /* {{{ coroutine */
-coroutine::coroutine(coroutine_base *base, size_t stack_size)
+#define  var_coroutine_stack_size 128 * 1024
+coroutine::coroutine(coroutine_base *base)
 {
     ___start_job = 0;
     ___context = 0;
@@ -406,8 +562,8 @@ coroutine::coroutine(coroutine_base *base, size_t stack_size)
     ___res_state = 0;
     ___gethostbyname = 0;
     memset(&___sys_context, 0, sizeof(___sys_context));
-    ___sys_context.ss_sp = (char *)malloc(stack_size + 16 + 10);
-    ___sys_context.ss_size = stack_size;
+    ___sys_context.ss_sp = (char *)malloc(var_coroutine_stack_size + 16 + 10);
+    ___sys_context.ss_size = var_coroutine_stack_size;
     coroutine_sys_context_init(&___sys_context, (void *)this);
 }
 
@@ -515,8 +671,8 @@ void coroutine_base_fini()
             coroutine_base_remove_coroutine(cobs);
         }
         delete cobs->self_coroutine;
-        zcc::syscall_close(cobs->epoll_fd);
-        zcc::syscall_close(cobs->event_fd);
+        close_co(cobs->epoll_fd);
+        close_co(cobs->event_fd);
         free(cobs);
         var_coroutine_base_per_pthread = 0;
         pthread_mutex_lock(var_general_pthread_mutex);
@@ -529,7 +685,7 @@ void coroutine_base_fini()
     }
 }
 
-void coroutine_go(void *(*start_job)(void *ctx), void *ctx, size_t stack_size)
+void coroutine_go(void *(*start_job)(void *ctx), void *ctx)
 {
     if (start_job == 0) {
         return;
@@ -541,7 +697,7 @@ void coroutine_go(void *(*start_job)(void *ctx), void *ctx, size_t stack_size)
     if (cobs->deleted_coroutine_head) {
         coroutine_base_remove_coroutine(cobs);
     }
-    coroutine *co = new coroutine(cobs, stack_size);
+    coroutine *co = new coroutine(cobs);
     zcc_mlink_append(cobs->prepare_coroutines_head, cobs->prepare_coroutines_tail, co, ___prev, ___next);
     co->___start_job = start_job;
     co->___context = ctx;
@@ -656,10 +812,10 @@ void coroutine_disable_fd(int fd)
     coroutine_fd_attribute  *cfa = coroutine_fd_attribute_get(fd);
     if (cfa) {
         int flags;
-        if ((flags = zcc::syscall_fcntl(fd, F_GETFL, 0)) < 0) {
+        if ((flags = fcntl_co(fd, F_GETFL, 0)) < 0) {
             zcc_fatal("fcntl _co(%m)");
         }
-        if (zcc::syscall_fcntl(fd, F_SETFL, (cfa->nonblock?flags | O_NONBLOCK : flags & ~O_NONBLOCK)) < 0) {
+        if (fcntl_co(fd, F_SETFL, (cfa->nonblock?flags | O_NONBLOCK : flags & ~O_NONBLOCK)) < 0) {
             zcc_fatal("fcntl _co(%m)");
         }
         coroutine_fd_attribute_free(fd);
@@ -1007,7 +1163,7 @@ void coroutine_base_loop()
             int fd = epev->data.fd;
             if (fd == cobs->event_fd) {
                 uint64_t u;
-                zcc::syscall_read(fd, &u, sizeof(uint64_t));
+                read_co(fd, &u, sizeof(uint64_t));
                 continue;
             }
             cfa = coroutine_fd_attribute_get(fd);
@@ -1172,17 +1328,14 @@ static void coroutine_hook_fileio_worker_do(zcc::coroutine_hook_fileio_t &cio)
     auto &args = cio.args;
     auto &retval = cio.retval;
     int errno_bak = 0;
-    if (cio.is_block_func) {
-        retval.void_ptr_t = args[0].block_func(args[1].void_ptr_t);
-    }
     switch(cio.cmdcode) {
     case zcc::coroutine_hook_fileio_open:
-        retval.int_t = zcc::syscall_open(args[0].char_ptr_t, args[1].int_t, args[2].int_t);
+        retval.int_t = open_co(args[0].char_ptr_t, args[1].int_t, args[2].int_t);
         if (retval.int_t > -1) {
             struct stat st;
-            if (zcc::syscall_fstat(retval.int_t, &st) == -1) {
+            if (fstat_co(retval.int_t, &st) == -1) {
                 errno_bak = errno;
-                zcc::syscall_close(retval.int_t);
+                close_co(retval.int_t);
                 retval.int_t = -1;
             } else {
                 if (S_ISFIFO(st.st_mode)) {
@@ -1194,12 +1347,12 @@ static void coroutine_hook_fileio_worker_do(zcc::coroutine_hook_fileio_t &cio)
         }
         break;
     case zcc::coroutine_hook_fileio_openat:
-        retval.int_t = zcc::syscall_openat(args[0].int_t, args[1].char_ptr_t, args[2].int_t, args[3].int_t);
+        retval.int_t = openat_co(args[0].int_t, args[1].char_ptr_t, args[2].int_t, args[3].int_t);
         if (retval.int_t > -1) {
             struct stat st;
-            if (zcc::syscall_fstat(retval.int_t, &st) == -1) {
+            if (fstat_co(retval.int_t, &st) == -1) {
                 errno_bak = errno;
-                zcc::syscall_close(retval.int_t);
+                close_co(retval.int_t);
                 retval.int_t = -1;
             } else {
                 if (S_ISFIFO(st.st_mode)) {
@@ -1211,79 +1364,79 @@ static void coroutine_hook_fileio_worker_do(zcc::coroutine_hook_fileio_t &cio)
         }
         break;
     case zcc::coroutine_hook_fileio_read:
-        retval.ssize_ssize_t = zcc::syscall_read(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
+        retval.ssize_ssize_t = read_co(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
         break;
     case zcc::coroutine_hook_fileio_write:
-        retval.ssize_ssize_t = zcc::syscall_write(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
+        retval.ssize_ssize_t = write_co(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
         break;
     case zcc::coroutine_hook_fileio_lseek:
-        retval.off_off_t = zcc::syscall_lseek(args[0].int_t, args[1].off_off_t, args[2].int_t);
+        retval.off_off_t = lseek_co(args[0].int_t, args[1].off_off_t, args[2].int_t);
         break;
     case zcc::coroutine_hook_fileio_fdatasync:
-        retval.int_t = zcc::syscall_fdatasync(args[0].int_t);
+        retval.int_t = fdatasync_co(args[0].int_t);
         break;
     case coroutine_hook_fileio_fsync:
-        retval.int_t = zcc::syscall_fsync(args[0].int_t);
+        retval.int_t = fsync_co(args[0].int_t);
         break;
     case coroutine_hook_fileio_rename:
-        retval.int_t = zcc::syscall_rename(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
+        retval.int_t = rename_co(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
         break;
     case coroutine_hook_fileio_truncate:
-        retval.int_t = zcc::syscall_truncate(args[0].const_char_ptr_t, args[1].off_off_t);
+        retval.int_t = truncate_co(args[0].const_char_ptr_t, args[1].off_off_t);
         break;
     case coroutine_hook_fileio_ftruncate:
-        retval.int_t = zcc::syscall_ftruncate(args[0].int_t, args[1].off_off_t);
+        retval.int_t = ftruncate_co(args[0].int_t, args[1].off_off_t);
         break;
     case coroutine_hook_fileio_rmdir:
-        retval.int_t = zcc::syscall_rmdir(args[0].const_char_ptr_t);
+        retval.int_t = rmdir_co(args[0].const_char_ptr_t);
         break;
     case coroutine_hook_fileio_mkdir:
-        retval.int_t = zcc::syscall_mkdir(args[0].const_char_ptr_t, args[1].mode_mode_t);
+        retval.int_t = mkdir_co(args[0].const_char_ptr_t, args[1].mode_mode_t);
         break;
     case coroutine_hook_fileio_getdents:
-        retval.int_t = zcc::syscall_getdents(args[0].uint_t, args[1].void_ptr_t, args[1].uint_t);
+        retval.int_t = getdents_co(args[0].uint_t, args[1].void_ptr_t, args[1].uint_t);
         break;
     case coroutine_hook_fileio_stat:
-        retval.int_t = zcc::syscall_stat(args[0].const_char_ptr_t, (struct stat *)args[0].char_ptr_t);
+        retval.int_t = stat_co(args[0].const_char_ptr_t, (struct stat *)args[0].char_ptr_t);
         break;
     case coroutine_hook_fileio_fstat:
-        retval.int_t = zcc::syscall_fstat(args[0].int_t, (struct stat *)args[0].char_ptr_t);
+        retval.int_t = fstat_co(args[0].int_t, (struct stat *)args[0].char_ptr_t);
         break;
     case coroutine_hook_fileio_lstat:
-        retval.int_t = zcc::syscall_lstat(args[0].const_char_ptr_t, (struct stat *)args[0].char_ptr_t);
+        retval.int_t = lstat_co(args[0].const_char_ptr_t, (struct stat *)args[0].char_ptr_t);
         break;
     case coroutine_hook_fileio_link:
-        retval.int_t = zcc::syscall_link(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
+        retval.int_t = link_co(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
         break;
     case coroutine_hook_fileio_symlink:
-        retval.int_t = zcc::syscall_symlink(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
+        retval.int_t = symlink_co(args[0].const_char_ptr_t, args[1].const_char_ptr_t);
         break;
     case coroutine_hook_fileio_readlink:
-        retval.int_t = zcc::syscall_readlink(args[0].const_char_ptr_t, args[1].char_ptr_t, args[2].size_size_t);
+        retval.int_t = readlink_co(args[0].const_char_ptr_t, args[1].char_ptr_t, args[2].size_size_t);
         break;
     case coroutine_hook_fileio_unlink:
-        retval.int_t = zcc::syscall_unlink(args[0].const_char_ptr_t);
+        retval.int_t = unlink_co(args[0].const_char_ptr_t);
         break;
     case coroutine_hook_fileio_chmod:
-        retval.int_t = zcc::syscall_chmod(args[0].const_char_ptr_t, args[1].mode_mode_t);
+        retval.int_t = chmod_co(args[0].const_char_ptr_t, args[1].mode_mode_t);
         break;
     case coroutine_hook_fileio_fchmod:
-        retval.int_t = zcc::syscall_fchmod(args[0].int_t, args[1].mode_mode_t);
+        retval.int_t = fchmod_co(args[0].int_t, args[1].mode_mode_t);
         break;
     case coroutine_hook_fileio_chown:
-        retval.int_t = zcc::syscall_chown(args[0].const_char_ptr_t, args[1].uid_uid_t, args[2].gid_gid_t);
+        retval.int_t = chown_co(args[0].const_char_ptr_t, args[1].uid_uid_t, args[2].gid_gid_t);
         break;
     case coroutine_hook_fileio_fchown:
-        retval.int_t = syscall_fchown(args[0].int_t, args[1].uid_uid_t, args[2].gid_gid_t);
+        retval.int_t = fchown_co(args[0].int_t, args[1].uid_uid_t, args[2].gid_gid_t);
         break;
     case coroutine_hook_fileio_lchown:
-        retval.int_t = zcc::syscall_lchown(args[0].const_char_ptr_t, args[1].uid_uid_t, args[2].gid_gid_t);
+        retval.int_t = lchown_co(args[0].const_char_ptr_t, args[1].uid_uid_t, args[2].gid_gid_t);
         break;
     case coroutine_hook_fileio_utime:
-        retval.int_t = zcc::syscall_utime(args[0].const_char_ptr_t, (const struct utimbuf *)args[1].char_ptr_t);
+        retval.int_t = utime_co(args[0].const_char_ptr_t, (const struct utimbuf *)args[1].char_ptr_t);
         break;
     case coroutine_hook_fileio_utimes:
-        retval.int_t = zcc::syscall_utimes(args[0].const_char_ptr_t, (struct timeval *)args[1].char_ptr_t);
+        retval.int_t = utimes_co(args[0].const_char_ptr_t, (struct timeval *)args[1].char_ptr_t);
         break;
     }
     if (errno_bak) {
@@ -1293,31 +1446,9 @@ static void coroutine_hook_fileio_worker_do(zcc::coroutine_hook_fileio_t &cio)
     }
 }
 
-static pthread_key_t ___gethostbyname_pthread_key;
-void ___gethostbyname_pthread_key_destroy(void *buf)
-{
-    char **g = (char **)buf;
-    if (g) {
-        if (*g) {
-            free(*g);
-        }
-        free(g);
-    }
-    pthread_setspecific(___gethostbyname_pthread_key, 0);
-}
-
-static void coroutine_hook_fileio_worker_init()
-{
-    pthread_detach(pthread_self());
-    pthread_key_create(&___gethostbyname_pthread_key, ___gethostbyname_pthread_key_destroy);
-    char **g = (char **)malloc(sizeof(char **));
-    *g = 0;
-    pthread_setspecific(___gethostbyname_pthread_key, g);
-}
-
 static void *coroutine_hook_fileio_worker(void *arg)
 {
-    coroutine_hook_fileio_worker_init();
+    pthread_detach(pthread_self());
     while (1) {
         zcc_pthread_lock(&var_coroutine_hook_fileio_lock);
         while(!var_coroutine_hook_fileio_head) {
@@ -1326,7 +1457,7 @@ static void *coroutine_hook_fileio_worker(void *arg)
                 return arg;
             }
             struct timespec ts;
-            ts.tv_sec = time(0) + 1;
+            ts.tv_sec = 1;
             ts.tv_nsec = 0;
             pthread_cond_timedwait(&var_coroutine_hook_fileio_cond, &var_coroutine_hook_fileio_lock, &ts);
         }
@@ -1347,25 +1478,10 @@ static void *coroutine_hook_fileio_worker(void *arg)
         coroutine_base *cobs = co->___base;
         zcc_mlink_append(cobs->fileio_coroutines_head, cobs->fileio_coroutines_tail, co, ___prev, ___next);
         uint64_t u = 1;
-        zcc::syscall_write(cobs->event_fd, &u, sizeof(uint64_t));
+        write_co(cobs->event_fd, &u, sizeof(uint64_t));
         zcc_pthread_unlock(&var_coroutine_hook_fileio_lock);
     }
     return arg;
-}
-/* }}} */
-
-/* {{{ block*/
-void *coroutine_block_do(void *(*block_func)(void *ctx), void *ctx)
-{
-    coroutine_hook_fileio_run_part1() {
-        return block_func(ctx);
-    }
-    coroutine_hook_fileio_run_part2(unknown);
-    fileio.args[0].block_func = block_func;
-    fileio.args[1].void_ptr_t = ctx;
-    fileio.is_block_func = 1;
-    coroutine_hook_fileio_run_part3();
-    return retval.void_ptr_t;
 }
 /* }}} */
 
@@ -1437,7 +1553,7 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
 int pipe(int pipefd[2])
 {
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    int ret = zcc::syscall_pipe(pipefd);
+    int ret = pipe_co(pipefd);
     if (ret < 0) {
         return ret;
     }
@@ -1456,7 +1572,7 @@ int pipe(int pipefd[2])
 int pipe2(int pipefd[2], int flags)
 {
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    int ret = zcc::syscall_pipe2(pipefd, flags);
+    int ret = pipe2_co(pipefd, flags);
     if (ret < 0) {
         return ret;
     }
@@ -1474,8 +1590,9 @@ int pipe2(int pipefd[2], int flags)
 /* {{{ dup hook */
 int dup(int oldfd)
 {
+    printf("dup\n");
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    int newfd = zcc::syscall_dup(oldfd);
+    int newfd = dup_co(oldfd);
     if (newfd < 0) {
         return newfd;
     }
@@ -1502,7 +1619,7 @@ int dup2(int oldfd, int newfd)
 {
     int ret;
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    if ((ret = zcc::syscall_dup2(oldfd, newfd)) < 0) {
+    if ((ret = dup2_co(oldfd, newfd)) < 0) {
         return ret;
     }
     if (!cobs) {
@@ -1535,7 +1652,7 @@ int dup2(int oldfd, int newfd)
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    int ret = zcc::syscall_socketpair(domain, type, protocol, sv);
+    int ret = socketpair_co(domain, type, protocol, sv);
     if (ret < 0) {
         return ret;
     }
@@ -1561,7 +1678,7 @@ int open(const char *pathname, int flags, ...)
         va_end(args);
     }
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_open(pathname, flags, mode);
+        return open_co(pathname, flags, mode);
     }
     coroutine_hook_fileio_run_part2(open);
     fileio.args[0].void_ptr_t = (void *)pathname;
@@ -1589,7 +1706,7 @@ int openat(int dirid, const char *pathname, int flags, ...)
         va_end(args);
     }
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_openat(dirid, pathname, flags, mode);
+        return openat_co(dirid, pathname, flags, mode);
     }
     coroutine_hook_fileio_run_part2(open);
     fileio.args[0].int_t = dirid;
@@ -1619,7 +1736,7 @@ int creat(const char *pathname, mode_t mode)
 /* {{{ socket hook */
 int socket(int domain, int type, int protocol)
 {
-	int fd = zcc::syscall_socket(domain, type, protocol);
+	int fd = socket_co(domain, type, protocol);
 	if(fd < 0) {
 		return fd;
 	}
@@ -1652,13 +1769,15 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len)
 {
     const int ___accept_timeout = 100 * 1000;
     return_zcc_call_co(fd) {
-        int sock = zcc::syscall_accept(fd, addr, len);
+    printf("accept inner nonblock:%d\n", fdatts->nonblock);
+        int sock = accept_co(fd, addr, len);
         if (cobs && (sock > -1)) {
             zcc::coroutine_fd_attribute_create(sock);
-            fcntl(sock, F_SETFL, zcc::syscall_fcntl(sock, F_GETFL,0));
+            fcntl(sock, F_SETFL, fcntl_co(sock, F_GETFL,0));
         }
         return sock;
     }
+    printf("accept inner\n");
 	struct pollfd pf;
     memset(&pf,0,sizeof(pf));
     pf.fd = fd;
@@ -1673,10 +1792,10 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len)
 		return -1;
     }
 
-    int sock = zcc::syscall_accept(fd, addr, len);
+    int sock = accept_co(fd, addr, len);
     if (sock > -1) {
         zcc::coroutine_fd_attribute_create(sock);
-        fcntl(sock, F_SETFL, zcc::syscall_fcntl(sock, F_GETFL,0));
+        fcntl(sock, F_SETFL, fcntl_co(sock, F_GETFL,0));
     }
     return sock;
 }
@@ -1687,7 +1806,7 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len)
 int connect(int fd, const struct sockaddr *address, socklen_t address_len)
 {
     const int ___connect_timeout = 100 * 1000;
-    int ret = zcc::syscall_connect(fd, address, address_len);
+    int ret = connect_co(fd, address, address_len);
     return_zcc_call_co(fd) {
         return ret;
     }
@@ -1723,7 +1842,7 @@ int close(int fd)
 {
     int ret;
     coroutine_hook_fileio_run_part1() {
-        ret = zcc::syscall_close(fd);
+        ret = close_co(fd);
         if (ret > -1) {
             zcc::coroutine_fd_attribute_free(fd);
         }
@@ -1732,7 +1851,7 @@ int close(int fd)
 
     zcc::coroutine_fd_attribute *fdatts = 0;
     if (((fdatts = zcc::coroutine_fd_attribute_get(fd)) == 0) || (fdatts->pseudo_mode == 1)) {
-        ret = zcc::syscall_close(fd);
+        ret = close_co(fd);
         if (ret > -1) {
             zcc::coroutine_fd_attribute_free(fd);
         }
@@ -1751,7 +1870,7 @@ int close(int fd)
 #endif
         return ret;
     }
-    ret = zcc::syscall_close(fd);
+    ret = close_co(fd);
     if (ret > -1) {
         zcc::coroutine_fd_attribute_free(fd);
     }
@@ -1762,18 +1881,16 @@ int close(int fd)
 /* {{{ read hook */
 ssize_t read(int fd, void *buf, size_t nbyte)
 {
-    coroutine_hook_fileio_run_part0() {
-        return zcc::syscall_read(fd, buf, nbyte);
+    printf("read\n");
+    coroutine_hook_fileio_run_part1() {
+        return read_co(fd, buf, nbyte);
     }
 
     zcc::coroutine_fd_attribute *fdatts = 0;
     if (((fdatts = zcc::coroutine_fd_attribute_get(fd)) == 0) || (fdatts->pseudo_mode == 1)) {
-        return zcc::syscall_read(fd, buf, nbyte);
+        return read_co(fd, buf, nbyte);
     }
     if (fdatts->is_regular_file) {
-        if (zcc::var_coroutine_block_pthread_count_limit < 1) {
-            return zcc::syscall_read(fd, buf, nbyte);
-        }
         coroutine_hook_fileio_run_part2(read);
         fileio.args[0].int_t = fd;
         fileio.args[1].void_ptr_t = buf;
@@ -1787,10 +1904,10 @@ ssize_t read(int fd, void *buf, size_t nbyte)
     }
 
     if (fdatts->nonblock) {
-        return zcc::syscall_read(fd, buf, nbyte);
+        return read_co(fd, buf, nbyte);
     }
     ___general_read_wait(fd);
-	ssize_t readret = zcc::syscall_read(fd,(char*)buf ,nbyte);
+	ssize_t readret = read_co(fd,(char*)buf ,nbyte);
     if (readret < 0) {
         if (errno == EAGAIN) {
             errno = EINTR;
@@ -1803,18 +1920,15 @@ ssize_t read(int fd, void *buf, size_t nbyte)
 /* {{{ write hook */
 ssize_t write(int fd, const void *buf, size_t nbyte)
 {
-    coroutine_hook_fileio_run_part0() {
-        return zcc::syscall_write(fd, buf, nbyte);
+    coroutine_hook_fileio_run_part1() {
+        return write_co(fd, buf, nbyte);
     }
 
     zcc::coroutine_fd_attribute *fdatts = 0;
     if (((fdatts = zcc::coroutine_fd_attribute_get(fd)) == 0) || (fdatts->pseudo_mode == 1)) {
-        return zcc::syscall_write(fd, buf, nbyte);
+        return write_co(fd, buf, nbyte);
     }
     if (fdatts->is_regular_file) {
-        if (zcc::var_coroutine_block_pthread_count_limit < 1) {
-            return zcc::syscall_write(fd, buf, nbyte);
-        }
         coroutine_hook_fileio_run_part2(write);
         fileio.args[0].int_t = fd;
         fileio.args[1].void_ptr_t = (void *)buf;
@@ -1828,10 +1942,10 @@ ssize_t write(int fd, const void *buf, size_t nbyte)
     }
 
     if (fdatts->nonblock) {
-        return zcc::syscall_write(fd, buf, nbyte);
+        return write_co(fd, buf, nbyte);
     }
     ___general_write_wait(fd);
-	ssize_t writeret = zcc::syscall_write(fd, buf ,nbyte);
+	ssize_t writeret = write_co(fd, buf ,nbyte);
     if (writeret < 0) {
         if (errno == EAGAIN) {
             errno = EINTR;
@@ -1846,10 +1960,10 @@ ssize_t sendto(int socket, const void *message, size_t length, int flags, const 
 {
     int ret;
     return_zcc_call_co(socket) {
-        return zcc::syscall_sendto(socket,message,length,flags,dest_addr,dest_len);
+        return sendto_co(socket,message,length,flags,dest_addr,dest_len);
     }
     ___general_write_wait(socket);
-    ret = zcc::syscall_sendto(socket,message,length,flags,dest_addr,dest_len);
+    ret = sendto_co(socket,message,length,flags,dest_addr,dest_len);
     if (ret > -1) {
         return ret;
     }
@@ -1864,10 +1978,10 @@ ssize_t sendto(int socket, const void *message, size_t length, int flags, const 
 ssize_t recvfrom(int socket, void *buf, size_t length, int flags, struct sockaddr *address, socklen_t *address_len)
 {
     return_zcc_call_co(socket) {
-		return zcc::syscall_recvfrom(socket,buf,length,flags,address,address_len);
+		return recvfrom_co(socket,buf,length,flags,address,address_len);
     }
     ___general_read_wait(socket);
-	ssize_t ret = zcc::syscall_recvfrom(socket,buf,length,flags,address,address_len);
+	ssize_t ret = recvfrom_co(socket,buf,length,flags,address,address_len);
     if (ret > -1) {
         return ret;
     }
@@ -1882,10 +1996,10 @@ ssize_t recvfrom(int socket, void *buf, size_t length, int flags, struct sockadd
 ssize_t send(int socket, const void *buffer, size_t length, int flags)
 {
     return_zcc_call_co(socket) {
-		return zcc::syscall_send(socket,buffer,length,flags);
+		return send_co(socket,buffer,length,flags);
     }
     ___general_write_wait(socket);
-    int ret = zcc::syscall_send(socket,(const char*)buffer, length, flags);
+    int ret = send_co(socket,(const char*)buffer, length, flags);
     if (ret > -1) {
         return ret;
     }
@@ -1900,10 +2014,10 @@ ssize_t send(int socket, const void *buffer, size_t length, int flags)
 ssize_t recv(int socket, void *buffer, size_t length, int flags)
 {
     return_zcc_call_co(socket) {
-		return zcc::syscall_recv(socket,buffer,length,flags);
+		return recv_co(socket,buffer,length,flags);
     }
     ___general_read_wait(socket);
-	ssize_t ret = zcc::syscall_recv(socket,buffer,length,flags);
+	ssize_t ret = recv_co(socket,buffer,length,flags);
     if (ret > -1) {
         return ret;
     }
@@ -1918,7 +2032,7 @@ ssize_t recv(int socket, void *buffer, size_t length, int flags)
 int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len)
 {
     return_zcc_call_co(fd) {
-		return zcc::syscall_setsockopt(fd,level,option_name,option_value,option_len);
+		return setsockopt_co(fd,level,option_name,option_value,option_len);
     }
 
 	if(SOL_SOCKET == level) {
@@ -1936,7 +2050,7 @@ int setsockopt(int fd, int level, int option_name, const void *option_value, soc
             fdatts->write_timeout = t;
 		}
 	}
-	return zcc::syscall_setsockopt(fd,level,option_name,option_value,option_len);
+	return setsockopt_co(fd,level,option_name,option_value,option_len);
 }
 /* }}} */
 
@@ -1958,7 +2072,7 @@ int fcntl(int fildes, int cmd, ...)
 		case F_DUPFD:
 		{
 			int param = va_arg(args,int);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
             if (cobs == 0) {
                 break;
             }
@@ -1966,32 +2080,32 @@ int fcntl(int fildes, int cmd, ...)
                 zcc::coroutine_fd_attribute *cfa = zcc::coroutine_fd_attribute_get(fildes);
                 if (cfa && (cfa->pseudo_mode == 0)) {
                     zcc::coroutine_fd_attribute_create(ret);
-                    fcntl(ret, F_SETFL, zcc::syscall_fcntl(ret, F_GETFL,0));
+                    fcntl(ret, F_SETFL, fcntl_co(ret, F_GETFL,0));
                 }
             }
 			break;
 		}
 		case F_GETFD:
 		{
-			ret = zcc::syscall_fcntl(fildes,cmd);
+			ret = fcntl_co(fildes,cmd);
 			break;
 		}
 		case F_SETFD:
 		{
 			int param = va_arg(args,int);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
 			break;
 		}
 		case F_GETFL:
 		{
-			ret = zcc::syscall_fcntl(fildes,cmd);
+			ret = fcntl_co(fildes,cmd);
 			break;
 		}
 		case F_SETFL:
 		{
 			int param = va_arg(args,int);
             if (cobs == 0) {
-                ret = zcc::syscall_fcntl(fildes,cmd,param);
+                ret = fcntl_co(fildes,cmd,param);
                 break;
             }
 			int flag = param;
@@ -1999,7 +2113,7 @@ int fcntl(int fildes, int cmd, ...)
             if (cfa) {
 				flag |= O_NONBLOCK;
 			}
-			ret = zcc::syscall_fcntl(fildes,cmd,flag);
+			ret = fcntl_co(fildes,cmd,flag);
 			if((0 == ret) && cfa) {
                 cfa->nonblock = ((param&O_NONBLOCK)?1:0);
 			}
@@ -2007,31 +2121,31 @@ int fcntl(int fildes, int cmd, ...)
 		}
 		case F_GETOWN:
 		{
-			ret = zcc::syscall_fcntl(fildes,cmd);
+			ret = fcntl_co(fildes,cmd);
 			break;
 		}
 		case F_SETOWN:
 		{
 			int param = va_arg(args,int);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
 			break;
 		}
 		case F_GETLK:
 		{
 			struct flock *param = va_arg(args,struct flock *);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
 			break;
 		}
 		case F_SETLK:
 		{
 			struct flock *param = va_arg(args,struct flock *);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
 			break;
 		}
 		case F_SETLKW:
 		{
 			struct flock *param = va_arg(args,struct flock *);
-			ret = zcc::syscall_fcntl(fildes,cmd,param);
+			ret = fcntl_co(fildes,cmd,param);
 			break;
 		}
 	}
@@ -2045,12 +2159,12 @@ int fcntl(int fildes, int cmd, ...)
 extern __thread struct __res_state *__resp;
 res_state __res_state2(void)
 {
-    printf("__res_state2 AAAAAAAAAAAAAAAAAAAAAAAAAA new\n");
+    printf("AAAAAAAAAAAAAAAAAAAAAAAAAA new\n");
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
     if (cobs == 0) {
         return __resp;
     }
-    printf("__res_state2 AAAAAAAAAAAAAAAAAAAAAAAAAA new\n");
+    printf("AAAAAAAAAAAAAAAAAAAAAAAAAA new\n");
     if (cobs->current_coroutine->___res_state == 0) {
         cobs->current_coroutine->___res_state = (struct __res_state *)zcc::calloc(1, sizeof(struct __res_state));
     }
@@ -2067,14 +2181,11 @@ struct hostent *gethostbyname(const char *name)
 struct hostent* gethostbyname2(const char* name, int af)
 {
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    char **_hp_char_ptr = 0;
-    zcc::gethostbyname_buf_t *_hp;
-    if (cobs) {
-        _hp = cobs->current_coroutine->___gethostbyname;
-    } else {
-        _hp_char_ptr = (char **)pthread_getspecific(zcc::___gethostbyname_pthread_key);
-        _hp = (zcc::gethostbyname_buf_t *)(*_hp_char_ptr);
+    if (cobs == 0) {
+        return (gethostbyname2_co(name, af));
     }
+
+    zcc::gethostbyname_buf_t *_hp = cobs->current_coroutine->___gethostbyname;
    
     if (_hp && (_hp->buf_size > 1024)) {
         zcc::free(_hp);
@@ -2084,11 +2195,7 @@ struct hostent* gethostbyname2(const char* name, int af)
         _hp = (zcc::gethostbyname_buf_t *)zcc::malloc(sizeof(zcc::gethostbyname_buf_t) + 1024 + 1);
         _hp->buf_ptr = ((char *)_hp) + sizeof(zcc::gethostbyname_buf_t);
         _hp->buf_size = 1024;
-        if (cobs) {
-            cobs->current_coroutine->___gethostbyname = _hp;
-        } else {
-            *_hp_char_ptr = (char *)_hp;
-        }
+        cobs->current_coroutine->___gethostbyname = _hp;
     }
     struct hostent *host = &(_hp->host);
     struct hostent *result = NULL;
@@ -2101,11 +2208,7 @@ struct hostent* gethostbyname2(const char* name, int af)
         _hp = (zcc::gethostbyname_buf_t *)zcc::malloc(sizeof(zcc::gethostbyname_buf_t) + nsize + 1);
         _hp->buf_ptr = ((char *)_hp) + sizeof(zcc::gethostbyname_buf_t);
         _hp->buf_size = nsize;
-        if (cobs) {
-            cobs->current_coroutine->___gethostbyname = _hp;
-        } else {
-            *_hp_char_ptr = (char *)_hp;
-        }
+        cobs->current_coroutine->___gethostbyname = _hp;
     } 
     if ((ret == 0) && (host == result)){
         return host;
@@ -2117,14 +2220,11 @@ struct hostent* gethostbyname2(const char* name, int af)
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
 {
     zcc::coroutine_base *cobs = zcc::coroutine_base_get_current();
-    char **_hp_char_ptr = 0;
-    zcc::gethostbyname_buf_t *_hp;
-    if (cobs) {
-        _hp = cobs->current_coroutine->___gethostbyname;
-    } else {
-        _hp_char_ptr = (char **)pthread_getspecific(zcc::___gethostbyname_pthread_key);
-        _hp = (zcc::gethostbyname_buf_t *)(*_hp_char_ptr);
+    if (cobs == 0) {
+        return (gethostbyaddr_co(addr, len, type));
     }
+
+    zcc::gethostbyname_buf_t *_hp = cobs->current_coroutine->___gethostbyname;
    
     if (_hp && (_hp->buf_size > 1024)) {
         zcc::free(_hp);
@@ -2134,11 +2234,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
         _hp = (zcc::gethostbyname_buf_t *)zcc::malloc(sizeof(zcc::gethostbyname_buf_t) + 1024 + 1);
         _hp->buf_ptr = ((char *)_hp) + sizeof(zcc::gethostbyname_buf_t);
         _hp->buf_size = 1024;
-        if (cobs) {
-            cobs->current_coroutine->___gethostbyname = _hp;
-        } else {
-            *_hp_char_ptr = (char *)_hp;
-        }
+        cobs->current_coroutine->___gethostbyname = _hp;
     }
     struct hostent *host = &(_hp->host);
     struct hostent *result = NULL;
@@ -2151,11 +2247,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
         _hp = (zcc::gethostbyname_buf_t *)zcc::malloc(sizeof(zcc::gethostbyname_buf_t) + nsize + 1);
         _hp->buf_ptr = ((char *)_hp) + sizeof(zcc::gethostbyname_buf_t);
         _hp->buf_size = nsize;
-        if (cobs) {
-            cobs->current_coroutine->___gethostbyname = _hp;
-        } else {
-            *_hp_char_ptr = (char *)_hp;
-        }
+        cobs->current_coroutine->___gethostbyname = _hp;
     } 
     if ((ret == 0) && (host == result)){
         return host;
@@ -2170,7 +2262,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
 off_t lseek(int fd, off_t offset, int whence)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_lseek(fd, offset, whence);
+        return lseek_co(fd, offset, whence);
     }
     coroutine_hook_fileio_run_part2(lseek);
     fileio.args[0].int_t = fd;
@@ -2183,7 +2275,7 @@ off_t lseek(int fd, off_t offset, int whence)
 int fdatasync(int fd)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_fdatasync(fd);
+        return fdatasync_co(fd);
     }
     coroutine_hook_fileio_run_part2(fdatasync);
     fileio.args[0].int_t = fd;
@@ -2194,7 +2286,7 @@ int fdatasync(int fd)
 int fsync(int fd)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_fsync(fd);
+        return fsync_co(fd);
     }
     coroutine_hook_fileio_run_part2(fsync);
     fileio.args[0].int_t = fd;
@@ -2205,7 +2297,7 @@ int fsync(int fd)
 int rename(const char *oldpath, const char *newpath)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_rename(oldpath, newpath);
+        return rename_co(oldpath, newpath);
     }
     coroutine_hook_fileio_run_part2(rename);
     fileio.args[0].const_char_ptr_t = oldpath;
@@ -2217,7 +2309,7 @@ int rename(const char *oldpath, const char *newpath)
 int truncate(const char *path, off_t length)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_truncate(path, length);
+        return truncate_co(path, length);
     }
     coroutine_hook_fileio_run_part2(truncate);
     fileio.args[0].const_char_ptr_t = path;
@@ -2229,7 +2321,7 @@ int truncate(const char *path, off_t length)
 int ftruncate(int fd, off_t length)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_ftruncate(fd, length);
+        return ftruncate_co(fd, length);
     }
     coroutine_hook_fileio_run_part2(ftruncate);
     fileio.args[0].int_t = fd;
@@ -2241,7 +2333,7 @@ int ftruncate(int fd, off_t length)
 int rmdir(const char *pathname)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_rmdir(pathname);
+        return rmdir_co(pathname);
     }
     coroutine_hook_fileio_run_part2(rmdir);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2252,7 +2344,7 @@ int rmdir(const char *pathname)
 int mkdir(const char *pathname, mode_t mode)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_mkdir(pathname, mode);
+        return mkdir_co(pathname, mode);
     }
     coroutine_hook_fileio_run_part2(mkdir);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2264,7 +2356,7 @@ int mkdir(const char *pathname, mode_t mode)
 int getdents(unsigned int fd, struct linux_dirent *dirp, unsigned int count)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_getdents(fd, (void *)dirp, count);
+        return getdents_co(fd, (void *)dirp, count);
     }
     coroutine_hook_fileio_run_part2(getdents);
     fileio.args[0].uint_t = fd;
@@ -2277,7 +2369,7 @@ int getdents(unsigned int fd, struct linux_dirent *dirp, unsigned int count)
 int stat(const char *pathname, struct stat *buf)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_stat(pathname, buf);
+        return stat_co(pathname, buf);
     }
     coroutine_hook_fileio_run_part2(stat);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2289,7 +2381,7 @@ int stat(const char *pathname, struct stat *buf)
 int fstat(int fd, struct stat *buf)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_fstat(fd, buf);
+        return fstat_co(fd, buf);
     }
     coroutine_hook_fileio_run_part2(fstat);
     fileio.args[0].int_t = fd;
@@ -2301,7 +2393,7 @@ int fstat(int fd, struct stat *buf)
 int lstat(const char *pathname, struct stat *buf)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_lstat(pathname, buf);
+        return lstat_co(pathname, buf);
     }
     coroutine_hook_fileio_run_part2(lstat);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2313,7 +2405,7 @@ int lstat(const char *pathname, struct stat *buf)
 int link(const char *oldpath, const char *newpath)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_link(oldpath, newpath);
+        return link_co(oldpath, newpath);
     }
     coroutine_hook_fileio_run_part2(link);
     fileio.args[0].const_char_ptr_t = oldpath;
@@ -2325,7 +2417,7 @@ int link(const char *oldpath, const char *newpath)
 int symlink(const char *target, const char *linkpath)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_symlink(target, linkpath);
+        return symlink_co(target, linkpath);
     }
     coroutine_hook_fileio_run_part2(symlink);
     fileio.args[0].const_char_ptr_t = target;
@@ -2337,7 +2429,7 @@ int symlink(const char *target, const char *linkpath)
 ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_readlink(pathname, buf, bufsiz);
+        return readlink_co(pathname, buf, bufsiz);
     }
     coroutine_hook_fileio_run_part2(readlink);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2350,7 +2442,7 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 int unlink(const char *pathname)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_unlink(pathname);
+        return unlink_co(pathname);
     }
     coroutine_hook_fileio_run_part2(unlink);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2361,7 +2453,7 @@ int unlink(const char *pathname)
 int chmod(const char *pathname, mode_t mode)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_chmod(pathname, mode);
+        return chmod_co(pathname, mode);
     }
     coroutine_hook_fileio_run_part2(chmod);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2373,7 +2465,7 @@ int chmod(const char *pathname, mode_t mode)
 int fchmod(int fd, mode_t mode)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_fchmod(fd, mode);
+        return fchmod_co(fd, mode);
     }
     coroutine_hook_fileio_run_part2(fchmod);
     fileio.args[0].int_t = fd;
@@ -2385,7 +2477,7 @@ int fchmod(int fd, mode_t mode)
 int chown(const char *pathname, uid_t owner, gid_t group)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_chown(pathname, owner, group);
+        return chown_co(pathname, owner, group);
     }
     coroutine_hook_fileio_run_part2(chown);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2398,7 +2490,7 @@ int chown(const char *pathname, uid_t owner, gid_t group)
 int fchown(int fd, uid_t owner, gid_t group)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_fchown(fd, owner, group);
+        return fchown_co(fd, owner, group);
     }
     coroutine_hook_fileio_run_part2(fchown);
     fileio.args[0].int_t = fd;
@@ -2411,7 +2503,7 @@ int fchown(int fd, uid_t owner, gid_t group)
 int lchown(const char *pathname, uid_t owner, gid_t group)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_lchown(pathname, owner, group);
+        return lchown_co(pathname, owner, group);
     }
     coroutine_hook_fileio_run_part2(lchown);
     fileio.args[0].const_char_ptr_t = pathname;
@@ -2424,7 +2516,7 @@ int lchown(const char *pathname, uid_t owner, gid_t group)
 int utime(const char *filename, const struct utimbuf *times)
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_utime(filename, times);
+        return utime_co(filename, times);
     }
     coroutine_hook_fileio_run_part2(utime);
     fileio.args[0].const_char_ptr_t = filename;
@@ -2436,7 +2528,7 @@ int utime(const char *filename, const struct utimbuf *times)
 int utimes(const char *filename, const struct timeval times[2])
 {
     coroutine_hook_fileio_run_part1() {
-        return zcc::syscall_utimes(filename, times);
+        return utimes_co(filename, times);
     }
     coroutine_hook_fileio_run_part2(utimes);
     fileio.args[0].const_char_ptr_t = filename;

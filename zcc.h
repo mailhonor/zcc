@@ -17,7 +17,6 @@
 #include <map>
 #include <errno.h>
 #include <stdarg.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -81,6 +80,19 @@ typedef struct ssl_st SSL;
         var_your_map_second_old = var_std_map_iterator->second; \
         var_std_map_iterator->second = var_your_map_second; \
     } \
+}
+
+extern "C"
+{
+#ifdef ZCC_USE_LIBICONV
+#include <iconv.h>
+typeof(iconv) libiconv;
+typeof(iconv_open) libiconv_open;
+typeof(iconv_close) libiconv_close;
+iconv_t iconv_open(const char *t, const char *f) { return libiconv_open(t, f); }
+size_t iconv(iconv_t cd, char **a, size_t *b, char **c, size_t *d) { return libiconv(cd, a, b, c, d); }
+int iconv_close(iconv_t cd) { return libiconv_close(cd); }
+#endif
 }
 
 namespace zcc
@@ -652,6 +664,7 @@ const int var_tcp_listen_type_fifo = 'f';
 /* <0: error for these funcs */
 int unix_accept(int fd);
 int inet_accept(int fd);
+int easy_accept(int sock, int type = var_tcp_listen_type_inet);
 int accept(int sock, int type = var_tcp_listen_type_inet);
 int unix_listen(char *addr, int backlog = 1024);
 int inet_listen(const char *sip, int port, int backlog = 1024);
@@ -668,12 +681,12 @@ extern bool var_openssl_debug;
 void openssl_init(void);
 void openssl_fini(void);
 void openssl_phtread_fini(void);
-SSL_CTX *openssl_create_SSL_CTX_server(void);
-SSL_CTX *openssl_create_SSL_CTX_client(void);
+SSL_CTX *openssl_SSL_CTX_create_server(void);
+SSL_CTX *openssl_SSL_CTX_create_client(void);
 bool openssl_SSL_CTX_set_cert(SSL_CTX *ctx, const char *cert_file, const char *key_file);
 void openssl_SSL_CTX_free(SSL_CTX * ctx);
 void openssl_get_error(unsigned long *ecode, char *buf, int buf_len);
-SSL *openssl_create_SSL(SSL_CTX * ctx, int fd);
+SSL *openssl_SSL_create(SSL_CTX * ctx, int fd);
 void openssl_SSL_free(SSL * ssl);
 int openssl_SSL_get_fd(SSL *ssl);
 bool openssl_timed_connect(SSL * ssl, long timeout);
@@ -685,29 +698,17 @@ ssize_t openssl_timed_write(SSL * ssl, const void *buf, size_t len, long timeout
 /* stream ########################################################## */
 const size_t stream_read_buf_size = 4096;
 const size_t stream_write_buf_size = 4096;
-class stream
+
+class basic_stream
 {
 public:
-    stream();
-    stream(SSL *ssl);
-    stream(int fd);
-    ~stream();
-    stream &open(SSL *ssl);
-    stream &open(int fd);
-    stream &close();
-    stream &set_timeout(long timeout);
-    inline long get_timeout() { return ___timeout; }
-    inline stream &set_auto_close_fd(bool flag = true) { ___auto_release=flag; return *this; }
+    basic_stream();
+    virtual ~basic_stream();
     inline bool is_error() { return ___error; }
     inline bool is_eof() { return ___eof; }
     inline bool is_exception() { return ___error || ___eof; }
     inline bool is_opened() { return ___opened; }
-    int get_fd();
-    SSL *get_SSL();
-    bool tls_connect(SSL_CTX *ctx);
-    bool tls_accept(SSL_CTX *ctx);
     /* read */
-    int timed_wait_readable(long timeout);
     inline int get() { return ((read_buf_p1<read_buf_p2)?(read_buf[read_buf_p1++]):(get_char_do())); }
     ssize_t readn(void *buf, size_t size);
     ssize_t readn(std::string &str, size_t size);
@@ -715,42 +716,91 @@ public:
     ssize_t gets(std::string &str, int delimiter = '\n');
     ssize_t size_data_get_size();
     /* write */
-    int timed_wait_writeable(long timeout);
-    inline stream &put(int ch) {
+    inline basic_stream &put(int ch) {
         write_buf[write_buf_len++]=ch; ___flushed = false;
         (write_buf_len<stream_write_buf_size)?(1):(flush());
         return *this;
     };
-    bool flush();
-    stream &write(const void *buf, size_t size);
-    stream &puts(const char *str);
-    stream &printf_1024(const char *format, ...);
-    inline stream &append(std::string &str) { return write(str.c_str(), str.size()); }
-    inline stream &append(const char *str, size_t s) { return write(str, s); }
-    inline stream &append(const char *str) { return puts(str); }
-    inline stream &append(int i) {return printf_1024("%d", i);}
-    inline stream &append(unsigned int i) {return printf_1024("%u", i);}
-    inline stream &append(long i) {return printf_1024("%ld", i);}
-    inline stream &append(unsigned long i) {return printf_1024("%lu", i);}
-    inline stream &append(double i) {return printf_1024("%f", i);}
-    inline stream &append(float i) {return printf_1024("%f", i);}
-private:
-    void init_all();
-    int get_char_do();
+    virtual bool flush();
+    basic_stream &write(const void *buf, size_t size);
+    basic_stream &puts(const char *str);
+    basic_stream &printf_1024(const char *format, ...);
+    inline basic_stream &append(std::string &str) { return write(str.c_str(), str.size()); }
+    inline basic_stream &append(const char *str, size_t s) { return write(str, s); }
+    inline basic_stream &append(const char *str) { return puts(str); }
+    inline basic_stream &append(int i) {return printf_1024("%d", i);}
+    inline basic_stream &append(unsigned int i) {return printf_1024("%u", i);}
+    inline basic_stream &append(long i) {return printf_1024("%ld", i);}
+    inline basic_stream &append(unsigned long i) {return printf_1024("%lu", i);}
+    inline basic_stream &append(double i) {return printf_1024("%f", i);}
+    inline basic_stream &append(float i) {return printf_1024("%f", i);}
+protected:
+    virtual int get_char_do();
+    basic_stream &reset();
     char *read_buf;
     char *write_buf;
-    long ___timeout;
-    union { int fd; SSL *ssl; } ___fd;
     int read_buf_p1:16;
     int read_buf_p2:16;
     unsigned short int write_buf_len;
     bool ___opened;
-    bool ___auto_release;
-    bool ___ssl_mode;
-    bool ___ssl_opened_mode;
     bool ___error;
     bool ___eof;
     bool ___flushed;
+};
+
+class stream: public basic_stream
+{
+public:
+    stream();
+    stream(SSL *ssl);
+    stream(int fd);
+    stream(const char *path, const char *mode);
+    ~stream();
+    stream &open(SSL *ssl);
+    stream &open(int fd);
+    bool open(const char *path, const char *mode);
+    stream &close();
+    stream &set_timeout(long timeout);
+    inline long get_timeout() { return ___timeout; }
+    inline stream &set_auto_close_fd(bool flag = true) { ___auto_release=flag; return *this; }
+    int get_fd();
+    SSL *get_SSL();
+    int detach_fd();
+    SSL *detach_SSL();
+    bool tls_connect(SSL_CTX *ctx);
+    bool tls_accept(SSL_CTX *ctx);
+    int timed_wait_readable(long timeout);
+    int timed_wait_writeable(long timeout);
+    bool flush();
+private:
+    void init();
+    void fini();
+    int get_char_do();
+    union { int fd; SSL *ssl; } ___fd;
+    long ___timeout;
+    bool ___auto_release;
+    bool ___ssl_mode;
+    bool ___ssl_opened_mode;
+};
+
+class fstream: public basic_stream
+{
+public:
+    fstream();
+    fstream(int fd, bool auto_release = false);
+    fstream(const char *path, const char *mode);
+    ~fstream();
+    bool open(const char *path, const char *mode);
+    fstream &open(int fd, bool auto_release = false);
+    fstream &close();
+    inline int get_fd() { return ___fd; }
+    bool flush();
+private:
+    void init();
+    void fini();
+    int get_char_do();
+    int ___fd;
+    bool ___auto_release;
 };
 
 /* event ####################################################### */
@@ -864,6 +914,10 @@ private:
     void *___data;
 };
 
+/* robust ############################################################# */
+int robust_close(int fd);
+int robust_flock(int fd, int operation);
+int robust_rename(const char *oldpath, const char *newpath);
 
 /* coroutine ########################################################## */
 class coroutine;
@@ -873,7 +927,7 @@ void coroutine_base_init();
 void coroutine_base_loop();
 void coroutine_base_stop_notify();
 void coroutine_base_fini();
-void coroutine_go(void *(*start_job)(void *ctx), void *ctx);
+void coroutine_go(void *(*start_job)(void *ctx), void *ctx, size_t stack_size = 128*1024);
 coroutine * coroutine_self();
 void coroutine_yield(coroutine *co = 0);
 void coroutine_exit(coroutine *co = 0);
@@ -893,6 +947,11 @@ void coroutine_cond_free(coroutine_cond_t *);
 void coroutine_cond_wait(coroutine_cond_t *, coroutine_mutex_t *);
 void coroutine_cond_signal(coroutine_cond_t *);
 void coroutine_cond_broadcast(coroutine_cond_t *);
+
+void coroutine_set_block_pthread_limit(int limit);
+void *coroutine_block_do(void *(*block_func)(void *ctx), void *ctx);
+
+void coroutine_go_iopipe(int fd1, SSL *ssl1, int fd2, SSL *ssl2, void (*after_close)(void *ctx), void *ctx);
 
 /* pthread job ###################################################### */
 class tjob

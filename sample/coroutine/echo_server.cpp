@@ -7,6 +7,8 @@
  */
 
 #include "zcc.h"
+#include <unistd.h>
+#include <fcntl.h>
 
 void ___usage(const char *p = 0)
 {
@@ -14,33 +16,77 @@ void ___usage(const char *p = 0)
     exit(1);
 }
 
+namespace zcc
+{
+int syscall_fcntl(int fildes, int cmd, ...);
+}
+
+bool __nonblocking(int fd, bool no)
+{
+    int flags;
+
+    if ((flags = zcc::syscall_fcntl(fd, F_GETFL, 0)) < 0) {
+        return false;
+    }
+
+    if (zcc::syscall_fcntl(fd, F_SETFL, no ? flags | O_NONBLOCK : flags & ~O_NONBLOCK) < 0) {
+        return false;
+    }
+
+    return ((flags & O_NONBLOCK) != 0);
+}
+
+#if 0
 void *echo_service(void *context)
 {
     int fd = (int)(long)context;
+    __nonblocking(fd, false);
     printf("fd:%d\n", fd);
     FILE *fp = fdopen(fd, "a+");
     char buf[4096 + 10];
     while(1) {
-        zcc::timed_wait_readable(fd, 1000);
         printf("AAAAAAAAAAAA readable\n");
         if (fgets(buf, 4096, fp) == 0) {
-        printf("AAAAAAAAAAAA readable continue\n");
-            continue;
+            printf("end\n");
+            break;
         }
         zcc::timed_wait_writeable(fd, 1000);
         zcc::timed_write(fd, buf, strlen(buf), 1000);
     }
     return context;
 }
+#endif
 
-
+void *echo_service(void *context)
+{
+    int fd = (int)(long)context;
+    printf("fd:%d\n", fd);
+    zcc::stream fp(fd);
+    std::string str;
+    while(1) {
+        printf("AAAAAAAAAAAA readable\n");
+        str.clear();
+        if (fp.gets(str) < 1) {
+            printf("end\n");
+            break;
+        }
+        zcc::timed_wait_writeable(fd, 1000);
+        zcc::timed_write(fd, str.c_str(), str.size(), 1000);
+    }
+    return context;
+}
 void *do_listen(void *context)
 {
     int sock_type;
     int sock = zcc::listen("0:8899", &sock_type); 
     while(1) {
+        if (zcc::timed_wait_readable(sock, 10 * 1000) < 0) {
+            printf("error\n");
+            break;
+        }
         int fd = zcc::accept(sock, sock_type);
         if (fd < 0) {
+            printf("fd is 0\n");
             return 0;
         }
         printf("accept ok: %d\n", fd);

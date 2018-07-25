@@ -54,7 +54,9 @@ int main(int argc, char **argv)
     }
     mgrep.add_token_over();
 
+    for (int i=0;i<10;i++) {
     offset = mgrep.match(matched, dcon.data(), dcon.size());
+    }
     if (offset < 0) {
         printf("NOT FOUND\n");
     } else {

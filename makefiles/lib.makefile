@@ -1,4 +1,4 @@
-all: libzcc.a libzcc_coroutine.a
+mll: libzcc.a libzcc_coroutine.a
 
 include OBJS_DEST/depend
 
@@ -17,7 +17,7 @@ CFLAGS= -I./ -std=gnu++0x -ggdb -O3 -D___ZCC_INNER___ -D_GNU_SOURCE \
 	-Wsign-promo -Wstrict-null-sentinel -Wsync-nand -Wsynth -Wtrigraphs -Wuninitialized -Wunknown-pragmas \
 	-Wvariadic-macros -Wvla -Wvolatile-register-var -Wwrite-strings
 
-SRCS_COROUTINE=${shell find src/coroutine/ -type f -name "*.cpp"}
+SRCS_COROUTINE=${shell find src/coroutine -type f -name "*.cpp"}
 OBJS_COROUTINE = $(patsubst %.cpp, OBJS_DEST/%.o, $(SRCS_COROUTINE))
 
 SRCS_ZCC=${shell find src -type f -name "*.cpp"|grep -v "^src/coroutine/"}

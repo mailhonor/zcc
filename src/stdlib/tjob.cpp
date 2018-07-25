@@ -38,7 +38,7 @@ bool tjob::get(void(**callback)(void *), void **context, long timeout)
     zcc_pthread_lock(&mutex);
 
     if (timeout > 0) {
-        ts.tv_sec = timeout/1000;
+        ts.tv_sec = time(0) + timeout/1000;
         ts.tv_nsec = timeout%1000 * 1000 * 1000;
         pthread_cond_timedwait(&cond, &mutex, &ts);
     } else {

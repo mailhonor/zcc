@@ -60,19 +60,16 @@ ssize_t flat_finder::find(const char *query, std::string &result, long timeout)
 
 bool flat_finder::load_dict(const char *fn)
 {
-    FILE *fp;
     char buf_raw[10240 + 10], *buf, *p;
     int len;
 
-    fp = fopen(fn, "r");
-    if (!fp) {
+    fstream fp;
+    if (!fp.open(fn, "r")) {
         zcc_info("finder: create %s, can not open(%m)", ___url);
         return false;
     }
-    while ((!feof(fp)) && (!ferror(fp))) {
-        if (!fgets(buf_raw, 10240, fp)) {
-            break;
-        }
+    while ((len = fp.gets(buf_raw, 10240)) > 0) {
+        buf_raw[len] = 0;
         buf = buf_raw;
         while (*buf) {
             if (*buf == ' ' || *buf == '\t') {
@@ -109,12 +106,11 @@ bool flat_finder::load_dict(const char *fn)
         p[len] = 0;
         ___dict[buf] = p;
     }
-    if (ferror(fp)) {
+    if (fp.is_error()) {
         zcc_info("finder: create %s, read error(%m)", ___url);
         return false;
     }
 
-    fclose(fp);
     return true;
 }
 
