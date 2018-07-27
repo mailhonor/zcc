@@ -84,9 +84,19 @@ ssize_t syscall_read(int fildes, void *buf, size_t nbyte)
     return ::syscall(__NR_read, fildes, buf, nbyte);
 }
 
+ssize_t syscall_readv(int fd, const struct iovec *iov, int iovcnt)
+{
+    return ::syscall(__NR_readv, fd, iov, iovcnt);
+}
+
 ssize_t syscall_write(int fildes, const void *buf, size_t nbyte)
 {
     return ::syscall(__NR_write, fildes, buf, nbyte);
+}
+
+ssize_t syscall_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    return ::syscall(__NR_writev, fd, iov, iovcnt);
 }
 
 ssize_t syscall_sendto(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len)

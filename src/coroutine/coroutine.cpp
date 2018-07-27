@@ -47,7 +47,9 @@ int syscall_accept(int fd, struct sockaddr *addr, socklen_t *len);
 int syscall_connect(int socket, const struct sockaddr *address, socklen_t address_len);
 int syscall_close(int fd);
 ssize_t syscall_read(int fildes, void *buf, size_t nbyte);
+ssize_t syscall_readv(int fd, const struct iovec *iov, int iovcnt);
 ssize_t syscall_write(int fildes, const void *buf, size_t nbyte);
+ssize_t syscall_writev(int fd, const struct iovec *iov, int iovcnt);
 ssize_t syscall_sendto(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
 ssize_t syscall_recvfrom(int socket, void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
 size_t syscall_send(int socket, const void *buffer, size_t length, int flags);
@@ -118,6 +120,8 @@ union coroutine_hook_arg_t {
     void *void_ptr_t;
     const char *const_char_ptr_t;
     char *char_ptr_t;
+    struct iovec *iovec_t;
+    const struct iovec *const_iovec_t;
     long long_t;
     int int_t;
     unsigned uint_t;
@@ -153,7 +157,9 @@ enum coroutine_hook_fileio_cmd_t {
     coroutine_hook_fileio_openat,
     coroutine_hook_fileio_close,
     coroutine_hook_fileio_read,
+    coroutine_hook_fileio_readv,
     coroutine_hook_fileio_write,
+    coroutine_hook_fileio_writev,
     coroutine_hook_fileio_lseek,
     coroutine_hook_fileio_fdatasync,
     coroutine_hook_fileio_fsync,
@@ -1213,8 +1219,14 @@ static void coroutine_hook_fileio_worker_do(zcc::coroutine_hook_fileio_t &cio)
     case zcc::coroutine_hook_fileio_read:
         retval.ssize_ssize_t = zcc::syscall_read(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
         break;
+    case zcc::coroutine_hook_fileio_readv:
+        retval.ssize_ssize_t = zcc::syscall_readv(args[0].int_t, args[1].const_iovec_t, args[2].int_t);
+        break;
     case zcc::coroutine_hook_fileio_write:
         retval.ssize_ssize_t = zcc::syscall_write(args[0].int_t, args[1].void_ptr_t, args[2].size_size_t);
+        break;
+    case zcc::coroutine_hook_fileio_writev:
+        retval.ssize_ssize_t = zcc::syscall_writev(args[0].int_t, args[1].const_iovec_t, args[2].int_t);
         break;
     case zcc::coroutine_hook_fileio_lseek:
         retval.off_off_t = zcc::syscall_lseek(args[0].int_t, args[1].off_off_t, args[2].int_t);
@@ -1800,6 +1812,48 @@ ssize_t read(int fd, void *buf, size_t nbyte)
 }
 /* }}} */
 
+
+/* {{{ readv hook */
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+    coroutine_hook_fileio_run_part0() {
+        return zcc::syscall_readv(fd, iov, iovcnt);
+    }
+
+    zcc::coroutine_fd_attribute *fdatts = 0;
+    if (((fdatts = zcc::coroutine_fd_attribute_get(fd)) == 0) || (fdatts->pseudo_mode == 1)) {
+        return zcc::syscall_readv(fd, iov, iovcnt);
+    }
+    if (fdatts->is_regular_file) {
+        if (zcc::var_coroutine_block_pthread_count_limit < 1) {
+            return zcc::syscall_readv(fd, iov, iovcnt);
+        }
+        coroutine_hook_fileio_run_part2(readv);
+        fileio.args[0].int_t = fd;
+        fileio.args[1].const_iovec_t = iov;
+        fileio.args[2].int_t = iovcnt;
+        coroutine_hook_fileio_run_part3();
+        ssize_t retfd = retval.ssize_ssize_t;
+#if 0
+        fcntl(retfd, F_SETFL, fcntl(retfd, F_GETFL, 0));
+#endif
+        return retfd;
+    }
+
+    if (fdatts->nonblock) {
+        return zcc::syscall_readv(fd, iov, iovcnt);
+    }
+    ___general_read_wait(fd);
+	ssize_t readret = zcc::syscall_readv(fd, iov, iovcnt);
+    if (readret < 0) {
+        if (errno == EAGAIN) {
+            errno = EINTR;
+        }
+    }
+	return readret;
+}
+/* }}} */
+
 /* {{{ write hook */
 ssize_t write(int fd, const void *buf, size_t nbyte)
 {
@@ -1832,6 +1886,47 @@ ssize_t write(int fd, const void *buf, size_t nbyte)
     }
     ___general_write_wait(fd);
 	ssize_t writeret = zcc::syscall_write(fd, buf ,nbyte);
+    if (writeret < 0) {
+        if (errno == EAGAIN) {
+            errno = EINTR;
+        }
+    }
+	return writeret;
+}
+/* }}} */
+
+/* {{{ writev hook */
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    coroutine_hook_fileio_run_part0() {
+        return zcc::syscall_writev(fd, iov, iovcnt);
+    }
+
+    zcc::coroutine_fd_attribute *fdatts = 0;
+    if (((fdatts = zcc::coroutine_fd_attribute_get(fd)) == 0) || (fdatts->pseudo_mode == 1)) {
+        return zcc::syscall_writev(fd, iov, iovcnt);
+    }
+    if (fdatts->is_regular_file) {
+        if (zcc::var_coroutine_block_pthread_count_limit < 1) {
+            return zcc::syscall_writev(fd, iov, iovcnt);
+        }
+        coroutine_hook_fileio_run_part2(write);
+        fileio.args[0].int_t = fd;
+        fileio.args[1].const_iovec_t = iov;
+        fileio.args[2].int_t = iovcnt;
+        coroutine_hook_fileio_run_part3();
+        ssize_t retfd = retval.ssize_ssize_t;
+#if 0
+        fcntl(retfd, F_SETFL, fcntl(retfd, F_GETFL, 0));
+#endif
+        return retfd;
+    }
+
+    if (fdatts->nonblock) {
+        return zcc::syscall_writev(fd, iov, iovcnt);
+    }
+    ___general_write_wait(fd);
+	ssize_t writeret = zcc::syscall_writev(fd, iov, iovcnt);
     if (writeret < 0) {
         if (errno == EAGAIN) {
             errno = EINTR;
