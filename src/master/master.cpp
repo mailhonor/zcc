@@ -438,7 +438,13 @@ static void start_one_child(server_info *server)
         dup2(master_status_fd[1], var_master_master_status_fd);
         close(master_status_fd[1]);
 
-        exec_argv.push_back(server->cmd);
+        const char *cmdname = strrchr(server->cmd.c_str(), '/');
+        if (cmdname) {
+            cmdname++;
+        } else {
+            cmdname = server->cmd.c_str();
+        }
+        exec_argv.push_back(cmdname);
         exec_argv.push_back("--MASTER");
 
         if (!config_path.empty()) {

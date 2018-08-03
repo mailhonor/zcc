@@ -30,6 +30,11 @@ long mime_header_line_decode_date(const char *str)
     strncpy(str_copy, str, 127);
     str_copy[127] = 0;
     tolower(str_copy);
+    for (p = str_copy;*p;p++) {
+        if (*p == '-') {
+            *p = ' ';
+        }
+    }
     p = str_copy;
 
     ___FIND_DIGIT(p);
