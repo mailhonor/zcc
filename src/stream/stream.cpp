@@ -193,9 +193,10 @@ int stream::get_char_do()
         ___error = true;
         return -1;
     }
+    read_buf_p1 = 1;
     read_buf_p2 = ret;
 
-    return read_buf[read_buf_p1++];
+    return read_buf[0];
 }
 
 bool stream::flush()

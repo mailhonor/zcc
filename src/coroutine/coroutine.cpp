@@ -1801,6 +1801,7 @@ ssize_t read(int fd, void *buf, size_t nbyte)
     if (fdatts->nonblock) {
         return zcc::syscall_read(fd, buf, nbyte);
     }
+#if 0
     ___general_read_wait(fd);
 	ssize_t readret = zcc::syscall_read(fd,(char*)buf ,nbyte);
     if (readret < 0) {
@@ -1809,6 +1810,17 @@ ssize_t read(int fd, void *buf, size_t nbyte)
         }
     }
 	return readret;
+#else 
+    while(1) {
+        ___general_read_wait(fd);
+        ssize_t readret = zcc::syscall_read(fd,(char*)buf ,nbyte);
+        int ec = errno;
+        if ((readret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return readret;
+        }
+    }
+	return -1;
+#endif
 }
 /* }}} */
 
@@ -1843,6 +1855,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
     if (fdatts->nonblock) {
         return zcc::syscall_readv(fd, iov, iovcnt);
     }
+#if 0
     ___general_read_wait(fd);
 	ssize_t readret = zcc::syscall_readv(fd, iov, iovcnt);
     if (readret < 0) {
@@ -1851,6 +1864,17 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
         }
     }
 	return readret;
+#else
+    while(1) {
+        ___general_read_wait(fd);
+        ssize_t readret = zcc::syscall_readv(fd, iov, iovcnt);
+        int ec = errno;
+        if ((readret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return readret;
+        }
+    }
+	return -1;
+#endif
 }
 /* }}} */
 
@@ -1884,6 +1908,8 @@ ssize_t write(int fd, const void *buf, size_t nbyte)
     if (fdatts->nonblock) {
         return zcc::syscall_write(fd, buf, nbyte);
     }
+
+#if 0
     ___general_write_wait(fd);
 	ssize_t writeret = zcc::syscall_write(fd, buf ,nbyte);
     if (writeret < 0) {
@@ -1892,6 +1918,17 @@ ssize_t write(int fd, const void *buf, size_t nbyte)
         }
     }
 	return writeret;
+#else
+    while(1) {
+        ___general_write_wait(fd);
+        ssize_t writeret = zcc::syscall_write(fd, buf ,nbyte);
+        int ec = errno;
+        if ((writeret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return writeret;
+        }
+    }
+	return -1;
+#endif
 }
 /* }}} */
 
@@ -1925,6 +1962,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
     if (fdatts->nonblock) {
         return zcc::syscall_writev(fd, iov, iovcnt);
     }
+#if 0
     ___general_write_wait(fd);
 	ssize_t writeret = zcc::syscall_writev(fd, iov, iovcnt);
     if (writeret < 0) {
@@ -1933,6 +1971,17 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
         }
     }
 	return writeret;
+#else
+    while(1) {
+        ___general_write_wait(fd);
+        ssize_t writeret = zcc::syscall_writev(fd, iov, iovcnt);
+        int ec = errno;
+        if ((writeret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return writeret;
+        }
+    }
+    return -1;
+#endif
 }
 /* }}} */
 
@@ -1943,6 +1992,7 @@ ssize_t sendto(int socket, const void *message, size_t length, int flags, const 
     return_zcc_call_co(socket) {
         return zcc::syscall_sendto(socket,message,length,flags,dest_addr,dest_len);
     }
+#if 0
     ___general_write_wait(socket);
     ret = zcc::syscall_sendto(socket,message,length,flags,dest_addr,dest_len);
     if (ret > -1) {
@@ -1952,6 +2002,17 @@ ssize_t sendto(int socket, const void *message, size_t length, int flags, const 
         errno = EINTR;
     }
     return ret;
+#else
+    while(1) {
+        ___general_write_wait(socket);
+        ret = zcc::syscall_sendto(socket,message,length,flags,dest_addr,dest_len);
+        int ec = errno;
+        if ((ret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return ret;
+        }
+    }
+    return -1;
+#endif
 }
 /* }}} */
 
@@ -1961,6 +2022,7 @@ ssize_t recvfrom(int socket, void *buf, size_t length, int flags, struct sockadd
     return_zcc_call_co(socket) {
 		return zcc::syscall_recvfrom(socket,buf,length,flags,address,address_len);
     }
+#if 0
     ___general_read_wait(socket);
 	ssize_t ret = zcc::syscall_recvfrom(socket,buf,length,flags,address,address_len);
     if (ret > -1) {
@@ -1970,6 +2032,17 @@ ssize_t recvfrom(int socket, void *buf, size_t length, int flags, struct sockadd
         errno = EINTR;
     }
 	return ret;
+#else
+    while(1) {
+        ___general_read_wait(socket);
+        ssize_t ret = zcc::syscall_recvfrom(socket,buf,length,flags,address,address_len);
+        int ec = errno;
+        if ((ret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return ret;
+        }
+    }
+    return -1;
+#endif
 }
 /* }}} */
 
@@ -1979,6 +2052,7 @@ ssize_t send(int socket, const void *buffer, size_t length, int flags)
     return_zcc_call_co(socket) {
 		return zcc::syscall_send(socket,buffer,length,flags);
     }
+#if 0
     ___general_write_wait(socket);
     int ret = zcc::syscall_send(socket,(const char*)buffer, length, flags);
     if (ret > -1) {
@@ -1988,6 +2062,18 @@ ssize_t send(int socket, const void *buffer, size_t length, int flags)
         errno = EINTR;
     }
     return ret;
+#else
+    while(1) {
+        ___general_write_wait(socket);
+        int ret = zcc::syscall_send(socket,(const char*)buffer, length, flags);
+        int ec = errno;
+        if ((ret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return ret;
+        }
+    }
+    return -1;
+#endif
+
 }
 /* }}} */
 
@@ -1997,6 +2083,7 @@ ssize_t recv(int socket, void *buffer, size_t length, int flags)
     return_zcc_call_co(socket) {
 		return zcc::syscall_recv(socket,buffer,length,flags);
     }
+#if 0
     ___general_read_wait(socket);
 	ssize_t ret = zcc::syscall_recv(socket,buffer,length,flags);
     if (ret > -1) {
@@ -2006,6 +2093,17 @@ ssize_t recv(int socket, void *buffer, size_t length, int flags)
         errno = EINTR;
     }
 	return ret;
+#else
+    while(1) {
+        ___general_read_wait(socket);
+        ssize_t ret = zcc::syscall_recv(socket,buffer,length,flags);
+        int ec = errno;
+        if ((ret >= 0) || (ec == EINTR) || (ec != EAGAIN)) {
+            return ret;
+        }
+    }
+    return -1;
+#endif
 }
 /* }}} */
 

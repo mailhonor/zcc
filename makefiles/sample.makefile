@@ -12,7 +12,7 @@ DEST := $(SRCS:.cpp=)
 
 $(DEST): ../../libzcc.a ../../libzcc_coroutine.a
 .cpp:
-	$(CC) $*.cpp -o $* $(CFLAGS) $($*_LIB) $(LIBS) $(LIB_$*) ../../libzcc.a $(GLOBAL_LIBS)
+	$(CC) $*.cpp -o $* $(CFLAGS) $($*_LIB) ../../libzcc.a $(LIBS) $(LIB_$*) $(GLOBAL_LIBS)
 	#$(CC) $*.cpp -o $* $(CFLAGS) -Xlinker "-(" ../../libzcc.a $(GLOBAL_LIBS) $($*_LIB) $(LIBS)
 
 target: libzcc $(DEST)
