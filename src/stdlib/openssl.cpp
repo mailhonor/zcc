@@ -213,7 +213,7 @@ int openssl_SSL_get_fd(SSL *ssl)
             if (var_openssl_debug) { zcc_info("openssl: found error ret=%d, status=%d", ret, err); } \
             { ret = -1; break; } \
         } \
-    }
+    } 
 
 bool openssl_timed_connect(SSL * ssl, long timeout)
 {

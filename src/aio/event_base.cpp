@@ -20,7 +20,7 @@ namespace zcc
 event_base default_evbase;
 
 
-#pragma pack(push, 1)
+#pragma pack(push, 4)
 /* {{{ global vars, declare, macro, etc */
 #define lock_evbase(eb)   {if(((event_base_t *)(eb))->plocker_flag){ \
     zcc_pthread_lock(&(((event_base_t *)(eb))->plocker));}}
@@ -702,15 +702,19 @@ static int async_io_event_set(async_io_t * aio_data, int ev_type, long timeout)
         rbtree_node_t *rn;
         rn = &(aio_data->rbnode_time);
         if (timeout > 0) {
+            lock_evbase(eb->eb_data);
             if (aio_data->in_timeout) {
                 rbtree_detach(timer_tree, rn);
             }
             aio_data->timeout = timeout_set(timeout);
             rbtree_attach(timer_tree, rn);
             aio_data->in_timeout = 1;
+            unlock_evbase(eb->eb_data);
         } else if (timeout == 0) {
             if (aio_data->in_timeout) {
+                lock_evbase(eb->eb_data);
                 rbtree_detach(timer_tree, rn);
+                unlock_evbase(eb->eb_data);
             }
             aio_data->in_timeout = 0;
         }

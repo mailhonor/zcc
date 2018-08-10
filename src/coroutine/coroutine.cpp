@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <utime.h>
 
+#pragma pack(push, 4)
 extern "C"
 {
 }
@@ -1689,6 +1690,10 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len)
     if (sock > -1) {
         zcc::coroutine_fd_attribute_create(sock);
         fcntl(sock, F_SETFL, zcc::syscall_fcntl(sock, F_GETFL,0));
+    } else {
+        if (errno == EAGAIN) {
+            errno = EINTR;
+        }
     }
     return sock;
 }
@@ -2642,6 +2647,7 @@ int utimes(const char *filename, const struct timeval times[2])
 
 } /* extern "C" */
 
+#pragma pack(pop)
 /* Local variables:
 * End:
 * vim600: fdm=marker

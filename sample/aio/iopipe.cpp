@@ -9,6 +9,7 @@
 #include "zcc.h"
 #include <pthread.h>
 #include <openssl/ssl.h>
+#include <signal.h>
 
 static char *proxy_address = 0;
 static bool proxy_ssl = false;
@@ -23,7 +24,6 @@ static SSL_CTX * ssl_proxy_ctx = 0;
 static SSL_CTX * ssl_dest_ctx = 0;
 
 static zcc::iopipe *iop = 0;
-static zcc::event_base *eb;
 
 class  fd_to_fd_linker
 {
@@ -49,11 +49,10 @@ static int ___stop = 0;
 void after_close(void *ctx)
 {
     ___times++;
-    fprintf(stderr, "times: %d\n", ___times);
     if (___times == times) {
         iop->stop_notify();
         ___stop = 1;
-        eb->notify();
+        zcc::default_evbase.notify();
         fprintf(stderr, "... stop\n");
     }
 }
@@ -74,8 +73,8 @@ static void parameters_do(int argc, char **argv)
         dest_ssl = true;
     }
 
-    ssl_key = zcc::default_config.get_str("ssl_key");
-    ssl_cert = zcc::default_config.get_str("ssl_cert");
+    ssl_key = zcc::default_config.get_str("ssl-key");
+    ssl_cert = zcc::default_config.get_str("ssl-cert");
     times = zcc::default_config.get_int("times", 3, 1, 1000000);
 
     if (proxy_ssl && dest_ssl) {
@@ -96,9 +95,9 @@ static void ssl_do()
 {
     zcc::openssl_init();
 
-    ssl_proxy_ctx = zcc::openssl_create_SSL_CTX_server();
+    ssl_proxy_ctx = zcc::openssl_SSL_CTX_create_server();
 
-    ssl_dest_ctx = zcc::openssl_create_SSL_CTX_client();
+    ssl_dest_ctx = zcc::openssl_SSL_CTX_create_client();
 
     if (proxy_ssl) {
         if (zcc::empty(ssl_key) || zcc::empty(ssl_cert)) {
@@ -212,7 +211,6 @@ static void *accept_incoming(void *arg)
             break;
         }
     }
-    delete eb;
 
     zcc::openssl_phtread_fini();
 
@@ -229,6 +227,7 @@ void * iop_run(void *arg)
 
 int main(int argc, char **argv)
 {
+    signal(SIGPIPE, SIG_IGN);
     zcc::var_log_fatal_catch = 1;
     zcc::var_progname = argv[0];
 
@@ -236,7 +235,6 @@ int main(int argc, char **argv)
 
     ssl_do();
 
-    eb = new zcc::event_base();
     pthread_t pth;
 #if 0
     pthread_create(&pth, 0, accept_incoming, 0);

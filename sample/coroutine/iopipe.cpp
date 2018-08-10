@@ -11,10 +11,10 @@
 #include <openssl/ssl.h>
 
 static char *proxy_address = 0;
-static bool proxy_ssl = false;
+static bool proxy_is_ssl = false;
 
 static char *dest_address = 0;
-static bool dest_ssl = false;
+static bool dest_is_ssl = false;
 
 static char *ssl_key = 0;
 static char *ssl_cert = 0;
@@ -52,22 +52,22 @@ static void parameters_do(int argc, char **argv)
     proxy_address = zcc::default_config.get_str("proxy");
     if (zcc::empty(proxy_address)) {
         proxy_address = zcc::default_config.get_str("ssl-proxy");
-        proxy_ssl = true;
+        proxy_is_ssl = true;
     }
 
     dest_address = zcc::default_config.get_str("dest");
     if (zcc::empty(dest_address)) {
         dest_address = zcc::default_config.get_str("ssl-dest");
-        dest_ssl = true;
+        dest_is_ssl = true;
     }
 
-    ssl_key = zcc::default_config.get_str("ssl_key");
-    ssl_cert = zcc::default_config.get_str("ssl_cert");
+    ssl_key = zcc::default_config.get_str("ssl-key");
+    ssl_cert = zcc::default_config.get_str("ssl-cert");
     times = zcc::default_config.get_int("times", 3, 1, 1000000);
 
-    if (proxy_ssl && dest_ssl) {
-        proxy_ssl = false;
-        dest_ssl = false;
+    if (proxy_is_ssl && dest_is_ssl) {
+        proxy_is_ssl = false;
+        dest_is_ssl = false;
     }
     if (zcc::empty(proxy_address)) {
         printf("ERR proxy'address is null\n");
@@ -87,9 +87,9 @@ static void ssl_do()
 
     ssl_dest_ctx = zcc::openssl_SSL_CTX_create_client();
 
-    if (proxy_ssl) {
+    if (proxy_is_ssl) {
         if (zcc::empty(ssl_key) || zcc::empty(ssl_cert)) {
-            printf("ERR ssl-proxy mode, need --ssl-key, --ssl-cert\n");
+            printf("ERR ssl-proxy mode, need -ssl-key, -ssl-cert\n");
             ___usage();
         }
         if (!zcc::openssl_SSL_CTX_set_cert(ssl_proxy_ctx, ssl_cert, ssl_key)) {
@@ -115,7 +115,7 @@ void * do_after_accept(void *arg)
     bool err = false;
 
     do {
-        if (proxy_ssl) {
+        if (proxy_is_ssl) {
             proxy_ssl = zcc::openssl_SSL_create(ssl_proxy_ctx, proxy_fd);
             if (!zcc::openssl_timed_accept(proxy_ssl, 10 * 1000)) {
                 printf("ERR openssl_accept error\n");
@@ -129,11 +129,13 @@ void * do_after_accept(void *arg)
             err = true;
             break;
         }
-        dest_ssl = zcc::openssl_SSL_create(ssl_dest_ctx, dest_fd);
-        if (!zcc::openssl_timed_connect(dest_ssl, 10 * 1000)) {
-            printf("ERR openssl_accept error\n");
-            err = true;
-            break;
+        if (dest_is_ssl) {
+            dest_ssl = zcc::openssl_SSL_create(ssl_dest_ctx, dest_fd);
+            if (!zcc::openssl_timed_connect(dest_ssl, 10 * 1000)) {
+                printf("ERR openssl_accept error\n");
+                err = true;
+                break;
+            }
         }
     } while(0);
 

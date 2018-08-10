@@ -244,7 +244,7 @@ void coroutine_go_iopipe(int fd1, SSL *ssl1, int fd2, SSL *ssl2, void (*after_cl
     fgo->fass1.want_read = true;
     fgo->after_close = after_close;
     fgo->ctx = ctx;
-    coroutine_go(coroutine_go_iopipe_go, fgo, 4096);
+    coroutine_go(coroutine_go_iopipe_go, fgo, 16 * 1024);
 }
 
 }
