@@ -1,7 +1,7 @@
 /*
  * ================================
- * eli960@163.com
- * http://www.mailhonor.com/
+ * eli960@qq.com
+ * http://blog.chinaunix.net/uid/31513553.html
  * 2015-12-06
  * ================================
  */
