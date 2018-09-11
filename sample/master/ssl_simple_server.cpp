@@ -15,9 +15,9 @@ int main(int argc, char **argv)
 {
 
     zcc::openssl_init();
-    var_openssl_server_ctx = zcc::openssl_create_SSL_CTX_server();
-    const char *fn_cert = "/home/xxx/mycode/honor-grid/etc/ssl/grid.crt";
-    const char *fn_key = "/home/xxx/mycode/honor-grid/etc/ssl/grid.key";
+    var_openssl_server_ctx = zcc::openssl_SSL_CTX_create_server();
+    const char *fn_cert = "./server.cert";
+    const char *fn_key = "./server.key";
     if (!zcc::openssl_SSL_CTX_set_cert(var_openssl_server_ctx, fn_cert, fn_key)) {
         zcc_fatal("can not load ssl cert(%s) or key file(%s)", fn_cert, fn_key);
     }   

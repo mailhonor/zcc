@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     int flags;
 
     mc.set("iii", 0, 0, "123", 3);
-    mc.incr(&l, "iii", 3);
+    l = mc.incr("iii", 3);
     printf("incr iii: %ld\n", l);
     mc.get(str, &flags, "iii");
     printf("get iii: %s\n", str.c_str());

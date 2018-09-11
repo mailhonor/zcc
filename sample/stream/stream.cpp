@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     SSL_CTX *ssl_ctx = 0;
     if (tls_mode || ssl_mode) {
         zcc::openssl_init();
-        ssl_ctx = zcc::openssl_create_SSL_CTX_client();
+        ssl_ctx = zcc::openssl_SSL_CTX_create_client();
     }
 
     zcc::stream fp;
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         zcc::nonblocking(fd);
 
         if (ssl_mode) {
-            SSL *ssl = zcc::openssl_create_SSL(ssl_ctx, fd);
+            SSL *ssl = zcc::openssl_SSL_create(ssl_ctx, fd);
             if (!zcc::openssl_timed_connect(ssl, 10 * 1000)) {
                 printf("ERR ssl initialization error (%m)\n");
                 exit(1);

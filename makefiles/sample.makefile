@@ -2,8 +2,6 @@ all: target
 
 .PHONY: tags
 
-LIBCOROUTINE= ../../libzcc_coroutine.a
-
 CC=g++
 CFLAGS= -std=gnu++0x -ggdb -Wall -I../../ -O3
 GLOBAL_LIBS= -pthread

@@ -1,3 +1,3 @@
-LIBS=-lssl -lcrypto
-puny_server_LIB= $(LIBCOROUTINE)
+LIBS = ../../libzcc_coroutine.a ../../libzcc.a -lssl -lcrypto -ldl
 include ../../makefiles/sample.makefile
+

@@ -130,14 +130,40 @@ void openssl_phtread_fini(void)
     ERR_remove_state(0);
 }
 
+static SSL_CTX *openssl_SSL_CTX_create_by_method(const SSL_METHOD *method, bool server_or_client)
+{
+    SSL_CTX *ctx = SSL_CTX_new(method);
+    if (!ctx) {
+        zcc_fatal("SSL_CTX_new");
+    }
+    SSL_CTX_set_options(ctx, SSL_OP_ALL);
+    SSL_CTX_set_options(ctx, SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION);
+
+    SSL_CTX_clear_options(ctx, SSL_OP_NO_SSLv2);
+    SSL_CTX_clear_options(ctx, SSL_OP_NO_SSLv3);
+    SSL_CTX_clear_options(ctx, SSL_OP_NO_TLSv1);
+    SSL_CTX_clear_options(ctx, SSL_OP_NO_TLSv1_1);
+    SSL_CTX_clear_options(ctx, SSL_OP_NO_TLSv1_2);
+
+    SSL_CTX_set_read_ahead(ctx, 1);
+
+#if OPENSSL_VERSION_NUMBER > 0x10100080L
+    SSL_CTX_set_security_level(ctx, 1);
+#endif
+    SSL_CTX_set_cipher_list(ctx, "HIGH:SSLv3:SSLv1:TLSv1.3:TLSv1.1:TLSv1.0:!aNULL:!eNULL");
+    
+    return ctx;
+}
+
 SSL_CTX *openssl_SSL_CTX_create_server(void)
 {
-     return SSL_CTX_new(SSLv23_server_method());
+     return openssl_SSL_CTX_create_by_method(SSLv23_server_method(), true);
 }
 
 SSL_CTX *openssl_SSL_CTX_create_client(void)
 {
-     return SSL_CTX_new(SSLv23_client_method());
+     return openssl_SSL_CTX_create_by_method(SSLv23_client_method(), false);
 }
 
 bool openssl_SSL_CTX_set_cert(SSL_CTX *ctx, const char *cert_file, const char *key_file)
