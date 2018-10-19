@@ -91,9 +91,14 @@ int syscall_lutimes(const char *filename, const struct timeval tv[2]);
 extern pthread_mutex_t *var_general_pthread_mutex;
 
 static int var_coroutine_block_pthread_count_limit = 0;
-void coroutine_set_block_pthread_limit(int limit) 
+static bool var_coroutine_fileio_use_block_pthread = false;
+void coroutine_set_block_pthread_limit(size_t limit) 
 {
-    var_coroutine_block_pthread_count_limit = limit;
+    var_coroutine_block_pthread_count_limit = (int)limit;
+}
+void coroutine_set_fileio_use_block_pthread(bool r) 
+{
+    var_coroutine_fileio_use_block_pthread = r;
 }
 static int var_coroutine_block_pthread_count_current = 0;
 
@@ -194,7 +199,7 @@ typedef enum coroutine_hook_fileio_cmd_t coroutine_hook_fileio_cmd_t;
 
 #define coroutine_hook_fileio_run_part1() \
     zcc::coroutine_base *cobs = 0; \
-    if ((zcc::var_coroutine_block_pthread_count_limit<1) || ((cobs = zcc::coroutine_base_get_current())==0))
+    if ((!zcc::var_coroutine_fileio_use_block_pthread) || (zcc::var_coroutine_block_pthread_count_limit<1) || ((cobs = zcc::coroutine_base_get_current())==0))
 
 #define coroutine_hook_fileio_run_part2(func)  \
     zcc::coroutine *current_coroutine = cobs->current_coroutine; \
@@ -370,6 +375,7 @@ void coroutine_context_swap(coroutine_sys_context *, coroutine_sys_context *) as
 
 /* }}} */
 
+/* FIXME 是否需要加锁? 不需要! */
 /* {{{ coroutine_fd_attribute */
 static inline coroutine_fd_attribute * coroutine_fd_attribute_get(int fd)
 {
@@ -379,7 +385,7 @@ static inline coroutine_fd_attribute * coroutine_fd_attribute_get(int fd)
     return 0;
 }
 
-static inline coroutine_fd_attribute *coroutine_fd_attribute_create(int fd)
+static coroutine_fd_attribute *coroutine_fd_attribute_create(int fd)
 {
     if ((fd > -1) &&  (fd <= zcc::var_fd_max) && (var_coroutine_mode_flag)) {
         free(coroutine_fd_attribute_vec[fd]);
@@ -1370,7 +1376,8 @@ static void *coroutine_hook_fileio_worker(void *arg)
 /* {{{ block*/
 void *coroutine_block_do(void *(*block_func)(void *ctx), void *ctx)
 {
-    coroutine_hook_fileio_run_part1() {
+    zcc::coroutine_base *cobs = 0;
+    if ((zcc::var_coroutine_block_pthread_count_limit<1) || ((cobs = zcc::coroutine_base_get_current())==0)) {
         return block_func(ctx);
     }
     coroutine_hook_fileio_run_part2(unknown);

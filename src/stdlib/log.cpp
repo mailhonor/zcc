@@ -96,9 +96,14 @@ void log_use_syslog(const char *facility, const char *identity)
     log_use_syslog(fa, identity);
 }
 
+static std::string var_syslog_identity;;
 void log_use_syslog(int facility, const char *identity)
 {
-    openlog(identity, LOG_NDELAY | LOG_PID, facility);
+    var_syslog_identity.clear();
+    if(identity) {
+        var_syslog_identity = identity;
+    }
+    openlog(var_syslog_identity.c_str(), LOG_NDELAY | LOG_PID, facility);
     log_vprintf = vprintf_syslog;
 }
 

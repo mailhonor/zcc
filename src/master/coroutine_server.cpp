@@ -6,6 +6,8 @@
  * ================================
  */
 
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #include "zcc.h"
 #include <signal.h>
 #include <sys/types.h>

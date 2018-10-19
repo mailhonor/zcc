@@ -621,6 +621,7 @@ long timeout_set(long timeout);
 long timeout_left(long timeout);
 void msleep(long delay);
 void sleep(long delay);
+long get_compile_time(const char *date, const char *time);
 
 /* io ############################################################# */
 /* return , -1: error, 0: not, 1: yes */
@@ -948,8 +949,11 @@ void coroutine_cond_wait(coroutine_cond_t *, coroutine_mutex_t *);
 void coroutine_cond_signal(coroutine_cond_t *);
 void coroutine_cond_broadcast(coroutine_cond_t *);
 
-void coroutine_set_block_pthread_limit(int limit);
+/* 启用limit个线程池, 用于文件io,和 block_do */
+void coroutine_set_block_pthread_limit(size_t limit);
 void *coroutine_block_do(void *(*block_func)(void *ctx), void *ctx);
+/* 文件io是否用线程池模式, 前提是 coroutine_set_block_pthread_limit(limit>0) */
+void coroutine_set_fileio_use_block_pthread(bool r = true);
 
 void coroutine_go_iopipe(int fd1, SSL *ssl1, int fd2, SSL *ssl2, void (*after_close)(void *ctx), void *ctx);
 
@@ -1415,21 +1419,30 @@ public:
 
     /* request */
     char *request_method();
+    char *request_host();
     char *request_path();
     char *request_uri();
     char *request_version();
+    bool request_gzip();
+    bool request_deflate();
+    long request_content_length();
     const std::map<std::string, std::string> &request_header();
     const std::map<std::string, std::string> &request_query_variates();
     const std::map<std::string, std::string> &request_post_variates();
     const std::map<std::string, std::string> &request_cookie();
     const std::list<httpd_upload_file> &upload_files();
-    /* response completly*/
+    /* response completely*/
     virtual void response_304(const char *etag);
     virtual void response_404();
     virtual void response_500();
     void response_200(const char *data, size_t size);
     inline void response_200(const char *data) { response_200(data, strlen(data)); }
-    void response_file(const char *filename, const char *content_type = 0);
+    /* response file */
+    void response_file_set_max_age(int left_second);
+    void response_file_set_expires(int left_second);
+    void response_file_with_gzip(const char *filename, const char *content_type = 0, bool *catch_missing = 0);
+    void response_file(const char *filename, const char *content_type = 0, bool *catch_missing = 0);
+    void response_file_try_gzip(const char *filename, const char *content_type = 0, bool *catch_missing = 0);
 
     /* response header */
     void response_header_initialization(const char *initialization = 0);
@@ -1453,6 +1466,7 @@ private:
     void upload_file_parse_dump_file(const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, const char *name, const char *filename);
     void upload_file_parse_walk_mime(mail_parser_mime * mime, const char *data_filename, std::string &saved_path, std::string &content, int file_id_plus, std::string &disposition_raw, std::map<std::string, std::string> &params);
     void upload_file_parse(const char *data_filename);
+    void response_file_by_flag(const char *filename, const char *content_type, int flag, bool *catch_missing = 0);
     httpd_engine *h_engine;
 };
 

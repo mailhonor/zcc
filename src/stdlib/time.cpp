@@ -75,4 +75,14 @@ void sleep(long delay)
     msleep(delay * 1000);
 }
 
+long get_compile_time(const char *date, const char *time)
+{
+    struct tm tm;
+    char buf[256];
+    memset(&tm, 0, sizeof(struct tm));
+    sprintf(buf, "%s %s", date, time);
+    strptime(buf, "%B %d %Y %H:%M:%S", &tm);
+    return timegm(&tm);
+}
+
 }

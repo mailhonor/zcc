@@ -6,6 +6,8 @@
  * ================================
  */
 
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #include "zcc.h"
 #include <arpa/inet.h>
 #include <dirent.h>

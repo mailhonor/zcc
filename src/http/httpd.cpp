@@ -1,3 +1,9 @@
+#if 0
+    if (!strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "gzip")) {
+        response_500();
+        return;
+    }
+#endif
 /*
  * ================================
  * eli960@qq.com
@@ -33,6 +39,7 @@ public:
     bool stop;
     /* request */
     char * method;
+    char * host;
     char * uri;
     char * version;
     char * path;
@@ -49,12 +56,18 @@ public:
     bool get_post_data_myself;
     bool exception;
     bool tls_mode;
+    unsigned char request_gzip:2;
+    unsigned char request_deflate:2;
+    /* */
+    int response_max_age;
+    int response_expires;
 };
 
 httpd::httpd()
 {
     h_engine = new httpd_engine();
     h_engine->method = blank_buffer;
+    h_engine->host = blank_buffer;
     h_engine->uri = blank_buffer;
     h_engine->version = blank_buffer;
     h_engine->path = blank_buffer;
@@ -66,6 +79,12 @@ httpd::httpd()
     h_engine->get_post_data_myself = false;
     h_engine->exception = false;
     h_engine->tls_mode = false;
+
+    h_engine->request_gzip = 0;
+    h_engine->request_deflate = 0;
+
+    h_engine->response_max_age = -1;
+    h_engine->response_expires = -1;
 
     loop_clear();
     h_engine->fd = -1;
@@ -189,6 +208,11 @@ char *httpd::request_method()
     return h_engine->method;
 }
 
+char *httpd::request_host()
+{
+    return h_engine->host;
+}
+
 char *httpd::request_uri()
 {
     return h_engine->uri;
@@ -202,6 +226,27 @@ char *httpd::request_path()
 char *httpd::request_version()
 {
     return h_engine->version;
+}
+
+bool httpd::request_gzip()
+{
+    if (h_engine->request_gzip == 0) {
+        h_engine->request_gzip = (strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "gzip")?1:2);
+    }
+    return (h_engine->request_gzip==1);
+}
+
+bool httpd::request_deflate()
+{
+    if (h_engine->request_deflate == 0) {
+        h_engine->request_deflate = (strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "deflate")?1:2);
+    }
+    return (h_engine->request_deflate==1);
+}
+
+long httpd::request_content_length()
+{
+    return h_engine->request_content_length;
 }
 
 const std::map<std::string, std::string> &httpd::request_header()
@@ -242,53 +287,99 @@ void httpd::response_500()
     h_engine->http_fp.flush();
 }
 
-void httpd::response_file(const char *filename, const char *content_type)
+static const int response_file_flag_gzip = (1<<0);
+static const int response_file_flag_try_gzip = (1<<1);
+static const int response_file_flag_regular = (1<<2);
+
+void httpd::response_file_by_flag(const char *filename, const char *content_type, int flag, bool *catch_missing)
 {
+    if (catch_missing) {
+        *catch_missing = false;
+    }
     if (empty(content_type)) {
         content_type = mime_type_from_filename(filename, var_mime_type_application_cotec_stream);
     }
     int fd;
     struct stat st;
-    int times;
     bool is_gzip = false;
-    for (times = 0; times < 2; times++) {
-        if (times == 0) {
-            if (zcc::empty(gzip_file_suffix())) {
-                continue;
-            }
-            if (!strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "gzip")) {
-                continue;
-            }
-            std::string fn(filename);
-            fn.push_back('.');
-            fn.append(gzip_file_suffix());
-            while ((fd = open(fn.c_str(), O_RDONLY)) == -1 && errno == EINTR) {
-                continue;
-            }
-            is_gzip = true;
-        } else {
-            while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
-                continue;
-            }
-            is_gzip = false;
+    if ((flag & response_file_flag_gzip) || (flag & response_file_flag_regular)) {
+        while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
+            continue;
         }
         if (fd == -1) {
-            continue;
+            if (catch_missing) {
+                *catch_missing = true;
+            } else {
+                response_404();
+            }
+            return;
         }
 
         if (fstat(fd, &st) == -1) {
             close(fd);
-            continue;
+            response_500();
+            return;
         }
-        break;
-    }
-    if (times == 2) {
-        response_404();
+        if (flag & response_file_flag_gzip) {
+            is_gzip = true;
+        }
+    } else if (flag & response_file_flag_try_gzip) {
+        int times;
+        for (times = 0; times < 2; times++) {
+            if (times == 0) {
+                if (zcc::empty(gzip_file_suffix())) {
+                    continue;
+                }
+                if (!strcasestr(dict_get_str(h_engine->request_headers,"accept-encoding", ""), "gzip")) {
+                    continue;
+                }
+                std::string fn(filename);
+                fn.push_back('.');
+                fn.append(gzip_file_suffix());
+                while ((fd = open(fn.c_str(), O_RDONLY)) == -1 && errno == EINTR) {
+                    continue;
+                }
+                is_gzip = true;
+            } else {
+                while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
+                    continue;
+                }
+                is_gzip = false;
+            }
+            if (fd == -1) {
+                continue;
+            }
+
+            if (fstat(fd, &st) == -1) {
+                close(fd);
+                continue;
+            }
+            break;
+        }
+        if (times == 2) {
+            if (catch_missing) {
+                *catch_missing = true;
+            } else {
+                response_404();
+            }
+            return;
+        }
+    } else {
+        response_500();
         return;
     }
-    char *old_etag = dict_get_str(h_engine->request_headers,"if-none-match");
+
     autobuffer rwbuffer;
     rwbuffer.data = (char *)malloc(4096 + 1);
+
+    if (h_engine->response_max_age > 0) {
+        sprintf(rwbuffer.data, "max-age=%d", h_engine->response_max_age);
+        response_header("Cache-Control", rwbuffer.data);
+    }
+    if (h_engine->response_expires > 0) {
+        response_header("Expires", h_engine->response_expires + 1 + time(0));
+    }
+    char *old_etag = dict_get_str(h_engine->request_headers,"if-none-match");
     char *new_etag = rwbuffer.data;
     sprintf(new_etag, "%lx_%lx", st.st_size, st.st_mtime);
     if (!strcmp(old_etag, new_etag)) {
@@ -304,9 +395,11 @@ void httpd::response_file(const char *filename, const char *content_type)
     if (var_httpd_no_cache == false) {
         response_header("Etag", new_etag);
     }
+
     if (is_gzip) {
         response_header("Content-Encoding", "gzip");
     }
+
     response_header("Last-Modified", st.st_mtime);
     if (h_engine->request_keep_alive) {
         response_header("Connection", "keep-alive");
@@ -344,6 +437,31 @@ void httpd::response_file(const char *filename, const char *content_type)
     } else {
         h_engine->http_fp.flush();
     }
+}
+
+void httpd::response_file_with_gzip(const char *filename, const char *content_type, bool *catch_missing)
+{
+    response_file_by_flag(filename, content_type, response_file_flag_gzip, catch_missing);
+}
+
+void httpd::response_file(const char *filename, const char *content_type, bool *catch_missing)
+{
+    response_file_by_flag(filename, content_type, response_file_flag_regular, catch_missing);
+}
+
+void httpd::response_file_try_gzip(const char *filename, const char *content_type, bool *catch_missing)
+{
+    response_file_by_flag(filename, content_type, response_file_flag_try_gzip, catch_missing);
+}
+
+void httpd::response_file_set_max_age(int left_second)
+{
+    h_engine->response_max_age = left_second;
+}
+
+void httpd::response_file_set_expires(int left_second)
+{
+    h_engine->response_expires = left_second;
 }
 
 void httpd::response_404()
@@ -462,6 +580,7 @@ void httpd::loop_clear()
 
 #define ___FR(m) free(m); m=blank_buffer;
     ___FR(h_engine->method);
+    ___FR(h_engine->host);
     ___FR(h_engine->path);
 #undef ___FR
 
@@ -475,6 +594,10 @@ void httpd::loop_clear()
     h_engine->request_keep_alive = false;
     h_engine->response_initialization = false;
     h_engine->response_content_type = false;
+
+    h_engine->response_max_age = -1;
+    h_engine->response_expires = -1;
+
 }
 
 void httpd::request_header_do(bool first)
@@ -595,7 +718,10 @@ void httpd::request_header_do(bool first)
             ps ++;
         }
         h_engine->request_headers[linebuf] = ps;
-        if (zcc_str_eq(linebuf, "content-length")) {
+        if (zcc_str_eq(linebuf, "host")) {
+            h_engine->host = strdup(ps);
+            zcc::tolower(h_engine->host);
+        } else if (zcc_str_eq(linebuf, "content-length")) {
             h_engine->request_content_length = atoi(ps);
         } else if (zcc_str_eq(linebuf, "cookie")) {
             http_cookie_parse_request(h_engine->request_cookies, ps);
