@@ -40,6 +40,7 @@ public:
     /* request */
     char * method;
     char * host;
+    int port;
     char * uri;
     char * version;
     char * path;
@@ -68,6 +69,7 @@ httpd::httpd()
     h_engine = new httpd_engine();
     h_engine->method = blank_buffer;
     h_engine->host = blank_buffer;
+    h_engine->port = -1;
     h_engine->uri = blank_buffer;
     h_engine->version = blank_buffer;
     h_engine->path = blank_buffer;
@@ -249,7 +251,7 @@ long httpd::request_content_length()
     return h_engine->request_content_length;
 }
 
-const std::map<std::string, std::string> &httpd::request_header()
+const std::map<std::string, std::string> &httpd::request_headers()
 {
     return h_engine->request_headers;
 }
@@ -264,7 +266,7 @@ const std::map<std::string, std::string> &httpd::request_post_variates()
     return h_engine->request_post;
 }
 
-const std::map<std::string, std::string> &httpd::request_cookie()
+const std::map<std::string, std::string> &httpd::request_cookies()
 {
     return h_engine->request_cookies;
 }
@@ -575,6 +577,11 @@ bool httpd::response_flush()
     return h_engine->http_fp.flush();
 }
 
+stream &httpd::get_stream()
+{
+    return h_engine->http_fp;
+}
+
 void httpd::loop_clear()
 {
 
@@ -583,6 +590,7 @@ void httpd::loop_clear()
     ___FR(h_engine->host);
     ___FR(h_engine->path);
 #undef ___FR
+    h_engine->port = -1;
 
     h_engine->stop = false;
     h_engine->request_content_length = -1;
@@ -720,6 +728,14 @@ void httpd::request_header_do(bool first)
         h_engine->request_headers[linebuf] = ps;
         if (zcc_str_eq(linebuf, "host")) {
             h_engine->host = strdup(ps);
+            p = strchr(ps, ':');
+            if (p) {
+                h_engine->host = strndup(ps, p-ps);
+                h_engine->port = atoi(p+1);
+            } else {
+                h_engine->host = strdup(ps);
+                h_engine->port = -1;
+            }
             zcc::tolower(h_engine->host);
         } else if (zcc_str_eq(linebuf, "content-length")) {
             h_engine->request_content_length = atoi(ps);

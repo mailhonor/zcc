@@ -13,6 +13,8 @@ namespace zcc
 
 config default_config;
 
+#define inner_empty(ptr) ((!ptr)||(!*ptr))
+
 bool config::load_by_filename(const char *filename)
 {
     char *key, *val;
@@ -121,82 +123,116 @@ char *config::get_str(const char *key, const char *def)
 
 bool config::get_bool(const std::string &key, bool def)
 {
-    return to_bool(get_str(key, ""), def);
+    char *str_val = get_str(key, "");
+    return (inner_empty(str_val)?def:to_bool(str_val, def));
 }
 
 bool config::get_bool(const char *key, bool def)
 {
-    return to_bool(get_str(key, ""), def);
+    char *str_val = get_str(key, "");
+    return (inner_empty(str_val)?def:to_bool(str_val,def));
 }
 
 int config::get_int(const std::string &key, int def, int min, int max)
 {
-    int r = atoi(get_str(key, ""));
-    if ((r < min) || (r > max)) {
-        return def;
+    int r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = atoi(str_val);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 int config::get_int(const char *key, int def, int min, int max)
 {
-    int r = atoi(get_str(key, ""));
-    if ((r < min) || (r > max)) {
-        return def;
+    int r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = atoi(str_val);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_long(const std::string &key, long def, long min, long max)
 {
-    long r = atol(get_str(key, ""));
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = atol(str_val);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_long(const char *key, long def, long min, long max)
 {
-    long r = atol(get_str(key, ""));
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = atol(str_val);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_second(const std::string &key, long def, long min, long max)
 {
-    int r = to_second(get_str(key, ""), def);
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = to_second(str_val, def);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_second(const char *key, long def, long min, long max)
 {
-    int r = to_second(get_str(key, ""), def);
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = to_second(str_val, def);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_size(const std::string &key, long def, long min, long max)
 {
-    int r = to_size(get_str(key, ""), def);
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = to_size(str_val, def);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }
 
 long config::get_size(const char *key, long def, long min, long max)
 {
-    int r = to_size(get_str(key, ""), def);
-    if ((r < min) || (r > max)) {
-        return def;
+    long r = def;
+    char *str_val = get_str(key, "");
+    if (!inner_empty(str_val)) {
+        r = to_size(str_val, def);
+        if ((r < min) || (r > max)) {
+            return def;
+        }
     }
     return r;
 }

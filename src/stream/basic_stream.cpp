@@ -21,7 +21,7 @@ basic_stream::basic_stream()
     ___error = false;
     ___eof = false;
     ___flushed = false;
-    read_buf = (char *) malloc(stream_read_buf_size + 1 + stream_write_buf_size+ 1);
+    read_buf = (unsigned char *) malloc(stream_read_buf_size + 1 + stream_write_buf_size+ 1);
     write_buf = read_buf + stream_read_buf_size + 1;
 }
 
@@ -82,6 +82,9 @@ ssize_t basic_stream::readn(void *buf, size_t size)
     if (size > left_size) {
         return size - left_size;
     }
+    if (___eof) {
+        return 0;
+    }
     return -1;
 }
 
@@ -108,6 +111,9 @@ ssize_t basic_stream::readn(std::string &str, size_t size)
 
     if (size > left_size) {
         return size - left_size;
+    }
+    if (___eof) {
+        return 0;
     }
     return -1;
 }
@@ -152,6 +158,9 @@ ssize_t basic_stream::gets(void *buf, size_t size, int delimiter)
     if (size > left_size) {
         return size - left_size;
     }
+    if (___eof) {
+        return 0;
+    }
     return -1;
 }
 
@@ -175,7 +184,13 @@ ssize_t basic_stream::gets(std::string &str, int delimiter)
             break;
         }
     }
-    return rlen;
+    if (rlen > 0) {
+        return rlen;
+    }
+    if (___eof) {
+        return 0;
+    }
+    return -1;
 }
 
 ssize_t basic_stream::size_data_get_size()

@@ -206,7 +206,7 @@ bool stream::flush()
     }
     ssize_t ret;
     long time_left;
-    char *data = write_buf;
+    unsigned char *data = write_buf;
     size_t data_len =write_buf_len;
     size_t wlen = 0;
 

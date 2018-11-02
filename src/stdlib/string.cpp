@@ -46,6 +46,22 @@ std::string &toupper(std::string &str)
     return str;
 }
 
+std::string &trim_right(std::string &str, const char *delims)
+{
+    int olen = (int)(str.size()), len = olen;
+    char *p = (char *)(void *)str.c_str() + len;
+    for (;len>0;len--) {
+        p--;
+        if (!strchr(delims, *p)) {
+            break;
+        }
+    }
+    if (len != olen) {
+        str.resize(len);
+    }
+    return str;
+}
+
 std::string &size_data_escape(std::string &str, const void *data, size_t n)
 {
     int ch, left;

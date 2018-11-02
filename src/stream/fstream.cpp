@@ -167,7 +167,7 @@ bool fstream::flush()
         return false;
     }
     ssize_t ret;
-    char *data = write_buf;
+    unsigned char *data = write_buf;
     size_t data_len =write_buf_len;
     size_t wlen = 0;
 

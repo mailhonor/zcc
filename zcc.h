@@ -223,6 +223,8 @@ class autobuffer
 {
 public:
     inline autobuffer() { data = 0; }
+    inline autobuffer(const void *_data) { data = (char *)(void *)_data; }
+    inline autobuffer(void *_data) { data = (char *)_data; }
     inline ~autobuffer() { free(data); }
     char *data;
 };
@@ -240,17 +242,18 @@ inline std::string &to_string(std::string &str, double i) {return sprintf_1024(s
 inline std::string &to_string(std::string &str, float i) {return sprintf_1024(str, "%f", i);}
 std::string &tolower(std::string &str);
 std::string &toupper(std::string &str);
+std::string &trim_right(std::string &str, const char *delims);
 std::string &size_data_escape(std::string &str, const void *data, size_t n = 0);
 std::string &size_data_escape(std::string &str, int i);
 std::string &size_data_escape(std::string &str, long i);
 std::vector<std::string> split(const char *s, const char *delims);
 
 /* std::map<std::string, std::string> ############################ */
-void dict_debug(std::map<std::string, std::string> &dict);
-bool dict_find(std::map<std::string, std::string> &dict, const std::string &key, char **val);
-bool dict_find(std::map<std::string, std::string> &dict, const char *key, char **val);
-char *dict_get_str(std::map<std::string, std::string> &dict,const std::string &key,const char *def = blank_buffer);
-char *dict_get_str(std::map<std::string, std::string> &dict, const char *key, const char *def = blank_buffer);
+void dict_debug(const std::map<std::string, std::string> &dict);
+bool dict_find(const std::map<std::string, std::string> &dict, const std::string &key, char **val);
+bool dict_find(const std::map<std::string, std::string> &dict, const char *key, char **val);
+char *dict_get_str(const std::map<std::string, std::string> &dict,const std::string &key,const char *def = blank_buffer);
+char *dict_get_str(const std::map<std::string, std::string> &dict, const char *key, const char *def = blank_buffer);
 
 /* ################################################################# */
 class mgrep
@@ -579,8 +582,8 @@ bool chroot_user(const char *root_dir, const char *user_name);
 
 /* mime types */
 extern const char *var_mime_type_application_cotec_stream;
-const char *mime_type_from_suffix(const char *suffix, const char *def = blank_buffer);
-const char *mime_type_from_filename(const char *filename, const char *def = blank_buffer);
+const char *mime_type_from_suffix(const char *suffix, const char *def = 0);
+const char *mime_type_from_filename(const char *filename, const char *def = 0);
 
 /* file ############################################################## */
 ssize_t file_get_size(const char *filename);
@@ -738,8 +741,8 @@ public:
 protected:
     virtual int get_char_do();
     basic_stream &reset();
-    char *read_buf;
-    char *write_buf;
+    unsigned char *read_buf;
+    unsigned char *write_buf;
     int read_buf_p1:16;
     int read_buf_p2:16;
     unsigned short int write_buf_len;
@@ -1395,6 +1398,8 @@ public:
 };
 
 class httpd_engine;
+extern bool var_httpd_debug;
+extern bool var_httpd_no_cache;
 class httpd
 {
 public:
@@ -1426,10 +1431,10 @@ public:
     bool request_gzip();
     bool request_deflate();
     long request_content_length();
-    const std::map<std::string, std::string> &request_header();
+    const std::map<std::string, std::string> &request_headers();
     const std::map<std::string, std::string> &request_query_variates();
     const std::map<std::string, std::string> &request_post_variates();
-    const std::map<std::string, std::string> &request_cookie();
+    const std::map<std::string, std::string> &request_cookies();
     const std::list<httpd_upload_file> &upload_files();
     /* response completely*/
     virtual void response_304(const char *etag);
@@ -1828,6 +1833,7 @@ public:
     inline string &push_back(char c) {std::string::push_back(c); return *this; }
     inline string &tolower() {zcc::tolower(this->c_str()); return *this; }
     inline string &toupper() {zcc::toupper(this->c_str()); return *this; }
+    inline string &trim_right(const char *delims) { zcc::trim_right(*this, delims); return *this; }
     inline string &size_data_escape(const void *d, size_t n) {zcc::size_data_escape(*this, d, n);return *this; }
     inline string &size_data_escape(int i) { zcc::size_data_escape(*this, i); return *this; }
     inline string &size_data_escape(long i) { zcc::size_data_escape(*this, i); return *this; }
