@@ -35,8 +35,8 @@ namespace zcc
 char *var_progname = 0;
 bool var_proc_stop = false;
 
-char ** main_parameter_argv = 0;
-int main_parameter_argc = 0;
+char ** var_main_parameter_argv = 0;
+int var_main_parameter_argc = 0;
 
 void main_parameter_run(int argc, char **argv)
 {
@@ -49,8 +49,8 @@ void main_parameter_run(int argc, char **argv)
 
         /* abc */
         if (optname[0] != '-') {
-            main_parameter_argv = argv + i;
-            main_parameter_argc = argc - i;
+            var_main_parameter_argv = argv + i;
+            var_main_parameter_argc = argc - i;
             break;
         }
 

@@ -156,7 +156,7 @@ bool sqlite3_proxy::query(const char *sql, size_t size, long timeout)
         return true;
     }
 
-    if (!connect() < 0) {
+    if (!connect()) {
         return false;
     }
 

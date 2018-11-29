@@ -37,7 +37,7 @@ static int save_att_tnef(zcc::tnef_parser * parser, zcc::tnef_parser_mime * mime
         name_char_validate(tmpname+5);
     }
     printf("save tnef attachment %s\n", tmpname);
-    if (zcc::file_put_contents(tmpname, parser->data() + mime->body_offset(), mime->body_size()) < 0) {
+    if (!zcc::file_put_contents(tmpname, parser->data() + mime->body_offset(), mime->body_size())) {
         printf("ERR save_att_tnef save %m\n");
     }
 
@@ -60,7 +60,7 @@ static int save_att(zcc::mail_parser * parser, zcc::mail_parser_mime * mime, int
     mime->decoded_content(dcon);
 
     printf("save attachment %s\n", tmpname);
-    if (zcc::file_put_contents(tmpname, dcon.c_str(), dcon.size()) < 0) {
+    if (!zcc::file_put_contents(tmpname, dcon.c_str(), dcon.size())) {
         printf("ERR decode_mime_body: save %m\n");
     }
 
@@ -111,8 +111,8 @@ int main(int argc, char **argv)
     zcc::main_parameter_run(argc, argv);
     enable_att = zcc::default_config.get_bool("att", false);
 
-    for (int i = 0; i < zcc::main_parameter_argc; i++) {
-        do_parse(zcc::main_parameter_argv[i]);
+    for (int i = 0; i < zcc::var_main_parameter_argc; i++) {
+        do_parse(zcc::var_main_parameter_argv[i]);
     }
 
     return 0;

@@ -323,7 +323,7 @@ void master_event_server::run(int argc, char ** argv)
         master_register(default_config.get_str("server-service", ""));
     }
 
-    attr = default_config.get_str("sever_user", "");
+    attr = default_config.get_str("server-user", "");
     if (!empty(attr)) {
         if(!chroot_user(0, attr)) {
             zcc_fatal("ERR chroot_user %s", attr);

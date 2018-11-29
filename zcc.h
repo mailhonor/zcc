@@ -614,9 +614,8 @@ void license_mac_build(const char *salt, const char *_mac, std::string &license)
 /* main main_parameter ################################################## */
 extern char *var_progname;
 extern bool var_proc_stop;
-
-extern char ** main_parameter_argv;
-extern int main_parameter_argc;
+extern char ** var_main_parameter_argv;
+extern int var_main_parameter_argc;
 void main_parameter_run(int argc, char **argv);
 
 /* time ############################################################ */
@@ -1408,6 +1407,7 @@ public:
     void bind(int sock);
     void bind(SSL *ssl);
     bool bind(int sock, SSL_CTX *sslctx, long timeout);
+    httpd &set_auto_close_fd(bool flag = true);
     bool run();
     virtual void handler();
     virtual void handler_after_request_header();

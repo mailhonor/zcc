@@ -287,6 +287,9 @@ int memcache_client::op_set(const char *op, const char *key, int flags, long tim
     if (!strncmp(ps, "STORED", 6)) {
         return 1;
     }
+    if (!strncmp(ps, "NOT_STORED", 10)) {
+        return 0;
+    }
 
     r_msg = str;
     return -1;

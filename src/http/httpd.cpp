@@ -122,6 +122,12 @@ bool httpd::bind(int sock, SSL_CTX *sslctx, long timeout)
     return true;
 }
 
+httpd &httpd::set_auto_close_fd(bool flag)
+{
+    h_engine->http_fp.set_auto_close_fd(flag);
+    return *this;
+}
+
 void httpd::handler_after_request_header()
 {
     h_engine->get_post_data_myself = true;

@@ -57,7 +57,10 @@ int main(int argc, char **argv)
         if (line.size()) {
             result.clear();
             zcc::mime_header_line_get_utf8(default_charset, line.c_str(), line.size(), result);
-            fputs(result.c_str(), stdout);
+            if (result.size()) {
+                fwrite(result.c_str(), 1, result.size(), stdout);
+            }
+            fputs("\n", stdout);
         }
     }
     fclose(fp);

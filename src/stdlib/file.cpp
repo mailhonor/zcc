@@ -68,7 +68,7 @@ ssize_t file_get_contents(const char *filename, std::string &str)
     int errno2;
     ssize_t ret;
     char buf[4096 + 1];
-    size_t *rlen = 0;
+    size_t rlen = 0;
     str.clear();
 
     while ((fd = open(filename, O_RDONLY)) == -1 && errno == EINTR) {
@@ -123,7 +123,7 @@ ssize_t stdin_get_contents(std::string &str)
     int errno2;
     ssize_t ret;
     char buf[4096 + 1];
-    size_t *rlen = 0;
+    size_t rlen = 0;
     str.clear();
 
     while(1) {

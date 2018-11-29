@@ -234,7 +234,6 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, 
         in_len = var_mime_header_line_max_length;
     }
 
-    bq_join.clear();
     out_string.clear();
 
     int mt_count_max = in_len/10 + 10;
@@ -255,6 +254,7 @@ void mime_header_line_get_utf8(const char *src_charset_def, const char *in_src, 
             dest += out_string;
             continue;
         }
+        bq_join.clear();
         bq_join.append(mt->data, mt->size);
         mtn = mt + 1;
         while (1) {
