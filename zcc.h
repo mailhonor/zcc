@@ -48,23 +48,23 @@ typedef struct ssl_st SSL;
     typeof(var_your_vec) &___V_VEC = (var_your_vec); \
     for (typeof(___V_VEC.begin()) var_std_vector_iterator = ___V_VEC.begin(); \
             var_std_vector_iterator!=___V_VEC.end(); var_std_vector_iterator ++) { \
-        typeof(*(___V_VEC.begin())) var_your_ptr = (*var_std_vector_iterator); {
+        typeof(*(___V_VEC.begin())) &var_your_ptr = (*var_std_vector_iterator); {
 #define std_vector_walk_end }}}
 
 #define std_list_walk_begin(var_your_vec, var_your_ptr) { \
     typeof(var_your_vec) &___V_LIST = (var_your_vec); \
     for (typeof(___V_LIST.begin()) var_std_list_iterator = ___V_LIST.begin(); \
             var_std_list_iterator!=___V_LIST.end(); var_std_list_iterator ++) { \
-        typeof(*(___V_LIST.begin())) var_your_ptr = (*var_std_list_iterator); {
+        typeof(*(___V_LIST.begin())) &var_your_ptr = (*var_std_list_iterator); {
 #define std_list_walk_end }}}
 
 #define std_map_walk_begin(var_your_map, var_your_first_ptr, var_your_value_ptr) { \
     typeof(var_your_map) &___V_MAP = (var_your_map); \
     typeof(___V_MAP.begin()) var_std_map_iterator = ___V_MAP.begin(); \
     for (; var_std_map_iterator!=___V_MAP.end(); var_std_map_iterator ++) { \
-        typeof(___V_MAP.begin()->first)&var_your_first_ptr=var_std_map_iterator->first; \
+        typeof(___V_MAP.begin()->first) &var_your_first_ptr=var_std_map_iterator->first; \
         (void)var_your_first_ptr; \
-        typeof(___V_MAP.begin()->second)&var_your_value_ptr=var_std_map_iterator->second; \
+        typeof(___V_MAP.begin()->second) &var_your_value_ptr=var_std_map_iterator->second; \
         (void)var_your_value_ptr; \
         {
 #define std_map_walk_end }}}

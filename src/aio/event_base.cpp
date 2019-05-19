@@ -103,7 +103,7 @@ struct aio_rwbuf_list_t {
     aio_rwbuf_t *tail;
 };
 struct async_io_t {
-    unsigned char aio_type:4;
+    unsigned char aio_type:3;
     unsigned char is_local:1;
     unsigned char in_timeout:1;
     unsigned char want_read:1;

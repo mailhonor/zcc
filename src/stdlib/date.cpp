@@ -9,6 +9,9 @@
 #include "zcc.h"
 #include <time.h>
 
+namespace zcc
+{
+
 char *build_rfc1123_date_string(long t, std::string &result)
 {
     struct tm tmbuf;
@@ -17,4 +20,6 @@ char *build_rfc1123_date_string(long t, std::string &result)
     strftime(buf, 32, "%a, %d %b %Y %H:%M:%S GMT", &tmbuf);
     result.append(buf);
     return (char *)result.c_str();
+}
+
 }

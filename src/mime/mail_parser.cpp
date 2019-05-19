@@ -48,6 +48,7 @@ mail_parser_mime_engine::~mail_parser_mime_engine()
 mail_parser_engine::mail_parser_engine()
 {
     parsed_flag = 0;
+    date_flag = 0;
     date_unix = 0;
     from_flag = 0;
     sender_flag = 0;
